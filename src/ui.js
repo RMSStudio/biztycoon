@@ -62,7 +62,12 @@ function renderGame() {
     pipsDiv.appendChild(d);
   }
   document.getElementById('g-action-val').textContent=`${G.actions} / ${ACTIONS_PER_MONTH}`;
-  document.getElementById('btn-scout').disabled=G.actions<SCOUT_COST;
+  const hasPool=G.scoutPool && G.scoutPool.length>0;
+  const scoutBtn=document.getElementById('btn-scout');
+  scoutBtn.disabled=!hasPool && G.actions<SCOUT_COST;
+  scoutBtn.innerHTML=hasPool
+    ? `📋 Открыть пул <span style="color:rgba(255,255,255,.6);font-size:11px">${G.scoutPool.length} ${G.scoutPool.length===1?'проект':'проекта'}</span>`
+    : `🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>`;
 
   // ── Active clients ──
   document.getElementById('g-client-count').textContent=G.activeClients.length+'/'+getCapacity();
@@ -89,6 +94,28 @@ function renderGame() {
     const mb=c.modBadge||'mb-teal';
     const affordable=G.money>=20000;
 
+    // Deadline badge
+    let deadlineBadge='';
+    if (!c.oneTime && c._duration) {
+      const mo=c._monthsSigned||0;
+      const dur=c._duration;
+      const overdue=mo>dur;
+      const minComplete=Math.max(2, Math.floor(dur*0.5));
+      const canComplete=mo>=minComplete;
+      if (overdue) {
+        deadlineBadge=`<span class="tag red" style="font-size:10px;">⏰ Просрочен +${mo-dur} мес.</span>`;
+      } else {
+        const color=mo>=dur?'var(--green)':mo>=(dur-1)?'var(--amber)':'var(--teal)';
+        deadlineBadge=`<span style="font-size:10px;color:${color};font-weight:600;">📅 ${mo}/${dur} мес.</span>`;
+      }
+    }
+
+    // Complete button availability: min half of duration passed (at least 2 months)
+    const mo=c._monthsSigned||0;
+    const dur=c._duration||99;
+    const minComplete=Math.max(2, Math.floor(dur*0.5));
+    const canComplete=!c.oneTime && mo>=minComplete;
+
     chtml+=`<div class="client-card ${warn}">
       <div class="client-row1">
         <div class="client-icon">${c.icon}</div>
@@ -98,6 +125,7 @@ function renderGame() {
             ${warn==='critical'?'<span class="tag red" style="font-size:10px;">⚠ Уходит</span>':
               warn==='at-risk'?'<span class="tag amber" style="font-size:10px;">Недоволен</span>':''}
             ${c.oneTime?'<span class="tag purple" style="font-size:10px;">Разовый</span>':''}
+            ${deadlineBadge}
           </div>
           <div class="client-desc">
             <span class="modifier-badge ${mb}" style="font-size:10px;padding:2px 6px">${ml}</span>
@@ -112,7 +140,8 @@ function renderGame() {
         <span class="nps-label">NPS</span>
         <div class="nps-wrap"><div class="nps-fill" style="width:${nps}%;background:${nc}"></div></div>
         <span class="nps-val" style="color:${nc}">${nps}</span>
-        <span class="nps-btn" style="display:flex;gap:5px;align-items:center">
+        <span class="nps-btn" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+          ${canComplete?`<button class="btn btn-xs" style="background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.3);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="completeProject('${c.id}')" title="Успешно завершить проект">🏁 Завершить</button>`:''}
           <button class="btn btn-xs btn-ghost" onclick="investInClient('${c.id}')" ${!affordable?'disabled':''} title="−20 000₽ → NPS +25">💬 −20К</button>
           <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>
         </span>
@@ -328,6 +357,14 @@ function renderGame() {
   // ── Log ──
   const lhtml=G.log.map(l=>`<div class="log-item"><span class="log-month">${l.month} — </span><span class="log-msg ${l.cls}">${l.msg}</span></div>`).join('');
   document.getElementById('g-log').innerHTML=lhtml||'<div class="log-item"><span class="log-msg">Пока всё тихо…</span></div>';
+
+  // ── Portfolio tab badge ──
+  const available=(G.completedProjects||[]).filter(p=>!p._cased).length;
+  const tabBadge=document.getElementById('tab-portfolio-badge');
+  if (tabBadge){
+    tabBadge.textContent=available;
+    tabBadge.style.display=available>0?'inline-flex':'none';
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -467,6 +504,143 @@ function generateInsights(won) {
   if (won) ins.push({icon:'📊',text:`<strong>Победа за ${G.monthsPlayed} мес. — специализация: ${SPECS[G.spec].name}.</strong> В реальном агентстве этот путь занимает 18–36 месяцев.`});
   if (!won&&G.monthsPlayed<5) ins.push({icon:'⚡',text:`<strong>Банкротство за ${G.monthsPlayed} мес.</strong> Overhead ${fmt(OVERHEAD)}/мес + зарплаты без выручки — классический кассовый разрыв первого года.`});
   return ins.slice(0,4);
+}
+
+// ══════════════════════════════════════════════════════
+//  PORTFOLIO TAB
+// ══════════════════════════════════════════════════════
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.gtab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-panel-'+tab).classList.add('active');
+  document.getElementById('tab-btn-'+tab).classList.add('active');
+  if (tab==='portfolio') renderPortfolioTab();
+}
+
+function renderPortfolioTab() {
+  const container=document.getElementById('g-portfolio-content');
+  if (!container) return;
+
+  const cases=G.cases||[];
+  const available=(G.completedProjects||[]).filter(p=>!p._cased);
+  const cased=(G.completedProjects||[]).filter(p=>p._cased);
+
+  // ── Total bonuses summary ──
+  const totalQ=G.caseQBonus||0;
+  const totalRep=G.caseRepBonus||0;
+  const totalScout=G.caseScoutBonus||0;
+  const hasBonuses=totalQ>0||totalRep>0||totalScout>0;
+  const bonusSummary=hasBonuses
+    ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.2);border-radius:9px;align-items:center">
+        <span style="font-size:11px;color:var(--sub)">Суммарные бонусы портфолио:</span>
+        ${totalQ>0?`<span style="font-size:12px;color:var(--teal);font-weight:700">Q +${totalQ}</span>`:''}
+        ${totalRep>0?`<span style="font-size:12px;color:var(--green);font-weight:700">Реп +${totalRep}/мес</span>`:''}
+        ${totalScout>0?`<span style="font-size:12px;color:var(--purple);font-weight:700">+${totalScout} лид/скаутинг</span>`:''}
+      </div>` : '';
+
+  // ── Cases in portfolio ──
+  let casesHtml='';
+  if (cases.length===0){
+    casesHtml=`<div style="text-align:center;padding:20px 0;color:var(--sub)">
+      <div style="font-size:26px;margin-bottom:8px">📁</div>
+      <div style="font-weight:600;color:var(--text);margin-bottom:4px">Кейсов пока нет</div>
+      <div style="font-size:12px">Собери первый кейс из завершённых проектов справа</div>
+    </div>`;
+  } else {
+    casesHtml=cases.map(c=>{
+      const gd=CASE_GRADES[c.grade];
+      const bonusPills=[
+        c.qBonus>0?`<span style="font-size:10px;color:var(--teal);font-weight:700;background:rgba(45,212,191,.12);padding:2px 7px;border-radius:4px">Q +${c.qBonus}</span>`:'',
+        c.repBonus>0?`<span style="font-size:10px;color:var(--green);font-weight:700;background:rgba(63,185,80,.1);padding:2px 7px;border-radius:4px">Реп +${c.repBonus}/мес</span>`:'',
+        c.scoutBonus>0?`<span style="font-size:10px;color:var(--purple);font-weight:700;background:rgba(168,85,247,.12);padding:2px 7px;border-radius:4px">+${c.scoutBonus} лид</span>`:'',
+      ].filter(Boolean).join('');
+      return `<div class="staff-item" style="border-left:3px solid ${gd.color};padding-left:12px;margin-bottom:8px">
+        <div class="staff-avatar" style="background:rgba(168,85,247,.12);font-size:18px">${c.icon}</div>
+        <div class="staff-info">
+          <div class="staff-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${c.name}
+            <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(168,85,247,.15);color:${gd.color};font-weight:700">${gd.icon} ${gd.label}</span>
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">${bonusPills||`<span style="font-size:10px;color:var(--muted)">без бонусов</span>`}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">NPS при закрытии: ${c.finalNPS} · сборка: ${c.daysSpent} дн.</div>
+        </div>
+        <button class="btn btn-xs" style="background:rgba(248,81,73,.08);color:var(--red);border:1px solid rgba(248,81,73,.2);flex-shrink:0" onclick="removeCase('${c.id}')">Убрать</button>
+      </div>`;
+    }).join('');
+    if (cased.length>0){
+      casesHtml+=`<div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:center">${cased.length} проект${cased.length<5?'а':'ов'} в кейсах — убери чтобы пересобрать</div>`;
+    }
+  }
+
+  // ── Available to build ──
+  let buildHtml='';
+  if (available.length===0 && (G.completedProjects||[]).length===0){
+    buildHtml=`<div style="text-align:center;padding:20px 0;color:var(--sub)">
+      <div style="font-size:22px;margin-bottom:8px">⏳</div>
+      <div style="font-size:13px">Здесь появятся завершённые проекты.<br>Закрой разовый заказ или дождись ухода клиента.</div>
+    </div>`;
+  } else if (available.length===0){
+    buildHtml=`<div style="text-align:center;padding:14px 0;color:var(--sub);font-size:13px">Все завершённые проекты уже оформлены в кейсы.</div>`;
+  } else {
+    buildHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Потрать рабочие дни на сборку. Больше дней + выше Q + лучший NPS → выше грейд.</div>`;
+    buildHtml+=available.map(p=>{
+      const g1=CASE_GRADES[calcCaseGrade(p,1)];
+      const g2=CASE_GRADES[calcCaseGrade(p,2)];
+      const g3=CASE_GRADES[calcCaseGrade(p,3)];
+      const statusBadge=p.failed
+        ?`<span style="font-size:10px;color:var(--red);font-weight:600">💔 Клиент ушёл</span>`
+        :p.terminated
+        ?`<span style="font-size:10px;color:var(--amber);font-weight:600">🚫 Расторгнут</span>`
+        :`<span style="font-size:10px;color:var(--green);font-weight:600">✅ Выполнен</span>`;
+
+      const btnStyle=(gd)=>{
+        if (gd.id==='excellent') return 'btn-primary';
+        if (gd.id==='good') return 'btn-teal';
+        return 'btn-ghost';
+      };
+
+      return `<div class="client-card" style="margin-bottom:10px">
+        <div class="client-row1">
+          <div class="client-icon">${p.icon}</div>
+          <div class="client-info">
+            <div class="client-name">${p.name} ${statusBadge}</div>
+            <div class="client-desc">NPS при завершении: <strong style="color:${p.finalNPS>=55?'var(--green)':p.finalNPS>=40?'var(--amber)':'var(--red)'}">${p.finalNPS}</strong> · Tier ${p.tier}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:6px">Выбери время на сборку кейса:</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm ${btnStyle(g1)}" onclick="buildCase('${p.id}',1)" ${G.actions<1?'disabled':''}
+              style="flex:1;flex-direction:column;gap:2px;align-items:center;padding:8px 6px;text-align:center">
+              <span>1 день</span><span style="font-size:9px;opacity:.75">${g1.icon} ${g1.label}</span>
+            </button>
+            <button class="btn btn-sm ${btnStyle(g2)}" onclick="buildCase('${p.id}',2)" ${G.actions<2?'disabled':''}
+              style="flex:1;flex-direction:column;gap:2px;align-items:center;padding:8px 6px;text-align:center">
+              <span>2 дня</span><span style="font-size:9px;opacity:.75">${g2.icon} ${g2.label}</span>
+            </button>
+            <button class="btn btn-sm ${btnStyle(g3)}" onclick="buildCase('${p.id}',3)" ${G.actions<3?'disabled':''}
+              style="flex:1;flex-direction:column;gap:2px;align-items:center;padding:8px 6px;text-align:center">
+              <span>3 дня</span><span style="font-size:9px;opacity:.75">${g3.icon} ${g3.label}</span>
+            </button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  container.innerHTML=`
+    ${bonusSummary}
+    <div class="portfolio-grid">
+      <div class="panel">
+        <div class="panel-title">Кейсы в портфолио <span class="badge badge-spec">${cases.length}</span></div>
+        ${casesHtml}
+      </div>
+      <div class="panel">
+        <div class="panel-title">Завершённые проекты <span class="badge badge-spec">${available.length}</span></div>
+        ${buildHtml}
+      </div>
+    </div>`;
 }
 
 // ══════════════════════════════════════════════════════

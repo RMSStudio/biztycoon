@@ -23,6 +23,13 @@ function initState() {
     qualityBonus: 0,     // постоянный Q-бонус от апгрейдов
     tempQBonus: 0,       // временный Q-бонус (сбрасывается в конце месяца)
     portfolio: 0,        // накопленное портфолио (баллы за завершённые проекты)
+    completedProjects: [],  // завершённые проекты, доступные для кейсов
+    cases: [],              // собранные кейсы в портфолио
+    caseQBonus: 0,          // суммарный Q-бонус от кейсов
+    caseRepBonus: 0,        // суммарный бонус восстановления репутации от кейсов
+    caseScoutBonus: 0,      // суммарный бонус лидов при скаутинге от кейсов
+    caseRepPenalty: 0,      // репутационный штраф/мес от провальных кейсов в портфолио
+    scoutPool: null,        // сохранённый пул скаутинга (массив project-def или null)
   };
   DECISIONS = [];
 }
@@ -59,6 +66,7 @@ function startGame() {
   G.actions=ACTIONS_PER_MONTH; G.reputation=100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
+  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null;
   DECISIONS=[];
   G.history.push({month:0, money:500000, label:'Старт'});
   addLog('Агентство открыто. Используй Скаутинг чтобы найти первый проект!','amber');
@@ -73,7 +81,7 @@ function fmt(n)  { return Math.round(n).toLocaleString('ru-RU')+'₽'; }
 function fmtK(n) { return Math.abs(n)>=1000000?(n/1000000).toFixed(1)+'M₽':Math.abs(n)>=1000?Math.round(n/1000)+'K₽':Math.round(n)+'₽'; }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 
-function getQuality(g=G){ return g.staff.reduce((s,x)=>s+(x.quality||0),0)+(g.qualityBonus||0)+(g.tempQBonus||0); }
+function getQuality(g=G){ return g.staff.reduce((s,x)=>s+(x.quality||0),0)+(g.qualityBonus||0)+(g.tempQBonus||0)+(g.caseQBonus||0); }
 function getVolume(g=G) { return g.staff.reduce((s,x)=>s+(x.volume||0),0); }
 function getCapacity(g=G){ return 1+g.staff.reduce((s,x)=>s+(x.capacity||0),0); }
 function hasRole(id,g=G){ return !!g.staff.find(s=>s.id===id); }
@@ -183,6 +191,12 @@ function updateAllNPS() {
   });
 
   churned.forEach(c=>{
+    const finalNPS=Math.round(G.clientNPS[c.id]||20);
+    G.completedProjects=G.completedProjects||[];
+    G.completedProjects.push({
+      id:c.id, name:c.name, icon:c.icon, revenue:c.revenue, tier:c.tier||1,
+      finalNPS:finalNPS, monthCompleted:G.month, terminated:false, failed:true, _cased:false,
+    });
     G.activeClients=G.activeClients.filter(a=>a.id!==c.id);
     delete G.clientNPS[c.id];
     addLog(`💔 ${c.name} расторг контракт (NPS обнулился)`,'red');
@@ -207,14 +221,9 @@ function investInClient(cid) {
 // ══════════════════════════════════════════════════════
 //  SCOUTING
 // ══════════════════════════════════════════════════════
-function doScouting() {
-  if (G.actions<SCOUT_COST){ notify(`Нужно ≥${SCOUT_COST} дней — осталось ${G.actions}`,'error'); return; }
-  G.actions-=SCOUT_COST;
-  addLog(`🔍 Скаутинг проектов (−${SCOUT_COST} дня)`,'teal');
-
-  // How many offers? Depends on reputation + luck
+function _generateOffers() {
   const roll=Math.random()*100;
-  const repBonus=(G.reputation-50)*0.2; // -10..+10 adjustment
+  const repBonus=(G.reputation-50)*0.2;
   const adjustedRoll=roll+repBonus;
 
   let offerCount;
@@ -223,10 +232,9 @@ function doScouting() {
   else if (adjustedRoll<=75) offerCount=2;
   else                       offerCount=3;
 
-  // SMM: guaranteed +1 offer (max 3)
   if (hasRole('smm')) offerCount=Math.min(3, offerCount+1);
+  if (G.caseScoutBonus>0) offerCount=Math.min(3, offerCount+(G.caseScoutBonus||0));
 
-  // Eligible pool by reputation tier + developer unlock
   const maxTier = G.reputation>=70?3 : G.reputation>=40?2 : 1;
   const pool=PROJECT_POOL.filter(p=>
     p.tier<=maxTier &&
@@ -234,16 +242,36 @@ function doScouting() {
     (!p.minPortfolio || (G.portfolio||0)>=p.minPortfolio)
   );
 
-  // Pick `offerCount` random unique projects
   const offers=[];
   const shuffled=[...pool].sort(()=>Math.random()-0.5);
   for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
     const p=shuffled[i];
-    // Don't offer project already active
     if (!G.activeClients.find(c=>c.id.startsWith(p.id))) offers.push(p);
   }
+  return offers;
+}
 
-  showScoutResults(offers);
+function doScouting() {
+  // Если пул уже есть — просто переоткрываем модал без затрат дней
+  if (G.scoutPool && G.scoutPool.length>0) {
+    showScoutResults(G.scoutPool);
+    return;
+  }
+  if (G.actions<SCOUT_COST){ notify(`Нужно ≥${SCOUT_COST} дней — осталось ${G.actions}`,'error'); return; }
+  G.actions-=SCOUT_COST;
+  addLog(`🔍 Скаутинг проектов (−${SCOUT_COST} дня)`,'teal');
+  G.scoutPool=_generateOffers();
+  showScoutResults(G.scoutPool);
+  renderGame();
+}
+
+function refreshScoutPool() {
+  if (G.actions<SCOUT_COST){ notify(`Нужно ≥${SCOUT_COST} дней — осталось ${G.actions}`,'error'); return; }
+  G.actions-=SCOUT_COST;
+  G.scoutPool=null;
+  addLog(`🔄 Пул заказов обновлён (−${SCOUT_COST} дня)`,'teal');
+  G.scoutPool=_generateOffers();
+  showScoutResults(G.scoutPool);
   renderGame();
 }
 
@@ -253,7 +281,7 @@ function showScoutResults(offers) {
     offers.length ? `Найдено проектов: ${offers.length}` : 'Скаутинг не дал результатов';
   document.getElementById('scout-sub').textContent=
     offers.length
-      ? 'Выбери один проект для подписания (или закрой без выбора).'
+      ? 'Можно взять несколько. Пул сохраняется — закрой, докупи перки и вернись.'
       : 'На рынке тишина. Попробуй снова в следующем месяце или улучши репутацию.';
 
   const grid=document.getElementById('scout-grid');
@@ -327,6 +355,8 @@ function signProject(pid) {
     ...def,
     id: pid+'_'+G.month,
     _monthsSigned: 0,
+    // Дедлайн: явный duration из дефиниции или тир-дефолт (tier1=3, tier2=4, tier3=5 мес.)
+    _duration: def.oneTime ? 1 : (def.duration || (def.tier===1 ? 3 : def.tier===2 ? 4 : 5)),
   };
 
   // nps_start: override starting NPS
@@ -349,8 +379,15 @@ function signProject(pid) {
   notify(`${client.icon} ${client.name} — контракт подписан!`,'success');
   rd(`Подписан: ${client.name}`,'client');
 
-  closeScout();
+  // Убираем подписанный проект из пула; пул остаётся открытым если ещё есть офферы
+  if (G.scoutPool) G.scoutPool=G.scoutPool.filter(p=>p.id!==pid);
   renderGame();
+  if (G.scoutPool && G.scoutPool.length>0) {
+    showScoutResults(G.scoutPool);
+  } else {
+    G.scoutPool=null;
+    closeScout();
+  }
 }
 
 function closeScout() {
@@ -416,7 +453,8 @@ function showConfirm(icon, title, body, confirmText, confirmClass, onConfirm) {
 
   const btnOk = document.createElement('button');
   btnOk.className = 'modal-choice';
-  btnOk.style.borderColor = confirmClass === 'red' ? 'rgba(248,81,73,.4)' : 'rgba(210,153,34,.4)';
+  const borderMap = { red:'rgba(248,81,73,.4)', amber:'rgba(210,153,34,.4)', teal:'rgba(45,212,191,.4)', green:'rgba(74,222,128,.4)' };
+  btnOk.style.borderColor = borderMap[confirmClass] || borderMap.amber;
   btnOk.innerHTML = `<div class="choice-title" style="color:var(--${confirmClass})">${confirmText}</div>`;
   btnOk.onclick = () => {
     document.getElementById('event-modal').classList.remove('active');
@@ -466,6 +504,12 @@ function terminateContract(cid) {
     `Досрочное расторжение: −10 репутации. Клиент уходит недовольным — это повлияет на входящие предложения.`,
     'Расторгнуть контракт', 'red',
     () => {
+      G.completedProjects=G.completedProjects||[];
+      G.completedProjects.push({
+        id:cid, name:c.name, icon:c.icon, revenue:c.revenue, tier:c.tier||1,
+        finalNPS:Math.round(G.clientNPS[cid]||50), monthCompleted:G.month,
+        terminated:true, failed:false, _cased:false,
+      });
       G.activeClients = G.activeClients.filter(a => a.id !== cid);
       delete G.clientNPS[cid];
       G.reputation = clamp(G.reputation - 10, 0, 100);
@@ -475,6 +519,155 @@ function terminateContract(cid) {
       renderGame();
     }
   );
+}
+
+// ══════════════════════════════════════════════════════
+//  PORTFOLIO CASES
+// ══════════════════════════════════════════════════════
+
+// Рассчитывает грейд кейса по трём факторам: Q компании, время сборки, финальный NPS.
+// Провальные и досрочно расторгнутые проекты имеют кап по score.
+function calcCaseGrade(project, daysSpent) {
+  const q=getQuality();
+  const nps=project.finalNPS||50;
+  let score=0;
+
+  // Q factor (0–3)
+  if      (q>=30) score+=3;
+  else if (q>=20) score+=2;
+  else if (q>=10) score+=1;
+
+  // Time factor (1–3)
+  score+=Math.min(3, daysSpent);
+
+  // NPS factor (0–3)
+  if      (nps>=70) score+=3;
+  else if (nps>=55) score+=2;
+  else if (nps>=40) score+=1;
+
+  // Штраф: провал или досрочное расторжение ограничивают максимум
+  if (project.failed)     score=Math.min(score,3); // cap → bad/normal
+  if (project.terminated) score=Math.min(score,5); // cap → normal/good
+
+  if (score>=8) return 'excellent';
+  if (score>=6) return 'good';
+  if (score>=4) return 'normal';
+  return 'bad';
+}
+
+function buildCase(projectId, daysSpent) {
+  const project=G.completedProjects.find(p=>p.id===projectId);
+  if (!project) return;
+  if (project._cased)     { notify('Кейс уже собран','error'); return; }
+  if (G.actions<daysSpent){ notify(`Нужно ≥${daysSpent} рабочих дня`,'error'); return; }
+
+  G.actions-=daysSpent;
+  const grade=calcCaseGrade(project, daysSpent);
+  const gd=CASE_GRADES[grade];
+
+  // Провальный кейс в портфолио даёт штраф репутации каждый месяц пока находится там
+  const repPenalty=project.failed ? 1 : 0;
+
+  const newCase={
+    id:'case_'+G.month+'_'+G.cases.length,
+    projectId:projectId,
+    name:project.name, icon:project.icon, tier:project.tier,
+    grade:grade,
+    qBonus:gd.qBonus, repBonus:gd.repBonus, scoutBonus:gd.scoutBonus,
+    repPenalty:repPenalty,
+    assembledMonth:G.month, daysSpent:daysSpent, finalNPS:project.finalNPS,
+    failed:project.failed||false,
+  };
+
+  G.cases.push(newCase);
+  G.caseQBonus=(G.caseQBonus||0)+newCase.qBonus;
+  G.caseRepBonus=(G.caseRepBonus||0)+newCase.repBonus;
+  G.caseScoutBonus=(G.caseScoutBonus||0)+newCase.scoutBonus;
+  G.caseRepPenalty=(G.caseRepPenalty||0)+newCase.repPenalty;
+  project._cased=true;
+
+  const bonusLine=[
+    newCase.qBonus>0?`Q+${newCase.qBonus}`:'',
+    newCase.repBonus>0?`Реп+${newCase.repBonus}/мес`:'',
+    newCase.scoutBonus>0?`+${newCase.scoutBonus} лид`:'',
+  ].filter(Boolean).join(', ');
+
+  addLog(`📁 Кейс «${project.name}» — ${gd.icon} ${gd.label}${bonusLine?' ('+bonusLine+')':''}`, 'purple');
+  notify(`${gd.icon} Кейс собран: ${gd.label}`, 'success');
+  rd(`Кейс: ${project.name} (${gd.label})`, 'event');
+  renderPortfolioTab();
+  renderGame();
+}
+
+function removeCase(caseId) {
+  const c=G.cases.find(x=>x.id===caseId);
+  if (!c) return;
+  const gd=CASE_GRADES[c.grade];
+  showConfirm(
+    '🗑️', `Убрать кейс «${c.name}»?`,
+    `Бонусы будут сняты: ${gd.desc}. Кейс можно пересобрать позже.`,
+    'Убрать из портфолио', 'amber',
+    () => {
+      G.cases=G.cases.filter(x=>x.id!==caseId);
+      G.caseQBonus=Math.max(0,(G.caseQBonus||0)-c.qBonus);
+      G.caseRepBonus=Math.max(0,(G.caseRepBonus||0)-c.repBonus);
+      G.caseScoutBonus=Math.max(0,(G.caseScoutBonus||0)-c.scoutBonus);
+      G.caseRepPenalty=Math.max(0,(G.caseRepPenalty||0)-(c.repPenalty||0));
+      const p=G.completedProjects.find(x=>x.id===c.projectId);
+      if (p) p._cased=false;
+      addLog(`🗑️ Кейс «${c.name}» убран из портфолио`,'amber');
+      renderPortfolioTab();
+      renderGame();
+    }
+  );
+}
+
+function completeProject(cid) {
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c) return;
+
+  const onTime = (c._monthsSigned||0) <= (c._duration||99);
+  const earlyRatio = c._duration ? Math.max(0.5, (c._monthsSigned||0)/c._duration) : 1;
+  const finalNPS = G.clientNPS[cid] != null ? G.clientNPS[cid] : 50;
+
+  // Bonus reputation for on-time completion
+  const repGain = onTime ? 3 : 0;
+
+  // Portfolio points proportional to tier + time ratio
+  const pfBonus = Math.round((c.portfolioWeight || c.tier || 1) * 3 * earlyRatio);
+
+  // Earnings so far (recorded monthly by advanceMonth)
+  const totalEarned = G.clientEarnings[cid] || 0;
+
+  // Push to completedProjects for casing
+  G.completedProjects = G.completedProjects || [];
+  G.completedProjects.push({
+    id: cid,
+    name: c.name,
+    tier: c.tier,
+    failed: false,
+    terminated: false,
+    completed: true,
+    onTime: onTime,
+    finalNPS: finalNPS,
+    totalEarned: totalEarned,
+    _cased: false,
+  });
+
+  // Remove from active
+  G.activeClients = G.activeClients.filter(a => a.id !== cid);
+
+  // Apply bonuses
+  if (repGain > 0) { G.reputation = clamp(G.reputation + repGain, 0, 100); }
+  G.portfolio = (G.portfolio || 0) + pfBonus;
+
+  const timeTag = onTime ? '✅ в срок' : '⚠️ с опозданием';
+  addLog(`🏁 Проект «${c.name}» завершён ${timeTag} | NPS ${finalNPS} | Портфолио +${pfBonus}${repGain>0?' | Реп +'+repGain:''}`, onTime ? 'green' : 'amber');
+  notify(`🏁 «${c.name}» завершён ${timeTag}`, onTime ? 'success' : 'info');
+  rd(`Завершён проект: ${c.name} (${timeTag})`, 'event');
+
+  renderPortfolioTab();
+  renderGame();
 }
 
 // ══════════════════════════════════════════════════════
@@ -542,6 +735,12 @@ function advanceMonth() {
     if (c.oneTime && c._monthsSigned>=1){
       const pfBonus=(c.portfolioWeight||c.tier||1)*2;
       G.portfolio=(G.portfolio||0)+pfBonus;
+      G.completedProjects=G.completedProjects||[];
+      G.completedProjects.push({
+        id:c.id, name:c.name, icon:c.icon, revenue:c.revenue, tier:c.tier||1,
+        finalNPS:Math.round(G.clientNPS[c.id]||70), monthCompleted:G.month,
+        terminated:false, failed:false, _cased:false,
+      });
       addLog(`📦 ${c.name}: разовый заказ выполнен (+${pfBonus} портфолио)`,'purple');
       rd(`${c.name} — разовый заказ закрыт`,'churn');
       return false;
@@ -549,18 +748,32 @@ function advanceMonth() {
     return true;
   });
 
+  // ⑥.⑤ Deadline penalty for overdue projects
+  G.activeClients.forEach(c=>{
+    if (!c.oneTime && c._duration && (c._monthsSigned||0) > c._duration){
+      const overdueMos=(c._monthsSigned||0)-c._duration;
+      const pen=hasRole('lawyer') ? 1 : 2;
+      G.reputation=clamp(G.reputation-pen,0,100);
+      addLog(`⏰ ${c.name}: просрочен на ${overdueMos} мес. — −${pen} репутации${hasRole('lawyer')?' (юрист −50%)':''}`, 'red');
+    }
+  });
+
   // ⑦ Reputation slow recovery (×2 при портфолио ≥25)
   const hasGrey=G.activeClients.some(c=>c.modifier?.type==='reputation');
   const repRecovery=(G.portfolio||0)>=25?2:1;
-  if (!hasGrey && G.reputation<100) G.reputation=Math.min(100,G.reputation+repRecovery);
+  const totalRepRecovery=repRecovery+(G.caseRepBonus||0);
+  if (!hasGrey && G.reputation<100) G.reputation=Math.min(100,G.reputation+totalRepRecovery);
+  // Репутационный штраф от провальных кейсов в портфолио (применяется всегда)
+  if ((G.caseRepPenalty||0)>0) G.reputation=clamp(G.reputation-(G.caseRepPenalty||0),0,100);
 
   // ⑧ NPS update
   updateAllNPS();
 
   G.month++;
 
-  // ⑨ Reset actions + temp bonuses
+  // ⑨ Reset actions + temp bonuses; scout pool expires each month
   G.actions=ACTIONS_PER_MONTH;
+  G.scoutPool=null;
   G.tempQBonus=0;
 
   // ⑩ History snapshot

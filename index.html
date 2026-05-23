@@ -82,6 +82,17 @@
     <div class="actions-val" id="g-action-val">10 / 10</div>
   </div>
 
+  <!-- Tab navigation -->
+  <div class="game-tabs">
+    <button class="gtab active" id="tab-btn-main" onclick="switchTab('main')">🎮 Проекты</button>
+    <button class="gtab" id="tab-btn-portfolio" onclick="switchTab('portfolio')">
+      📁 Портфолио
+      <span class="tab-badge" id="tab-portfolio-badge" style="display:none">0</span>
+    </button>
+  </div>
+
+  <!-- Main tab -->
+  <div id="tab-panel-main" class="tab-panel active">
   <div class="game-body">
     <!-- LEFT -->
     <div class="col-main">
@@ -146,6 +157,13 @@
 
     </div>
   </div>
+  </div><!-- /tab-panel-main -->
+
+  <!-- Portfolio tab -->
+  <div id="tab-panel-portfolio" class="tab-panel">
+    <div id="g-portfolio-content"></div>
+  </div>
+
 </div>
 
 <!-- ══ RESULTS ══ -->
@@ -197,9 +215,14 @@
       <p  id="scout-sub"></p>
     </div>
     <div class="scout-grid" id="scout-grid"></div>
-    <button class="btn btn-ghost" style="width:100%;justify-content:center;" onclick="closeScout()">
-      Ничего не подходит — закрыть
-    </button>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="refreshScoutPool()">
+        🔄 Обновить пул <span style="color:rgba(255,255,255,.4);font-size:11px">−3 дня</span>
+      </button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="closeScout()">
+        Закрыть — вернуться позже
+      </button>
+    </div>
   </div>
 </div>
 

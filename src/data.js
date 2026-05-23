@@ -126,6 +126,7 @@ const PROJECT_POOL = [
     id:'state', tier:3, icon:'🏛️', name:'Государственный контракт',
     desc:'Огромный чек, но бюрократия: первые 2 месяца оплаты нет — готовь кэш.',
     revenue:130000, minQ:30, minV:15, type:'corp', npsStart:62, oneTime:false,
+    duration:8,
     modifier:{ type:'payment_delay_fixed', val:2, label:'Первые 2 мес — нет оплаты' },
     modBadge:'mb-purple', prob:0.25,
   },
@@ -181,6 +182,37 @@ const PROJECT_POOL = [
     modBadge:'mb-purple', prob:0.30,
   },
 ];
+
+// ── CASE GRADES ─────────────────────────────────────────
+// Грейды кейсов в портфолио. Дают пассивные бонусы пока находятся в портфолио.
+// qBonus — постоянный бонус к Q; repBonus — доп. очки восстановления реп./мес;
+// scoutBonus — дополнительный лид при скаутинге.
+const CASE_GRADES = {
+  bad: {
+    id:'bad', label:'Слабый кейс', icon:'📄',
+    color:'var(--muted)',
+    qBonus:0, repBonus:0, scoutBonus:0,
+    desc:'Минимальная сборка. Виден в портфолио, бонусов почти нет.',
+  },
+  normal: {
+    id:'normal', label:'Нормальный кейс', icon:'📋',
+    color:'var(--sub)',
+    qBonus:1, repBonus:1, scoutBonus:0,
+    desc:'+1 Q постоянно, восстановление репутации +1/мес.',
+  },
+  good: {
+    id:'good', label:'Сильный кейс', icon:'📂',
+    color:'var(--teal)',
+    qBonus:2, repBonus:2, scoutBonus:0,
+    desc:'+2 Q постоянно, восстановление репутации +2/мес.',
+  },
+  excellent: {
+    id:'excellent', label:'Топ-кейс', icon:'💎',
+    color:'var(--purple)',
+    qBonus:4, repBonus:3, scoutBonus:1,
+    desc:'+4 Q постоянно, реп. +3/мес, +1 лид при каждом скаутинге.',
+  },
+};
 
 // ── EVENTS ──────────────────────────────────────────────
 const EVENTS = [

@@ -314,10 +314,37 @@
   .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
   .badge-spec { background:rgba(79,110,247,.2); color:var(--accent2); }
 
+  /* ── GAME TABS ── */
+  .game-tabs {
+    display:flex; gap:6px; margin-bottom:14px;
+  }
+  .gtab {
+    display:inline-flex; align-items:center; gap:6px;
+    background:transparent; border:1px solid var(--border);
+    color:var(--sub); padding:7px 18px; border-radius:8px;
+    font-size:12px; font-weight:600; cursor:pointer; transition:all .15s;
+  }
+  .gtab:hover { background:var(--bg3); color:var(--text); }
+  .gtab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .tab-panel  { display:none; }
+  .tab-panel.active { display:block; }
+  .tab-badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:17px; height:17px; padding:0 4px;
+    background:var(--red); color:#fff; border-radius:9px;
+    font-size:9px; font-weight:800; line-height:1;
+  }
+
+  /* ── PORTFOLIO GRID ── */
+  .portfolio-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:14px;
+  }
+
   @media(max-width:720px){
     .game-body{grid-template-columns:1fr}
     .spec-grid{grid-template-columns:1fr}
     .stat-row{grid-template-columns:repeat(2,1fr)}
     .result-kpis{grid-template-columns:repeat(2,1fr)}
     .analytics-grid{grid-template-columns:1fr}
+    .portfolio-grid{grid-template-columns:1fr}
   }
