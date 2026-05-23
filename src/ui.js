@@ -82,39 +82,56 @@ function renderGame() {
   }
 
   G.activeClients.forEach(c=>{
-    const nps=Math.round(G.clientNPS[c.id]??c.npsStart??70);
-    const nc=npsColor(nps);
-    const warn=nps<25?'critical':nps<45?'at-risk':'';
-    const rev=getClientRevenue(c);
-    const revNow=getClientRevenueThisMonth(c);
-    const isDeferred=c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0)<=c.modifier.val;
+    const nps       = Math.round(G.clientNPS[c.id]??c.npsStart??70);
+    const nc        = npsColor(nps);
+    const warn      = nps<25?'critical':nps<45?'at-risk':'';
+    const ml        = c.modifier?.label||'';
+    const mb        = c.modBadge||'mb-teal';
+    const affordable= G.money>=20000;
 
-    // Modifier label
-    const ml=c.modifier?.label||'';
-    const mb=c.modBadge||'mb-teal';
-    const affordable=G.money>=20000;
+    // Прогресс проекта
+    const progress  = Math.round(c._progress||0);
+    const progColor = progress>=100?'var(--green)':progress>=60?'var(--teal)':'var(--amber)';
 
-    // Deadline badge
+    // Дедлайн-бейдж
     let deadlineBadge='';
     if (!c.oneTime && c._duration) {
-      const mo=c._monthsSigned||0;
-      const dur=c._duration;
-      const overdue=mo>dur;
-      const minComplete=Math.max(2, Math.floor(dur*0.5));
-      const canComplete=mo>=minComplete;
+      const mo=c._monthsSigned||0, dur=c._duration, overdue=mo>dur;
+      const penPct=overdue?Math.min(40,Math.round((mo-dur)*10)):0;
       if (overdue) {
-        deadlineBadge=`<span class="tag red" style="font-size:10px;">⏰ Просрочен +${mo-dur} мес.</span>`;
+        deadlineBadge=`<span class="tag red" style="font-size:10px;">⏰ +${mo-dur} мес.${penPct?` (−${penPct}%)`:''}</span>`;
       } else {
-        const color=mo>=dur?'var(--green)':mo>=(dur-1)?'var(--amber)':'var(--teal)';
-        deadlineBadge=`<span style="font-size:10px;color:${color};font-weight:600;">📅 ${mo}/${dur} мес.</span>`;
+        const col=mo>=dur?'var(--green)':mo>=(dur-1)?'var(--amber)':'var(--teal)';
+        deadlineBadge=`<span style="font-size:10px;color:${col};font-weight:600;">📅 ${mo}/${dur} мес.</span>`;
       }
     }
 
-    // Complete button availability: min half of duration passed (at least 2 months)
-    const mo=c._monthsSigned||0;
-    const dur=c._duration||99;
-    const minComplete=Math.max(2, Math.floor(dur*0.5));
-    const canComplete=!c.oneTime && mo>=minComplete;
+    // Ожидание старта (payment_delay_fixed)
+    const isWaiting = c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0)<=c.modifier.val;
+    const waitMos   = isWaiting ? c.modifier.val-(c._monthsSigned||0) : 0;
+
+    // Бюджет
+    const budget    = c._totalBudget||0;
+    const budgetStr = c.oneTime
+      ? `${fmtK(budget)}<small> разово</small>`
+      : isWaiting
+        ? `<span style="color:var(--muted);font-size:12px">${fmtK(budget)}</span><small style="color:var(--amber)"> старт через ${waitMos} мес.</small>`
+        : `${fmtK(budget)}<small> при сдаче</small>`;
+
+    // Кнопка «Завершить» — только при progress === 100
+    const canComplete = !c.oneTime && progress >= 100;
+
+    // Прогресс-бар (не для разовых)
+    const progressBar = !c.oneTime ? `
+      <div style="margin-top:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:10px;color:var(--sub)">Прогресс</span>
+          <span style="font-size:10px;font-weight:700;color:${progColor}">${progress}%</span>
+        </div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${progress}%;background:${progColor};border-radius:2px;transition:width .4s"></div>
+        </div>
+      </div>` : '';
 
     chtml+=`<div class="client-card ${warn}">
       <div class="client-row1">
@@ -130,18 +147,16 @@ function renderGame() {
           <div class="client-desc">
             <span class="modifier-badge ${mb}" style="font-size:10px;padding:2px 6px">${ml}</span>
           </div>
+          ${progressBar}
         </div>
-        <div class="client-rev">
-          ${isDeferred?`<span style="color:var(--muted);font-size:12px">0₽</span><small style="color:var(--amber)">ожид. ${c.modifier.val-(c._monthsSigned||0)} мес</small>`:
-            `${fmt(rev)}<small>/мес</small>`}
-        </div>
+        <div class="client-rev">${budgetStr}</div>
       </div>
       <div class="nps-row">
         <span class="nps-label">NPS</span>
         <div class="nps-wrap"><div class="nps-fill" style="width:${nps}%;background:${nc}"></div></div>
         <span class="nps-val" style="color:${nc}">${nps}</span>
         <span class="nps-btn" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
-          ${canComplete?`<button class="btn btn-xs" style="background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.3);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="completeProject('${c.id}')" title="Успешно завершить проект">🏁 Завершить</button>`:''}
+          ${canComplete?`<button class="btn btn-xs" style="background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.3);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="completeProject('${c.id}')" title="Проект выполнен — получить оплату">🏁 Завершить</button>`:''}
           <button class="btn btn-xs btn-ghost" onclick="investInClient('${c.id}')" ${!affordable?'disabled':''} title="−20 000₽ → NPS +25">💬 −20К</button>
           <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>
         </span>
@@ -152,21 +167,44 @@ function renderGame() {
   document.getElementById('g-clients-list').innerHTML=chtml;
 
   // ── P&L ──
-  const rev=getTotalRevenue(); const staffCost=getTotalStaffCost();
-  const disc=G.tempDiscount>0?Math.round(rev*G.tempDiscount):0;
-  const baseRev=G.activeClients.reduce((s,c)=>s+c.revenue,0);
-  const prem=rev-baseRev;
-  const net=(rev-disc)-staffCost-OVERHEAD;
+  const staffCost = getTotalStaffCost();
+  const burnRate  = staffCost + OVERHEAD;
+  const pipeline  = G.activeClients.filter(c=>!c.oneTime).reduce((s,c)=>s+(c._totalBudget||0),0);
+  const oneTimeV  = G.activeClients.filter(c=>c.oneTime).reduce((s,c)=>s+(c._totalBudget||0),0);
 
   document.getElementById('g-pnl').innerHTML=`
-    <div class="pnl-row"><span>Базовая выручка</span><span class="pos">+${fmt(baseRev)}</span></div>
-    ${prem>0?`<div class="pnl-row"><span style="color:var(--teal)">↑ Премия качества/объёма</span><span class="teal">+${fmt(prem)}</span></div>`:''}
-    ${disc>0?`<div class="pnl-row"><span>Скидка</span><span class="neg">−${fmt(disc)}</span></div>`:''}
+    ${pipeline>0?`<div class="pnl-row"><span style="color:var(--sub)">Пайплайн проектов</span><span style="color:var(--teal);font-weight:700">${fmtK(pipeline)}</span></div>`:''}
+    ${oneTimeV>0?`<div class="pnl-row"><span style="color:var(--purple)">Разовые заказы</span><span style="color:var(--purple)">${fmtK(oneTimeV)}</span></div>`:''}
     ${G.delayedIncome>0?`<div class="pnl-row"><span style="color:var(--amber)">🕐 В пути (задержано)</span><span style="color:var(--amber)">+${fmt(G.delayedIncome)}</span></div>`:''}
+    ${(pipeline>0||oneTimeV>0)?'<div class="divider"></div>':''}
     <div class="pnl-row"><span>Зарплаты</span><span class="neg">−${fmt(staffCost)}</span></div>
     <div class="pnl-row"><span>Overhead</span><span class="neg">−${fmt(OVERHEAD)}</span></div>
     <div class="divider"></div>
-    <div class="pnl-row total"><span>Итого</span><span class="${net>=0?'pos':'neg'}">${net>=0?'+':''}${fmt(net)}</span></div>`;
+    <div class="pnl-row total"><span>Расход/мес</span><span class="neg">−${fmt(burnRate)}</span></div>
+    <div style="font-size:10px;color:var(--muted);margin-top:5px">Выручка — при завершении проектов</div>
+    ${(()=>{
+      if (G.loan) {
+        const remaining = G.loan.monthsRemaining;
+        return `<div class="divider" style="margin:8px 0"></div>
+          <div class="pnl-row">
+            <span style="color:var(--amber)">🏦 Кредит «${G.loan.label}»</span>
+            <span style="color:var(--amber);font-weight:700">−${fmt(G.loan.monthlyPayment)}/мес</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Осталось: ${remaining} мес. · Итого: ${fmtK(G.loan.monthlyPayment * remaining)}</div>`;
+      }
+      const loanTier = getLoanTier(G.reputation);
+      if (loanTier) {
+        return `<div class="divider" style="margin:8px 0"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <div>
+              <div style="font-size:11px;color:var(--sub)">🏦 Кредитная линия</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtK(loanTier.principal)} · ${fmtK(loanTier.monthlyPayment)}/мес × ${loanTier.months} мес. (${loanTier.label})</div>
+            </div>
+            <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:4px 10px;flex-shrink:0;white-space:nowrap" onclick="takeLoan()">Взять кредит</button>
+          </div>`;
+      }
+      return '';
+    })()}`;
 
   const pct=Math.min(100,Math.round(G.money/3000000*100));
   document.getElementById('g-progress-pct').textContent=pct+'%';
@@ -201,12 +239,16 @@ function renderGame() {
     const ok=G.money>=def.cost*2 && G.actions>=dayCostHire;
     const bonuses=[];
     if (def.quality){
-      const imp=G.activeClients.length?'+'+fmtK(G.activeClients.reduce((s,c)=>s+Math.min(def.quality*0.007,.35)*c.revenue,0))+'/мес':'разблокирует проекты';
-      bonuses.push(`Кач +${def.quality} <span style="color:var(--teal);font-size:10px">(${imp})</span>`);
+      bonuses.push(`Кач +${def.quality} <span style="color:var(--teal);font-size:10px">(улучшает Q-гейтинг проектов)</span>`);
     }
     if (def.volume){
-      const imp=G.activeClients.length?'+'+fmtK(G.activeClients.reduce((s,c)=>s+Math.min(def.volume*0.005,.25)*c.revenue,0))+'/мес':'повышает выручку';
-      bonuses.push(`Объём +${def.volume} <span style="color:var(--teal);font-size:10px">(${imp})</span>`);
+      bonuses.push(`Объём +${def.volume} <span style="color:var(--teal);font-size:10px">(V-гейтинг проектов)</span>`);
+    }
+    if (def.throughput){
+      const curT=getTeamThroughput(), newT=curT+def.throughput;
+      const tl=getTotalLoad();
+      const hint=tl>0?`нагрузка ${Math.round(tl)} → произв. ${newT}`:`произв. +${def.throughput}`;
+      bonuses.push(`Произв. +${def.throughput} <span style="color:var(--accent2);font-size:10px">(${hint})</span>`);
     }
     if (def.capacity) bonuses.push(`+${def.capacity} слот`);
     // Unique passive bonuses for specialist roles
@@ -225,7 +267,7 @@ function renderGame() {
         <div class="hire-desc">${bonuses.join(' · ')}</div>
       </div>
       <div class="hire-cost">−${fmt(def.cost)}/мес</div>
-      <button class="btn btn-sm btn-primary" style="margin-left:6px;" onclick="hireStaff('${def.id}')" ${!ok?'disabled':''}>${alreadyCount>0?'Ещё':'Нанять'}</button>
+      <button class="btn btn-sm btn-primary" style="margin-left:6px;align-self:center;flex-shrink:0;" onclick="hireStaff('${def.id}')" ${!ok?'disabled':''}>${alreadyCount>0?'Ещё':'Нанять'}</button>
     </div>`;
   });
   document.getElementById('g-hire-list').innerHTML=hhtml;
@@ -272,8 +314,7 @@ function renderGame() {
   const qCl=qv>=20?'var(--green)':qv>=10?'var(--amber)':'var(--red)';
   const vCl=vv>=15?'var(--green)':vv>=5?'var(--amber)':'var(--red)';
   const repC=repColor(G.reputation);
-  const curBase=G.activeClients.reduce((s,c)=>s+c.revenue,0);
-  const curReal=getTotalRevenue(); const qPct=curBase>0?Math.round((curReal-curBase)/curBase*100):0;
+  // Q/V премия к выручке убрана (нет помесячной выручки в новой модели)
 
   // Q bar: thresholds at 10 (разблокирует стартапы), 20 (корпораты), 30 (госконтракт)
   const qThresholds = [
@@ -341,7 +382,6 @@ function renderGame() {
       </div>
       ${vBar}
     </div>
-    ${qPct>0?`<div class="pnl-row" style="margin-bottom:6px"><span style="color:var(--teal);font-size:12px">Q/V премия к выручке</span><span style="color:var(--teal);font-weight:700">+${qPct}%</span></div>`:''}
     <div class="divider"></div>
     <div class="pnl-row"><span>Слоты</span><span>${G.activeClients.length}/${getCapacity()}</span></div>
     <div class="pnl-row"><span>Средний NPS</span><span style="color:${npsCl};font-weight:700">${avgNps}</span></div>
@@ -352,6 +392,18 @@ function renderGame() {
     <div class="rep-row" style="padding-bottom:4px;">
       <div class="rep-bar-wrap"><div class="rep-bar-fill" style="width:${G.reputation}%;background:${repC}"></div></div>
     </div>
+    <div class="divider" style="margin:6px 0"></div>
+    ${(()=>{
+      const thr=getTeamThroughput(), tld=getTotalLoad();
+      if(tld===0) return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Производительность</span><span style="font-weight:700">${thr}</span></div><div style="font-size:10px;color:var(--muted)">нет активных проектов</div>`;
+      const ratio=thr/tld, overloaded=ratio<0.95;
+      const loadCol=overloaded?'var(--red)':ratio<1.1?'var(--amber)':'var(--green)';
+      const loadPct=Math.round(ratio*100);
+      return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Нагрузка / Произв.</span><span style="color:${loadCol};font-weight:700">${Math.round(tld)} / ${thr}</span></div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:3px;overflow:hidden"><div style="height:100%;width:${Math.min(100,loadPct)}%;background:${loadCol};border-radius:2px"></div></div>
+        ${overloaded?`<div style="font-size:10px;color:var(--red)">⚠ Перегруз — прогресс ×${loadPct}%</div>`:`<div style="font-size:10px;color:var(--muted)">эффективность ${loadPct}%</div>`}`;
+    })()}
+    <div class="divider" style="margin:6px 0"></div>
     <div class="pnl-row"><span>Overhead/мес</span><span style="color:var(--red)">−${fmt(OVERHEAD)}</span></div>`;
 
   // ── Log ──

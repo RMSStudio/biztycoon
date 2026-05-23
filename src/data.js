@@ -11,6 +11,13 @@ const ACTIONS_PER_MONTH = 10;      // рабочих дней в месяц
 const SCOUT_COST        = 3;       // дней на скаутинг
 const HIRE_COST         = 2;       // дней на найм
 
+// Бюджеты проектов по тирам (генерируются при подписании)
+const BUDGET_RANGES = {
+  1: [80000,  150000],
+  2: [200000, 400000],
+  3: [500000, 1200000],
+};
+
 const SPECS = {
   smm:   { name:'SMM-агентство',  icon:'📱', bonus:'small_income', bonusVal:0.15 },
   seo:   { name:'SEO-агентство',  icon:'🔍', bonus:'staff_cost',   bonusVal:-0.10 },
@@ -19,13 +26,14 @@ const SPECS = {
 };
 
 const STAFF_DEFS = [
-  { id:'designer',   name:'Дизайнер',      icon:'🎨', role:'Визуал + качество',      cost:67000, quality:20, volume:0,  capacity:0 },
-  { id:'copywriter', name:'Копирайтер',    icon:'✍️', role:'Контент + объём',        cost:50000, quality:0,  volume:15, capacity:0 },
-  { id:'manager',    name:'Менеджер',      icon:'📋', role:'Аккаунтинг',             cost:75000, quality:0,  volume:0,  capacity:2 },
-  { id:'developer',  name:'Разработчик',   icon:'💻', role:'Кач +15 • тех-проекты',  cost:85000, quality:15, volume:0,  capacity:0 },
-  { id:'smm',        name:'SMM-маркетолог',icon:'📣', role:'Объём +10 • +1 лид/скаут',cost:48000, quality:0,  volume:10, capacity:0 },
-  { id:'lawyer',     name:'Юрист',         icon:'⚖️', role:'Штрафы и риски −50%',    cost:58000, quality:0,  volume:0,  capacity:0 },
-  { id:'hr',         name:'HR-менеджер',   icon:'🤝', role:'NPS +3/мес • найм за 1 день', cost:42000, quality:0, volume:0, capacity:0 },
+  // throughput — вклад в производительность команды (базовая = 10 у фаундера)
+  { id:'designer',   name:'Дизайнер',      icon:'🎨', role:'Визуал + качество',       cost:67000, quality:20, volume:0,  capacity:0, throughput:7 },
+  { id:'copywriter', name:'Копирайтер',    icon:'✍️', role:'Контент + объём',         cost:50000, quality:0,  volume:15, capacity:0, throughput:5 },
+  { id:'manager',    name:'Менеджер',      icon:'📋', role:'Аккаунтинг',              cost:75000, quality:0,  volume:0,  capacity:2, throughput:5 },
+  { id:'developer',  name:'Разработчик',   icon:'💻', role:'Кач +15 • тех-проекты',   cost:85000, quality:15, volume:0,  capacity:0, throughput:7 },
+  { id:'smm',        name:'SMM-маркетолог',icon:'📣', role:'Объём +10 • +1 лид/скаут',cost:48000, quality:0,  volume:10, capacity:0, throughput:3 },
+  { id:'lawyer',     name:'Юрист',         icon:'⚖️', role:'Штрафы и риски −50%',     cost:58000, quality:0,  volume:0,  capacity:0, throughput:2 },
+  { id:'hr',         name:'HR-менеджер',   icon:'🤝', role:'NPS +3/мес • найм за 1 день', cost:42000, quality:0, volume:0, capacity:0, throughput:2 },
 ];
 
 const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -218,10 +226,18 @@ const CASE_GRADES = {
 const EVENTS = [
   {
     id:'discount', icon:'🤝', title:'Клиент просит скидку',
-    body:'Постоянный клиент просит снизить чек на 15%. Отказать — NPS падает, согласиться — теряешь доход.',
+    body:'Постоянный клиент просит снизить итоговый бюджет на 15%. Отказать — NPS падает, согласиться — теряешь часть выплаты.',
     choices:[
-      { text:'Согласиться (−15% дохода, NPS +12)', desc:'Клиент доволен, лояльность растёт',
-        fn:g=>{ g.tempDiscount=0.15; nudgeAllNPS(g,+12); } },
+      { text:'Согласиться (−15% бюджета, NPS +12)', desc:'Клиент доволен, лояльность растёт',
+        fn:g=>{
+          const c=g.activeClients.length>0?g.activeClients[g.activeClients.length-1]:null;
+          if(c&&c._totalBudget){
+            const cut=Math.round(c._totalBudget*0.15);
+            c._totalBudget=Math.max(0,c._totalBudget-cut);
+            nudgeAllNPS(g,+12);
+            notify(`🤝 Скидка: бюджет «${c.name}» −${fmt(cut)}, NPS +12`,'info');
+          }
+        } },
       { text:'Отказать', desc:'NPS у клиента −20 (риск ухода)',
         fn:g=>{ if(g.activeClients.length>0){ const c=g.activeClients[g.activeClients.length-1]; g.clientNPS[c.id]=Math.max(0,(g.clientNPS[c.id]||60)-20); } } },
     ]
