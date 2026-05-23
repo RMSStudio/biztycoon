@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BizTycoon — Digital Agency</title>
+<link rel="stylesheet" href="styles/game.css">
+</head>
+
+<body>
+
+<!-- ══ INTRO ══ -->
+<div id="screen-intro" class="screen active">
+  <div class="logo-wrap">
+    <div class="logo-icon">🏢</div>
+    <div class="logo-title">BizTycoon</div>
+    <div class="logo-sub">Digital Agency — Prototype v0.4</div>
+  </div>
+  <div class="intro-desc">
+    Ты открываешь <strong>собственное диджитал-агентство</strong>. Клиенты не приходят сами — их нужно искать: каждый <strong>скаутинг</strong> стоит рабочих дней и не гарантирует результат. Каждый найденный проект — свой риск: кто-то задерживает оплату, кто-то платит хорошо, но портит репутацию. Доведи баланс до <strong>3 000 000 ₽</strong>, пока деньги не кончились.
+  </div>
+  <div class="stat-row">
+    <div class="stat-box"><div class="val">500 000 ₽</div><div class="lbl">Стартовый капитал</div></div>
+    <div class="stat-box"><div class="val">10 дней/мес</div><div class="lbl">Рабочий ресурс</div></div>
+    <div class="stat-box"><div class="val">3 000 000 ₽</div><div class="lbl">Цель</div></div>
+  </div>
+  <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:16px;padding:15px;" onclick="goTo('screen-spec')">
+    Начать игру →
+  </button>
+</div>
+
+<!-- ══ SPEC ══ -->
+<div id="screen-spec" class="screen">
+  <h2>Выбери специализацию</h2>
+  <p>Влияет на бонус к выручке и стартовую репутацию</p>
+  <div class="spec-grid">
+    <div class="spec-card" onclick="selectSpec('smm')" id="spec-smm">
+      <div class="spec-icon">📱</div><div class="spec-name">SMM-агентство</div>
+      <div class="spec-desc">Соцсети, контент, таргет. Много небольших клиентов, быстрый оборот.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag green">+15% к выручке малых клиентов</span></div>
+    </div>
+    <div class="spec-card" onclick="selectSpec('seo')" id="spec-seo">
+      <div class="spec-icon">🔍</div><div class="spec-name">SEO-агентство</div>
+      <div class="spec-desc">Продвижение в поиске. Стабильный, но медленный рост.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag amber">−10% расходов на команду</span></div>
+    </div>
+    <div class="spec-card" onclick="selectSpec('web')" id="spec-web">
+      <div class="spec-icon">💻</div><div class="spec-name">Web-разработка</div>
+      <div class="spec-desc">Сайты и приложения. Крупные проекты, длинные циклы.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag purple">+25% к выручке корпоратов</span></div>
+    </div>
+    <div class="spec-card" onclick="selectSpec('brand')" id="spec-brand">
+      <div class="spec-icon">✨</div><div class="spec-name">Брендинг</div>
+      <div class="spec-desc">Айдентика и стратегия. Высокий чек, долгий поиск.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag">+40% к выручке интернет-магазинов</span></div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <button class="btn btn-ghost" onclick="goTo('screen-intro')">← Назад</button>
+    <button class="btn btn-primary" id="btn-start-game" onclick="startGame()" disabled>Открыть агентство →</button>
+  </div>
+</div>
+
+<!-- ══ GAME ══ -->
+<div id="screen-game" class="screen">
+
+  <div class="game-header">
+    <div class="game-logo">BizTycoon <span>/ <span id="g-spec-name"></span></span></div>
+    <div class="header-stats">
+      <div class="hstat"><div class="v" id="g-month">Янв 2026</div><div class="l">Месяц</div></div>
+      <div class="hstat"><div class="v amber" id="g-money">500 000 ₽</div><div class="l">В банке</div></div>
+      <div class="hstat"><div class="v" id="g-cashflow">+0 ₽</div><div class="l">Ожид. cashflow</div></div>
+      <div class="hstat"><div class="v teal" id="g-rep">100</div><div class="l">Репутация</div></div>
+      <div class="hstat"><div class="v" id="g-portfolio" style="color:var(--purple)">0</div><div class="l">Портфолио</div></div>
+    </div>
+  </div>
+
+  <!-- Actions bar -->
+  <div class="actions-bar">
+    <div class="actions-label">📅 Рабочие дни</div>
+    <div class="actions-pips" id="g-action-pips"></div>
+    <div class="actions-val" id="g-action-val">10 / 10</div>
+  </div>
+
+  <div class="game-body">
+    <!-- LEFT -->
+    <div class="col-main">
+
+      <div class="panel">
+        <div class="panel-title">
+          Активные проекты
+          <span class="badge badge-spec" id="g-client-count">0/0</span>
+        </div>
+        <div id="g-clients-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">P&L этого месяца</div>
+        <div id="g-pnl"></div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>Цель: 3 000 000 ₽</span><span id="g-progress-pct">0%</span></div>
+          <div class="progress-bar"><div class="progress-fill" id="g-progress-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <button class="advance-btn" onclick="advanceMonth()">⏭ Завершить месяц</button>
+
+      <div class="panel">
+        <div class="panel-title">История</div>
+        <div id="g-log" style="max-height:150px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="col-side">
+
+      <!-- Scout action -->
+      <div class="panel">
+        <div class="panel-title">Действия</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
+            🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Прокачка Q <span style="color:var(--muted);font-size:10px;font-weight:400">качество</span></div>
+        <div id="g-upgrades-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Команда</div>
+        <div id="g-team-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Нанять <span style="color:var(--muted);font-size:10px;font-weight:400">−2 дня</span></div>
+        <div id="g-hire-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Метрики</div>
+        <div id="g-metrics"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ RESULTS ══ -->
+<div id="screen-results" class="screen">
+  <div class="result-hero">
+    <div class="result-icon" id="r-icon">🏆</div>
+    <div class="result-title" id="r-title"></div>
+    <div class="result-sub"   id="r-sub"></div>
+    <div class="result-kpis"  id="r-kpis"></div>
+  </div>
+  <div class="chart-panel">
+    <div class="chart-title">Кривая баланса по месяцам</div>
+    <div class="chart-wrap" id="r-chart"></div>
+  </div>
+  <div class="analytics-grid">
+    <div class="panel">
+      <div class="panel-title">Выручка по проектам</div>
+      <div id="r-breakdown"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Хронология решений</div>
+      <div class="timeline" id="r-timeline"></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title">Инсайты прогона</div>
+    <div id="r-insights"></div>
+  </div>
+  <div style="text-align:center;">
+    <button class="btn btn-primary" onclick="resetGame()">Играть снова</button>
+  </div>
+</div>
+
+<!-- ══ EVENT MODAL ══ -->
+<div class="modal-overlay" id="event-modal">
+  <div class="modal">
+    <div class="modal-icon" id="modal-icon">⚡</div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body"  id="modal-body"></div>
+    <div class="modal-choices" id="modal-choices"></div>
+  </div>
+</div>
+
+<!-- ══ SCOUT MODAL ══ -->
+<div class="modal-overlay" id="scout-modal">
+  <div class="modal modal-wide">
+    <div class="scout-header">
+      <h3 id="scout-title">Результаты скаутинга</h3>
+      <p  id="scout-sub"></p>
+    </div>
+    <div class="scout-grid" id="scout-grid"></div>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center;" onclick="closeScout()">
+      Ничего не подходит — закрыть
+    </button>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script src="src/data.js"></script>
+<script src="src/engine.js"></script>
+<script src="src/ui.js"></script>
+<script>initState();</script>
+</body>
+</html>

@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BizTycoon — Digital Agency</title>
+<style>
+  :root {
+    --bg: #0D1117; --bg2: #161B22; --bg3: #1C2330;
+    --border: #30363D; --accent: #4F6EF7; --accent2: #6B85FF;
+    --green: #3FB950; --red: #F85149; --amber: #D29922;
+    --purple: #A855F7; --teal: #2DD4BF;
+    --text: #E6EDF3; --sub: #8B949E; --muted: #484F58;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,'Segoe UI',system-ui,sans-serif;
+    font-size:14px; min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .screen { display:none; width:100%; max-width:1040px; padding:20px; }
+  .screen.active { display:block; }
+
+  /* ── INTRO ── */
+  #screen-intro { text-align:center; max-width:640px; margin:0 auto; }
+  .logo-wrap { margin-bottom:36px; }
+  .logo-icon {
+    width:72px; height:72px; background:var(--accent); border-radius:18px;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size:32px; margin-bottom:16px; box-shadow:0 0 40px rgba(79,110,247,.4);
+  }
+  .logo-title {
+    font-size:36px; font-weight:800; letter-spacing:-1px;
+    background:linear-gradient(135deg,#fff 30%,var(--accent2));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .logo-sub { color:var(--sub); margin-top:6px; font-size:15px; }
+  .intro-desc {
+    background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+    padding:24px; text-align:left; margin-bottom:24px; color:var(--sub); line-height:1.7;
+  }
+  .intro-desc strong { color:var(--text); }
+  .stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px; }
+  .stat-box { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .stat-box .val { font-size:20px; font-weight:700; color:var(--accent2); }
+  .stat-box .lbl { color:var(--sub); font-size:12px; margin-top:2px; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    padding:12px 28px; border-radius:8px; border:none; cursor:pointer;
+    font-size:15px; font-weight:600; transition:all .15s;
+  }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:var(--accent2); transform:translateY(-1px); box-shadow:0 4px 20px rgba(79,110,247,.4); }
+  .btn-ghost { background:transparent; color:var(--sub); border:1px solid var(--border); }
+  .btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-teal { background:rgba(45,212,191,.15); color:var(--teal); border:1px solid rgba(45,212,191,.3); }
+  .btn-teal:hover { background:rgba(45,212,191,.25); }
+  .btn-sm { padding:7px 14px; font-size:12px; border-radius:6px; }
+  .btn-xs { padding:4px 10px; font-size:11px; border-radius:5px; font-weight:600; }
+  .btn:disabled { opacity:.38; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
+
+  /* ── SPEC ── */
+  #screen-spec h2 { font-size:24px; font-weight:700; margin-bottom:6px; }
+  #screen-spec p { color:var(--sub); margin-bottom:24px; }
+  .spec-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:24px; }
+  .spec-card { background:var(--bg2); border:2px solid var(--border); border-radius:12px; padding:20px; cursor:pointer; transition:all .15s; }
+  .spec-card:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .spec-card.selected { border-color:var(--accent); background:rgba(79,110,247,.08); }
+  .spec-icon { font-size:28px; margin-bottom:10px; }
+  .spec-name { font-weight:700; font-size:16px; margin-bottom:6px; }
+  .spec-desc { color:var(--sub); font-size:13px; line-height:1.5; }
+  .spec-bonus { margin-top:10px; }
+
+  /* ── TAGS ── */
+  .tag {
+    display:inline-flex; align-items:center; gap:4px;
+    background:rgba(79,110,247,.15); color:var(--accent2);
+    border-radius:4px; padding:3px 8px; font-size:12px; font-weight:600;
+  }
+  .tag.green  { background:rgba(63,185,80,.12);  color:var(--green); }
+  .tag.amber  { background:rgba(210,153,34,.15); color:var(--amber); }
+  .tag.purple { background:rgba(168,85,247,.15); color:var(--purple); }
+  .tag.red    { background:rgba(248,81,73,.15);  color:var(--red); }
+  .tag.teal   { background:rgba(45,212,191,.12); color:var(--teal); }
+
+  /* ── MAIN GAME ── */
+  #screen-game { max-width:1040px; }
+  .game-header {
+    display:flex; align-items:center; gap:12px; margin-bottom:16px;
+    padding-bottom:14px; border-bottom:1px solid var(--border);
+    flex-wrap:wrap; gap:8px;
+  }
+  .game-logo { font-weight:800; font-size:17px; color:var(--accent2); margin-right:4px; }
+  .game-logo span { color:var(--sub); font-weight:400; }
+  .header-stats { display:flex; gap:16px; margin-left:auto; align-items:center; flex-wrap:wrap; }
+  .hstat { text-align:right; }
+  .hstat .v { font-size:17px; font-weight:700; }
+  .hstat .l { font-size:10px; color:var(--sub); }
+  .hstat .v.green { color:var(--green); }
+  .hstat .v.red   { color:var(--red); }
+  .hstat .v.amber { color:var(--amber); }
+  .hstat .v.teal  { color:var(--teal); }
+
+  /* Actions bar */
+  .actions-bar {
+    display:flex; align-items:center; gap:10px;
+    background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+    padding:10px 14px; margin-bottom:14px;
+  }
+  .actions-label { font-size:12px; color:var(--sub); white-space:nowrap; }
+  .actions-pips { display:flex; gap:3px; flex:1; }
+  .pip {
+    height:8px; border-radius:2px; flex:1;
+    background:var(--teal); transition:all .2s;
+  }
+  .pip.used { background:var(--bg3); }
+  .actions-val { font-size:12px; font-weight:700; color:var(--teal); white-space:nowrap; }
+
+  .game-body { display:grid; grid-template-columns:1fr 300px; gap:14px; }
+  .col-main { display:flex; flex-direction:column; gap:12px; }
+  .col-side { display:flex; flex-direction:column; gap:12px; }
+
+  .panel { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .panel-title {
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px;
+    color:var(--sub); margin-bottom:12px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+
+  /* ── ACTIVE CLIENT CARDS ── */
+  .client-card {
+    padding:12px; border-radius:10px; background:var(--bg3);
+    margin-bottom:8px; border:1px solid transparent; transition:border-color .2s;
+  }
+  .client-card.at-risk  { border-color:rgba(210,153,34,.4); }
+  .client-card.critical { border-color:rgba(248,81,73,.4); background:rgba(248,81,73,.04); }
+  .client-row1 { display:flex; align-items:flex-start; gap:10px; }
+  .client-icon { font-size:20px; width:28px; text-align:center; flex-shrink:0; padding-top:2px; }
+  .client-info { flex:1; min-width:0; }
+  .client-name { font-size:13px; font-weight:600; display:flex; align-items:center; gap:5px; flex-wrap:wrap; line-height:1.3; }
+  .client-desc { font-size:11px; color:var(--sub); margin-top:2px; }
+  .client-rev  { color:var(--green); font-size:13px; font-weight:700; white-space:nowrap; text-align:right; }
+  .client-rev small { display:block; color:var(--sub); font-size:10px; font-weight:400; }
+  .client-modifier { margin-top:4px; }
+
+  /* NPS row */
+  .nps-row { display:flex; align-items:center; gap:8px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.05); }
+  .nps-label  { font-size:11px; color:var(--sub); white-space:nowrap; }
+  .nps-wrap   { flex:1; height:5px; background:var(--bg); border-radius:3px; overflow:hidden; }
+  .nps-fill   { height:100%; border-radius:3px; transition:width .4s, background .4s; }
+  .nps-val    { font-size:11px; font-weight:700; width:26px; text-align:right; }
+  .nps-btn    { margin-left:2px; }
+
+  /* P&L */
+  .pnl-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; border-bottom:1px solid var(--border); color:var(--sub); }
+  .pnl-row:last-child { border-bottom:none; }
+  .pnl-row.total { color:var(--text); font-weight:700; padding-top:7px; font-size:14px; }
+  .pnl-row .pos { color:var(--green); font-weight:600; }
+  .pnl-row .neg { color:var(--red); font-weight:600; }
+  .pnl-row .teal{ color:var(--teal); font-weight:600; }
+
+  /* Staff */
+  .staff-item {
+    display:flex; align-items:center; gap:10px; padding:9px;
+    border-radius:8px; background:var(--bg3); margin-bottom:7px;
+  }
+  .staff-avatar { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .staff-info { flex:1; }
+  .staff-name { font-weight:600; font-size:13px; }
+  .staff-role { color:var(--sub); font-size:11px; }
+  .staff-cost { color:var(--red); font-size:12px; font-weight:600; white-space:nowrap; }
+
+  .hire-item { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); }
+  .hire-item:last-child { border-bottom:none; }
+  .hire-icon { font-size:18px; width:24px; text-align:center; }
+  .hire-info { flex:1; }
+  .hire-name { font-size:13px; font-weight:600; }
+  .hire-desc { color:var(--sub); font-size:11px; }
+  .hire-cost { color:var(--amber); font-size:11px; font-weight:700; white-space:nowrap; }
+
+  /* Progress bar */
+  .progress-wrap { margin-top:10px; }
+  .progress-label { display:flex; justify-content:space-between; font-size:12px; color:var(--sub); margin-bottom:4px; }
+  .progress-bar { height:6px; background:var(--bg3); border-radius:3px; overflow:hidden; }
+  .progress-fill { height:100%; background:var(--accent); border-radius:3px; transition:width .4s; }
+  .progress-fill.green { background:var(--green); }
+  .progress-fill.amber { background:var(--amber); }
+
+  /* Advance btn */
+  .advance-btn {
+    width:100%; padding:13px; font-size:15px; border-radius:10px;
+    background:var(--accent); color:#fff; border:none; cursor:pointer;
+    font-weight:700; transition:all .15s;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .advance-btn:hover { background:var(--accent2); transform:translateY(-1px); box-shadow:0 4px 20px rgba(79,110,247,.4); }
+
+  /* Log */
+  .log-item { padding:5px 0; border-bottom:1px solid var(--border); font-size:12px; line-height:1.4; }
+  .log-item:last-child { border-bottom:none; }
+  .log-month { color:var(--muted); font-size:10px; }
+  .log-msg { color:var(--text); }
+  .log-msg.green  { color:var(--green); }
+  .log-msg.red    { color:var(--red); }
+  .log-msg.amber  { color:var(--amber); }
+  .log-msg.purple { color:var(--purple); }
+  .log-msg.teal   { color:var(--teal); }
+
+  /* ── SCOUT MODAL ── */
+  .modal-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.78); backdrop-filter:blur(4px);
+    z-index:100; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.active { display:flex; }
+  .modal {
+    background:var(--bg2); border:1px solid var(--border); border-radius:16px;
+    padding:26px; max-width:480px; width:100%;
+    animation:modalIn .2s ease;
+  }
+  .modal-wide { max-width:680px; }
+  @keyframes modalIn { from{opacity:0;transform:scale(.95) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  .modal-icon    { font-size:38px; margin-bottom:10px; text-align:center; }
+  .modal-title   { font-size:19px; font-weight:700; margin-bottom:6px; }
+  .modal-body    { color:var(--sub); line-height:1.6; margin-bottom:18px; font-size:13px; }
+  .modal-choices { display:flex; flex-direction:column; gap:8px; }
+  .modal-choice  {
+    padding:11px 14px; background:var(--bg3); border:1px solid var(--border);
+    border-radius:8px; cursor:pointer; transition:all .12s; font-size:13px; text-align:left; color:var(--text);
+  }
+  .modal-choice:hover { border-color:var(--accent); background:rgba(79,110,247,.08); }
+  .modal-choice .choice-title { font-weight:600; margin-bottom:2px; }
+  .modal-choice .choice-desc  { color:var(--sub); font-size:12px; }
+
+  /* ── SCOUT RESULTS ── */
+  .scout-header { margin-bottom:16px; }
+  .scout-header h3 { font-size:18px; font-weight:700; }
+  .scout-header p  { color:var(--sub); font-size:13px; margin-top:4px; }
+  .scout-grid { display:grid; grid-template-columns:1fr; gap:10px; margin-bottom:16px; }
+  .project-card {
+    background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px;
+    transition:border-color .15s; position:relative;
+  }
+  .project-card:hover { border-color:var(--accent); }
+  .project-card.unavailable { opacity:.45; }
+  .project-top  { display:flex; align-items:flex-start; gap:10px; margin-bottom:8px; }
+  .project-icon { font-size:24px; flex-shrink:0; }
+  .project-meta { flex:1; }
+  .project-name { font-size:14px; font-weight:700; margin-bottom:4px; }
+  .project-desc { color:var(--sub); font-size:12px; line-height:1.4; }
+  .project-bottom { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .project-rev { font-size:16px; font-weight:800; color:var(--green); }
+  .project-rev-label { font-size:11px; color:var(--sub); }
+  .project-prob { font-size:11px; color:var(--muted); }
+  .modifier-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    border-radius:5px; padding:3px 8px; font-size:11px; font-weight:700;
+    margin-left:auto;
+  }
+  .mb-green  { background:rgba(63,185,80,.15);  color:var(--green); }
+  .mb-amber  { background:rgba(210,153,34,.15); color:var(--amber); }
+  .mb-red    { background:rgba(248,81,73,.15);  color:var(--red); }
+  .mb-purple { background:rgba(168,85,247,.15); color:var(--purple); }
+  .mb-teal   { background:rgba(45,212,191,.15); color:var(--teal); }
+  .req-badge { font-size:11px; color:var(--red); background:rgba(248,81,73,.1); border-radius:4px; padding:2px 7px; }
+
+  /* ── REPUTATION BAR ── */
+  .rep-row { display:flex; align-items:center; gap:8px; }
+  .rep-bar-wrap { flex:1; height:5px; background:var(--bg3); border-radius:3px; overflow:hidden; }
+  .rep-bar-fill { height:100%; border-radius:3px; transition:width .4s, background .4s; }
+
+  /* ── DASHBOARD ── */
+  #screen-results { max-width:780px; margin:0 auto; }
+  .result-hero  { text-align:center; margin-bottom:24px; }
+  .result-icon  { font-size:68px; margin-bottom:10px; }
+  .result-title { font-size:28px; font-weight:800; margin-bottom:7px; }
+  .result-sub   { color:var(--sub); font-size:15px; line-height:1.6; margin-bottom:18px; }
+  .result-kpis  { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:24px; }
+  .kpi-box { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center; }
+  .kpi-box .kv { font-size:18px; font-weight:700; }
+  .kpi-box .kl { color:var(--sub); font-size:11px; margin-top:2px; }
+  .chart-panel { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px; }
+  .chart-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--sub); margin-bottom:12px; }
+  .chart-wrap  { width:100%; overflow:hidden; border-radius:6px; }
+  .chart-wrap svg { width:100%; height:auto; display:block; }
+  .analytics-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+  .breakdown-row { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+  .breakdown-icon { font-size:16px; width:24px; text-align:center; flex-shrink:0; }
+  .breakdown-info { flex:1; }
+  .breakdown-name { font-size:13px; font-weight:600; }
+  .breakdown-bar-wrap { flex:1; height:7px; background:var(--bg3); border-radius:4px; overflow:hidden; margin:3px 0; }
+  .breakdown-bar-fill { height:100%; border-radius:4px; }
+  .breakdown-val { font-size:12px; font-weight:700; color:var(--green); white-space:nowrap; }
+  .timeline { display:flex; flex-direction:column; gap:5px; max-height:200px; overflow-y:auto; }
+  .tl-item { display:flex; align-items:flex-start; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); }
+  .tl-item:last-child { border-bottom:none; }
+  .tl-dot   { width:7px; height:7px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+  .tl-month { font-size:10px; color:var(--muted); white-space:nowrap; min-width:56px; }
+  .tl-text  { font-size:12px; color:var(--sub); }
+  .insight-row { display:flex; gap:10px; margin-bottom:8px; }
+  .insight-icon { font-size:15px; flex-shrink:0; margin-top:1px; }
+  .insight-text { font-size:13px; color:var(--sub); line-height:1.5; }
+  .insight-text strong { color:var(--text); }
+
+  /* ── NOTIF ── */
+  .notif {
+    position:fixed; top:18px; right:18px; background:var(--bg2); border:1px solid var(--border);
+    border-radius:10px; padding:11px 16px; font-size:13px; z-index:200;
+    transform:translateX(120%); transition:transform .3s; max-width:300px; line-height:1.4;
+  }
+  .notif.show    { transform:translateX(0); }
+  .notif.success { border-color:var(--green); }
+  .notif.error   { border-color:var(--red); }
+  .notif.info    { border-color:var(--accent); }
+  .notif.warning { border-color:var(--amber); }
+
+  .divider { height:1px; background:var(--border); margin:4px 0; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+  .badge-spec { background:rgba(79,110,247,.2); color:var(--accent2); }
+
+  @media(max-width:720px){
+    .game-body{grid-template-columns:1fr}
+    .spec-grid{grid-template-columns:1fr}
+    .stat-row{grid-template-columns:repeat(2,1fr)}
+    .result-kpis{grid-template-columns:repeat(2,1fr)}
+    .analytics-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ INTRO ══ -->
+<div id="screen-intro" class="screen active">
+  <div class="logo-wrap">
+    <div class="logo-icon">🏢</div>
+    <div class="logo-title">BizTycoon</div>
+    <div class="logo-sub">Digital Agency — Prototype v0.4</div>
+  </div>
+  <div class="intro-desc">
+    Ты открываешь <strong>собственное диджитал-агентство</strong>. Клиенты не приходят сами — их нужно искать: каждый <strong>скаутинг</strong> стоит рабочих дней и не гарантирует результат. Каждый найденный проект — свой риск: кто-то задерживает оплату, кто-то платит хорошо, но портит репутацию. Доведи баланс до <strong>3 000 000 ₽</strong>, пока деньги не кончились.
+  </div>
+  <div class="stat-row">
+    <div class="stat-box"><div class="val">500 000 ₽</div><div class="lbl">Стартовый капитал</div></div>
+    <div class="stat-box"><div class="val">10 дней/мес</div><div class="lbl">Рабочий ресурс</div></div>
+    <div class="stat-box"><div class="val">3 000 000 ₽</div><div class="lbl">Цель</div></div>
+  </div>
+  <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:16px;padding:15px;" onclick="goTo('screen-spec')">
+    Начать игру →
+  </button>
+</div>
+
+<!-- ══ SPEC ══ -->
+<div id="screen-spec" class="screen">
+  <h2>Выбери специализацию</h2>
+  <p>Влияет на бонус к выручке и стартовую репутацию</p>
+  <div class="spec-grid">
+    <div class="spec-card" onclick="selectSpec('smm')" id="spec-smm">
+      <div class="spec-icon">📱</div><div class="spec-name">SMM-агентство</div>
+      <div class="spec-desc">Соцсети, контент, таргет. Много небольших клиентов, быстрый оборот.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag green">+15% к выручке малых клиентов</span></div>
+    </div>
+    <div class="spec-card" onclick="selectSpec('seo')" id="spec-seo">
+      <div class="spec-icon">🔍</div><div class="spec-name">SEO-агентство</div>
+      <div class="spec-desc">Продвижение в поиске. Стабильный, но медленный рост.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag amber">−10% расходов на команду</span></div>
+    </div>
+    <div class="spec-card" onclick="selectSpec('web')" id="spec-web">
+      <div class="spec-icon">💻</div><div class="spec-name">Web-разработка</div>
+      <div class="spec-desc">Сайты и приложения. Крупные проекты, длинные циклы.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag purple">+25% к выручке корпоратов</span></div>
+    </div>
+    <div class="spec-card" onclick="selectSpec('brand')" id="spec-brand">
+      <div class="spec-icon">✨</div><div class="spec-name">Брендинг</div>
+      <div class="spec-desc">Айдентика и стратегия. Высокий чек, долгий поиск.</div>
+      <div class="spec-bonus" style="margin-top:8px"><span class="tag">+40% к выручке интернет-магазинов</span></div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <button class="btn btn-ghost" onclick="goTo('screen-intro')">← Назад</button>
+    <button class="btn btn-primary" id="btn-start-game" onclick="startGame()" disabled>Открыть агентство →</button>
+  </div>
+</div>
+
+<!-- ══ GAME ══ -->
+<div id="screen-game" class="screen">
+
+  <div class="game-header">
+    <div class="game-logo">BizTycoon <span>/ <span id="g-spec-name"></span></span></div>
+    <div class="header-stats">
+      <div class="hstat"><div class="v" id="g-month">Янв 2026</div><div class="l">Месяц</div></div>
+      <div class="hstat"><div class="v amber" id="g-money">500 000 ₽</div><div class="l">В банке</div></div>
+      <div class="hstat"><div class="v" id="g-cashflow">+0 ₽</div><div class="l">Ожид. cashflow</div></div>
+      <div class="hstat"><div class="v teal" id="g-rep">100</div><div class="l">Репутация</div></div>
+      <div class="hstat"><div class="v" id="g-portfolio" style="color:var(--purple)">0</div><div class="l">Портфолио</div></div>
+    </div>
+  </div>
+
+  <!-- Actions bar -->
+  <div class="actions-bar">
+    <div class="actions-label">📅 Рабочие дни</div>
+    <div class="actions-pips" id="g-action-pips"></div>
+    <div class="actions-val" id="g-action-val">10 / 10</div>
+  </div>
+
+  <div class="game-body">
+    <!-- LEFT -->
+    <div class="col-main">
+
+      <div class="panel">
+        <div class="panel-title">
+          Активные проекты
+          <span class="badge badge-spec" id="g-client-count">0/0</span>
+        </div>
+        <div id="g-clients-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">P&L этого месяца</div>
+        <div id="g-pnl"></div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>Цель: 3 000 000 ₽</span><span id="g-progress-pct">0%</span></div>
+          <div class="progress-bar"><div class="progress-fill" id="g-progress-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <button class="advance-btn" onclick="advanceMonth()">⏭ Завершить месяц</button>
+
+      <div class="panel">
+        <div class="panel-title">История</div>
+        <div id="g-log" style="max-height:150px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="col-side">
+
+      <!-- Scout action -->
+      <div class="panel">
+        <div class="panel-title">Действия</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
+            🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Прокачка Q <span style="color:var(--muted);font-size:10px;font-weight:400">качество</span></div>
+        <div id="g-upgrades-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Команда</div>
+        <div id="g-team-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Нанять <span style="color:var(--muted);font-size:10px;font-weight:400">−2 дня</span></div>
+        <div id="g-hire-list"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Метрики</div>
+        <div id="g-metrics"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ RESULTS ══ -->
+<div id="screen-results" class="screen">
+  <div class="result-hero">
+    <div class="result-icon" id="r-icon">🏆</div>
+    <div class="result-title" id="r-title"></div>
+    <div class="result-sub"   id="r-sub"></div>
+    <div class="result-kpis"  id="r-kpis"></div>
+  </div>
+  <div class="chart-panel">
+    <div class="chart-title">Кривая баланса по месяцам</div>
+    <div class="chart-wrap" id="r-chart"></div>
+  </div>
+  <div class="analytics-grid">
+    <div class="panel">
+      <div class="panel-title">Выручка по проектам</div>
+      <div id="r-breakdown"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Хронология решений</div>
+      <div class="timeline" id="r-timeline"></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title">Инсайты прогона</div>
+    <div id="r-insights"></div>
+  </div>
+  <div style="text-align:center;">
+    <button class="btn btn-primary" onclick="resetGame()">Играть снова</button>
+  </div>
+</div>
+
+<!-- ══ EVENT MODAL ══ -->
+<div class="modal-overlay" id="event-modal">
+  <div class="modal">
+    <div class="modal-icon" id="modal-icon">⚡</div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body"  id="modal-body"></div>
+    <div class="modal-choices" id="modal-choices"></div>
+  </div>
+</div>
+
+<!-- ══ SCOUT MODAL ══ -->
+<div class="modal-overlay" id="scout-modal">
+  <div class="modal modal-wide">
+    <div class="scout-header">
+      <h3 id="scout-title">Результаты скаутинга</h3>
+      <p  id="scout-sub"></p>
+    </div>
+    <div class="scout-grid" id="scout-grid"></div>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center;" onclick="closeScout()">
+      Ничего не подходит — закрыть
+    </button>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  CONSTANTS
+// ══════════════════════════════════════════════════════
+
+const OVERHEAD          = 20000;   // ₽/мес постоянных расходов
+const ACTIONS_PER_MONTH = 10;      // рабочих дней в месяц
+const SCOUT_COST        = 3;       // дней на скаутинг
+const HIRE_COST         = 2;       // дней на найм
+
+const SPECS = {
+  smm:   { name:'SMM-агентство',  icon:'📱', bonus:'small_income', bonusVal:0.15 },
+  seo:   { name:'SEO-агентство',  icon:'🔍', bonus:'staff_cost',   bonusVal:-0.10 },
+  web:   { name:'Web-разработка', icon:'💻', bonus:'corp_income',  bonusVal:0.25 },
+  brand: { name:'Брендинг',       icon:'✨', bonus:'store_income', bonusVal:0.40 },
+};
+
+const STAFF_DEFS = [
+  { id:'designer',   name:'Дизайнер',      icon:'🎨', role:'Визуал + качество',      cost:67000, quality:20, volume:0,  capacity:0 },
+  { id:'copywriter', name:'Копирайтер',    icon:'✍️', role:'Контент + объём',        cost:50000, quality:0,  volume:15, capacity:0 },
+  { id:'manager',    name:'Менеджер',      icon:'📋', role:'Аккаунтинг',             cost:75000, quality:0,  volume:0,  capacity:2 },
+  { id:'developer',  name:'Разработчик',   icon:'💻', role:'Кач +15 • тех-проекты',  cost:85000, quality:15, volume:0,  capacity:0 },
+  { id:'smm',        name:'SMM-маркетолог',icon:'📣', role:'Объём +10 • +1 лид/скаут',cost:48000, quality:0,  volume:10, capacity:0 },
+  { id:'lawyer',     name:'Юрист',         icon:'⚖️', role:'Штрафы и риски −50%',    cost:58000, quality:0,  volume:0,  capacity:0 },
+  { id:'hr',         name:'HR-менеджер',   icon:'🤝', role:'NPS +3/мес • найм за 1 день', cost:42000, quality:0, volume:0, capacity:0 },
+];
+
+const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+// ── Q-UPGRADES ───────────────────────────────────────────
+// oneTime:true  → постоянный бонус к qualityBonus (купить 1 раз)
+// oneTime:false → разовый бонус к tempQBonus (сбрасывается в конце месяца)
+const UPGRADES = [
+  {
+    id:'tools_q', icon:'🖥️', name:'Проф. инструментарий',
+    desc:'Figma Pro, Adobe CC — команда работает без ограничений',
+    cost:25000, days:1, qBonus:6,  repBonus:0, oneTime:true,
+  },
+  {
+    id:'training_q', icon:'📚', name:'Курсы по дизайну',
+    desc:'Онлайн-обучение + внутренний воркшоп для команды',
+    cost:45000, days:2, qBonus:10, repBonus:0, oneTime:true,
+  },
+  {
+    id:'consultant_q', icon:'🎯', name:'UX-консультант',
+    desc:'Разовый аудит от топ-специалиста: Q-рост и репутация',
+    cost:72000, days:1, qBonus:14, repBonus:5, oneTime:true,
+  },
+  {
+    id:'freelance_q', icon:'✏️', name:'Фриланс-дизайнер',
+    desc:'Временная помощь — Q только в этом месяце',
+    cost:30000, days:1, qBonus:10, repBonus:0, oneTime:false,
+  },
+];
+
+// ── PROJECT POOL ────────────────────────────────────────
+// tier 1 = малый риск/доход, tier 2 = средний, tier 3 = высокий
+// modifier.type: nps_passive | nps_start | nps_drain | payment_delay
+//                payment_delay_fixed | one_time | reputation | nps_penalty | random_bonus
+const PROJECT_POOL = [
+  // ── TIER 1 ─────────────────────────────────────────
+  {
+    id:'loyal', tier:1, icon:'😊', name:'Лояльный заказчик',
+    desc:'Простой проект, всегда доволен, платит вовремя. Идеальный первый клиент.',
+    revenue:12000, minQ:0, minV:0, type:'small', npsStart:84, oneTime:false,
+    modifier:{ type:'nps_passive', val:+5, label:'+5 NPS/мес' },
+    modBadge:'mb-green', prob:0.75,
+  },
+  {
+    id:'referral', tier:1, icon:'🤝', name:'Тёплый лид (рекомендация)',
+    desc:'Пришёл по рекомендации. Уже расположен к вам — NPS стартует выше нормы.',
+    revenue:19000, minQ:0, minV:0, type:'small', npsStart:94, oneTime:false,
+    modifier:{ type:'nps_start', val:+14, label:'NPS старт +14' },
+    modBadge:'mb-green', prob:0.80,
+  },
+  {
+    id:'late_pay', tier:1, icon:'🕐', name:'Систематически задерживает',
+    desc:'Хороший чек, но «деньги переведём на следующей неделе» — его фирменная фраза.',
+    revenue:28000, minQ:0, minV:0, type:'small', npsStart:72, oneTime:false,
+    modifier:{ type:'payment_delay', val:0.40, label:'40% шанс задержки/мес' },
+    modBadge:'mb-amber', prob:0.55,
+  },
+
+  // ── TIER 2 ─────────────────────────────────────────
+  {
+    id:'perfectionist', tier:2, icon:'🔬', name:'Перфекционист',
+    desc:'Платит хорошо, но никогда не удовлетворён. NPS тает быстрее без высокого качества.',
+    revenue:40000, minQ:15, minV:0, type:'small', npsStart:68, oneTime:false,
+    modifier:{ type:'nps_drain', val:-8, label:'NPS −8 доп./мес' },
+    modBadge:'mb-amber', prob:0.50,
+  },
+  {
+    id:'startup_hype', tier:2, icon:'🚀', name:'Стартап на хайпе',
+    desc:'Горит идеей, платит нерегулярно. Иногда кидает приятный бонус.',
+    revenue:24000, minQ:0, minV:10, type:'small', npsStart:74, oneTime:false,
+    modifier:{ type:'random_bonus', val:18000, label:'30% шанс бонуса 18К' },
+    modBadge:'mb-teal', prob:0.65,
+  },
+  {
+    id:'urgent', tier:2, icon:'⚡', name:'Срочный разовый заказ',
+    desc:'Нужно «ещё вчера». Хорошо платит единоразово и исчезает.',
+    revenue:60000, minQ:10, minV:5, type:'small', npsStart:78, oneTime:true,
+    modifier:{ type:'one_time', val:0, label:'Разовый платёж' },
+    modBadge:'mb-purple', prob:0.60,
+  },
+  {
+    id:'demanding_corp', tier:2, icon:'🏢', name:'Корпоративный KPI',
+    desc:'Солидный чек, но штраф если NPS опустится ниже порога.',
+    revenue:90000, minQ:30, minV:10, type:'corp', npsStart:66, oneTime:false,
+    modifier:{ type:'nps_penalty', val:-22000, threshold:65, label:'NPS<65 → штраф 22К/мес' },
+    modBadge:'mb-red', prob:0.35,
+  },
+
+  // ── TIER 3 ─────────────────────────────────────────
+  {
+    id:'grey_zone', tier:3, icon:'🌫️', name:'Серая зона',
+    desc:'Щедро платит, но проекты на грани закона. Репутация и портфолио страдают.',
+    revenue:75000, minQ:0, minV:0, type:'small', npsStart:70, oneTime:false,
+    modifier:{ type:'reputation', val:-12, label:'−12 репутации при подписании' },
+    modBadge:'mb-red', prob:0.45,
+  },
+  {
+    id:'state', tier:3, icon:'🏛️', name:'Государственный контракт',
+    desc:'Огромный чек, но бюрократия: первые 2 месяца оплаты нет — готовь кэш.',
+    revenue:130000, minQ:30, minV:15, type:'corp', npsStart:62, oneTime:false,
+    modifier:{ type:'payment_delay_fixed', val:2, label:'Первые 2 мес — нет оплаты' },
+    modBadge:'mb-purple', prob:0.25,
+  },
+  {
+    id:'retainer_plus', tier:3, icon:'💎', name:'Долгосрочный ретейнер',
+    desc:'Стабильный крупный клиент с растущей ставкой за лояльность.',
+    revenue:55000, minQ:20, minV:15, type:'store', npsStart:76, oneTime:false,
+    modifier:{ type:'revenue_growth', val:0.05, label:'+5% выручки каждый мес' },
+    modBadge:'mb-teal', prob:0.30,
+  },
+
+  // ── PORTFOLIO-GATED ──────────────────────────────────
+  {
+    id:'media_agency', tier:2, icon:'📊', name:'Медиа-агентство',
+    desc:'Работают только с агентствами с историей. Требует портфолио.',
+    revenue:54000, minQ:15, minV:10, type:'small', npsStart:77, oneTime:false,
+    minPortfolio:12, portfolioWeight:2,
+    modifier:{ type:'nps_passive', val:+4, label:'+4 NPS/мес' },
+    modBadge:'mb-green', prob:0.55,
+  },
+  {
+    id:'international', tier:3, icon:'🌍', name:'Международный клиент',
+    desc:'Зарубежная компания с серьёзными требованиями к опыту агентства.',
+    revenue:100000, minQ:25, minV:10, type:'corp', npsStart:70, oneTime:false,
+    minPortfolio:28, portfolioWeight:3,
+    modifier:{ type:'payment_delay', val:0.20, label:'20% шанс задержки/мес' },
+    modBadge:'mb-amber', prob:0.38,
+  },
+  {
+    id:'strategic_partner', tier:3, icon:'🤝', name:'Стратегический партнёр',
+    desc:'Якорный долгосрочный контракт. Только для агентств с сильным портфолио.',
+    revenue:80000, minQ:20, minV:15, type:'store', npsStart:82, oneTime:false,
+    minPortfolio:50, portfolioWeight:3,
+    modifier:{ type:'revenue_growth', val:0.08, label:'+8% выручки каждый мес' },
+    modBadge:'mb-teal', prob:0.32,
+  },
+
+  // ── TECH (требуют Разработчика) ─────────────────────
+  {
+    id:'saas', tier:2, icon:'⚙️', name:'SaaS-интеграция',
+    desc:'Технический клиент — настройка и поддержка платформы. Нужен Разработчик в команде.',
+    revenue:72000, minQ:20, minV:0, type:'corp', npsStart:74, oneTime:false,
+    requiresDev:true,
+    modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
+    modBadge:'mb-teal', prob:0.50,
+  },
+  {
+    id:'fintech', tier:3, icon:'🏦', name:'FinTech-платформа',
+    desc:'Крупный технический контракт. Высокий порог качества и обязательно нужен Разработчик.',
+    revenue:115000, minQ:30, minV:10, type:'corp', npsStart:65, oneTime:false,
+    requiresDev:true,
+    modifier:{ type:'payment_delay_fixed', val:1, label:'1 мес — нет оплаты' },
+    modBadge:'mb-purple', prob:0.30,
+  },
+];
+
+// ── EVENTS ──────────────────────────────────────────────
+const EVENTS = [
+  {
+    id:'discount', icon:'🤝', title:'Клиент просит скидку',
+    body:'Постоянный клиент просит снизить чек на 15%. Отказать — NPS падает, согласиться — теряешь доход.',
+    choices:[
+      { text:'Согласиться (−15% дохода, NPS +12)', desc:'Клиент доволен, лояльность растёт',
+        fn:g=>{ g.tempDiscount=0.15; nudgeAllNPS(g,+12); } },
+      { text:'Отказать', desc:'NPS у клиента −20 (риск ухода)',
+        fn:g=>{ if(g.activeClients.length>0){ const c=g.activeClients[g.activeClients.length-1]; g.clientNPS[c.id]=Math.max(0,(g.clientNPS[c.id]||60)-20); } } },
+    ]
+  },
+  {
+    id:'quit', icon:'🚪', title:'Сотрудник хочет уйти',
+    body:'Получил оффер. Можно удержать повышением или отпустить.',
+    choices:[
+      { text:'Повышение +20 000 ₽/мес', desc:'Остаётся, зарплата выше',
+        fn:g=>{ if(g.staff.length>0){ g.staff[g.staff.length-1].cost+=20000; notify('Зарплата повышена 💰','info'); rd('Удержал сотрудника +20К/мес','hire'); } } },
+      { text:'Отпустить', desc:'Теряешь его бонусы',
+        fn:g=>{ if(g.staff.length>0){ const s=g.staff.pop(); notify(`${s.name} ушёл 😢`,'error'); rd(`${s.name} ушёл из команды`,'churn'); } } },
+    ]
+  },
+  {
+    id:'algo', icon:'📉', title:'Алгоритм сменился',
+    body:'Апдейт платформ. Клиенты паникуют — NPS всех просел.',
+    choices:[
+      { text:'Антикризисный аудит (−30 000 ₽)', desc:'NPS +15 у всех',
+        fn:g=>{ g.money-=30000; nudgeAllNPS(g,+15); notify('Аудит проведён ✅','info'); rd('Антикризисный аудит −30К','event'); } },
+      { text:'Переждать', desc:'NPS всех клиентов −18',
+        fn:g=>{ nudgeAllNPS(g,-18); notify('Клиенты недовольны 📉','warning'); } },
+    ]
+  },
+  {
+    id:'conflict', icon:'⚡', title:'Конфликт в команде',
+    body:'Напряжение сказывается на работе — NPS клиентов падает.',
+    choices:[
+      { text:'Тимбилдинг (−25 000 ₽)', desc:'NPS +10, команда в потоке',
+        fn:g=>{ g.money-=25000; nudgeAllNPS(g,+10); notify('Тимбилдинг помог 🎉','success'); rd('Тимбилдинг −25К','event'); } },
+      { text:'Поговорить самому', desc:'50% — NPS −8 или без изменений',
+        fn:g=>{ if(Math.random()<0.5) nudgeAllNPS(g,-8); else notify('Конфликт исчерпан 🤝','success'); } },
+    ]
+  },
+];
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let G = {};
+let DECISIONS = [];
+
+function initState() {
+  G = {
+    spec:null, money:500000, month:0,
+    staff:[], activeClients:[], log:[],
+    tempDiscount:0, monthsPlayed:0,
+    actions: ACTIONS_PER_MONTH,
+    reputation: 100,
+    clientNPS: {},
+    clientEarnings: {},
+    delayedIncome: 0,
+    history: [],
+    upgrades: {},        // купленные одноразовые апгрейды {id: true}
+    qualityBonus: 0,     // постоянный Q-бонус от апгрейдов
+    tempQBonus: 0,       // временный Q-бонус (сбрасывается в конце месяца)
+    portfolio: 0,        // накопленное портфолио (баллы за завершённые проекты)
+  };
+  DECISIONS = [];
+}
+
+function rd(text, type) {
+  DECISIONS.push({ monthIdx:G.history.length, label:monthLabel(), text, type });
+}
+
+function monthLabel(offset=0) {
+  const m=G.month+offset;
+  return MONTHS[m%12]+' '+(2026+Math.floor(m/12));
+}
+
+// ══════════════════════════════════════════════════════
+//  NAV / SPEC / START
+// ══════════════════════════════════════════════════════
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function selectSpec(id) {
+  document.querySelectorAll('.spec-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('spec-'+id).classList.add('selected');
+  G.spec=id;
+  document.getElementById('btn-start-game').disabled=false;
+}
+
+function startGame() {
+  if (!G.spec) return;
+  G.money=500000; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[];
+  G.tempDiscount=0; G.monthsPlayed=0;
+  G.actions=ACTIONS_PER_MONTH; G.reputation=100;
+  G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
+  G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
+  DECISIONS=[];
+  G.history.push({month:0, money:500000, label:'Старт'});
+  addLog('Агентство открыто. Используй Скаутинг чтобы найти первый проект!','amber');
+  addLog(`Overhead −${fmt(OVERHEAD)}/мес (аренда, инструменты)`,'red');
+  renderGame(); goTo('screen-game');
+}
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function fmt(n)  { return Math.round(n).toLocaleString('ru-RU')+'₽'; }
+function fmtK(n) { return Math.abs(n)>=1000000?(n/1000000).toFixed(1)+'M₽':Math.abs(n)>=1000?Math.round(n/1000)+'K₽':Math.round(n)+'₽'; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+function getQuality(g=G){ return g.staff.reduce((s,x)=>s+(x.quality||0),0)+(g.qualityBonus||0)+(g.tempQBonus||0); }
+function getVolume(g=G) { return g.staff.reduce((s,x)=>s+(x.volume||0),0); }
+function getCapacity(g=G){ return 1+g.staff.reduce((s,x)=>s+(x.capacity||0),0); }
+function hasRole(id,g=G){ return !!g.staff.find(s=>s.id===id); }
+function countRole(id,g=G){ return g.staff.filter(s=>s.id===id).length; }
+// +0.4% выручки за каждый балл портфолио, cap +20% при 50 баллах
+function getPortfolioMultiplier(g=G){ return 1+Math.min((g.portfolio||0)*0.004, 0.20); }
+
+// Base expected revenue for display (no payment-delay adjustments)
+function getClientRevenue(c, g=G) {
+  let r = c.revenue;
+  // Revenue growth modifier
+  if (c.modifier?.type==='revenue_growth') r *= Math.pow(1+c.modifier.val, c._monthsSigned||0);
+  // Quality/Volume premium
+  const qO = Math.max(0, getQuality(g)-c.minQ); const vO = Math.max(0, getVolume(g)-c.minV);
+  r *= (1 + Math.min(qO*0.007,0.35) + Math.min(vO*0.005,0.25));
+  // Spec bonus
+  const spec=SPECS[g.spec];
+  if (c.type==='small' && spec.bonus==='small_income') r*=(1+spec.bonusVal);
+  if (c.type==='corp'  && spec.bonus==='corp_income')  r*=(1+spec.bonusVal);
+  if (c.type==='store' && spec.bonus==='store_income') r*=(1+spec.bonusVal);
+  // Portfolio multiplier
+  r *= getPortfolioMultiplier(g);
+  return Math.round(r);
+}
+
+// Actual revenue THIS month (respects payment_delay_fixed dormancy)
+function getClientRevenueThisMonth(c, g=G) {
+  if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return 0;
+  return getClientRevenue(c,g);
+}
+
+function getTotalRevenue(g=G)    { return g.activeClients.reduce((s,c)=>s+getClientRevenue(c,g),0); }
+function getTotalRevenueThisMonth(g=G) { return g.activeClients.reduce((s,c)=>s+getClientRevenueThisMonth(c,g),0); }
+
+function getTotalStaffCost(g=G) {
+  let t=g.staff.reduce((s,x)=>s+x.cost,0);
+  if (SPECS[g.spec].bonus==='staff_cost') t=Math.round(t*(1+SPECS[g.spec].bonusVal));
+  return t;
+}
+
+// Expected cashflow (for header display)
+function getCashflow(g=G) {
+  let rev=getTotalRevenue(g);
+  if (g.tempDiscount>0) rev=Math.round(rev*(1-g.tempDiscount));
+  return rev - getTotalStaffCost(g) - OVERHEAD;
+}
+
+function addLog(msg, cls='') {
+  G.log.unshift({ month:monthLabel(), msg, cls });
+  if (G.log.length>30) G.log.pop();
+}
+
+function notify(msg, type='info') {
+  const el=document.getElementById('notif');
+  el.textContent=msg; el.className='notif show '+type;
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+function npsColor(v) {
+  return v>=65?'var(--green)':v>=42?'var(--amber)':'var(--red)';
+}
+
+function repColor(v) {
+  return v>=70?'var(--green)':v>=40?'var(--amber)':'var(--red)';
+}
+
+// ══════════════════════════════════════════════════════
+//  NPS ENGINE
+// ══════════════════════════════════════════════════════
+function nudgeAllNPS(g,delta) {
+  g.activeClients.forEach(c=>{ g.clientNPS[c.id]=clamp((g.clientNPS[c.id]||70)+delta,0,100); });
+}
+
+function updateAllNPS() {
+  const quality=getQuality(), volume=getVolume();
+  const overloaded=G.activeClients.length>=getCapacity();
+  const hasManager=!!G.staff.find(s=>s.id==='manager');
+  const hrBonus=countRole('hr')*3; // +3 NPS/мес per HR
+  const churned=[];
+
+  G.activeClients.forEach(c=>{
+    let nps=G.clientNPS[c.id]??c.npsStart??70;
+    const qGap=quality-c.minQ, vGap=volume-c.minV;
+
+    // Качество/объём как драйверы NPS
+    if      (qGap<0)    nps-=14;
+    else if (qGap<5)    nps-=5;
+    else if (qGap>=15)  nps+=4;
+
+    if (vGap<0)   nps-=10;
+    else if (vGap<5) nps-=2;
+
+    if (overloaded)  nps-=6;
+    if (hasManager)  nps+=5;
+    if (hrBonus>0)   nps+=hrBonus;
+
+    // Client-specific passive modifiers
+    if (c.modifier?.type==='nps_passive') nps+=c.modifier.val;
+    if (c.modifier?.type==='nps_drain')   nps+=c.modifier.val;
+
+    nps+=Math.random()*6-3; // market noise ±3
+    nps=clamp(nps,0,100);
+    G.clientNPS[c.id]=nps;
+
+    if      (nps<25) churned.push(c);
+    else if (nps<45) addLog(`⚠️ ${c.name}: NPS ${Math.round(nps)} — клиент недоволен`,'amber');
+  });
+
+  churned.forEach(c=>{
+    G.activeClients=G.activeClients.filter(a=>a.id!==c.id);
+    delete G.clientNPS[c.id];
+    addLog(`💔 ${c.name} расторг контракт (NPS обнулился)`,'red');
+    notify(`${c.icon} ${c.name} ушёл сам`,'error');
+    rd(`${c.name} ушёл органически`,'churn');
+  });
+}
+
+function investInClient(cid) {
+  if (G.money<20000){ notify('Мало денег','error'); return; }
+  const c=G.activeClients.find(a=>a.id===cid);
+  if (!c) return;
+  G.money-=20000;
+  const before=Math.round(G.clientNPS[cid]||70);
+  G.clientNPS[cid]=clamp((G.clientNPS[cid]||70)+25,0,100);
+  addLog(`💬 Инвестиция в ${c.name}: NPS ${before}→${Math.round(G.clientNPS[cid])}`,'teal');
+  notify(`NPS ${c.name}: ${before}→${Math.round(G.clientNPS[cid])} 📈`,'success');
+  rd(`Инвестиция в ${c.name}:  NPS+25`,'event');
+  renderGame();
+}
+
+// ══════════════════════════════════════════════════════
+//  SCOUTING
+// ══════════════════════════════════════════════════════
+function doScouting() {
+  if (G.actions<SCOUT_COST){ notify(`Нужно ≥${SCOUT_COST} дней — осталось ${G.actions}`,'error'); return; }
+  G.actions-=SCOUT_COST;
+  addLog(`🔍 Скаутинг проектов (−${SCOUT_COST} дня)`,'teal');
+
+  // How many offers? Depends on reputation + luck
+  const roll=Math.random()*100;
+  const repBonus=(G.reputation-50)*0.2; // -10..+10 adjustment
+  const adjustedRoll=roll+repBonus;
+
+  let offerCount;
+  if      (adjustedRoll<=10) offerCount=0;
+  else if (adjustedRoll<=40) offerCount=1;
+  else if (adjustedRoll<=75) offerCount=2;
+  else                       offerCount=3;
+
+  // SMM: guaranteed +1 offer (max 3)
+  if (hasRole('smm')) offerCount=Math.min(3, offerCount+1);
+
+  // Eligible pool by reputation tier + developer unlock
+  const maxTier = G.reputation>=70?3 : G.reputation>=40?2 : 1;
+  const pool=PROJECT_POOL.filter(p=>
+    p.tier<=maxTier &&
+    (!p.requiresDev  || hasRole('developer')) &&
+    (!p.minPortfolio || (G.portfolio||0)>=p.minPortfolio)
+  );
+
+  // Pick `offerCount` random unique projects
+  const offers=[];
+  const shuffled=[...pool].sort(()=>Math.random()-0.5);
+  for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
+    const p=shuffled[i];
+    // Don't offer project already active
+    if (!G.activeClients.find(c=>c.id.startsWith(p.id))) offers.push(p);
+  }
+
+  showScoutResults(offers);
+  renderGame();
+}
+
+function showScoutResults(offers) {
+  const modal=document.getElementById('scout-modal');
+  document.getElementById('scout-title').textContent=
+    offers.length ? `Найдено проектов: ${offers.length}` : 'Скаутинг не дал результатов';
+  document.getElementById('scout-sub').textContent=
+    offers.length
+      ? 'Выбери один проект для подписания (или закрой без выбора).'
+      : 'На рынке тишина. Попробуй снова в следующем месяце или улучши репутацию.';
+
+  const grid=document.getElementById('scout-grid');
+  grid.innerHTML='';
+
+  offers.forEach(p=>{
+    const curQ = getQuality(), curV = getVolume();
+    const qOk  = curQ >= p.minQ;
+    const vOk  = curV >= p.minV;
+    const devOk  = !p.requiresDev  || hasRole('developer');
+    const portOk = !p.minPortfolio || (G.portfolio||0) >= p.minPortfolio;
+    const slotOk = G.activeClients.length < getCapacity();
+    const canTake = slotOk && qOk && vOk && devOk && portOk;
+
+    // Build req row: always show when there are any requirements
+    const hasReqs = p.minQ > 0 || p.minV > 0 || p.requiresDev || p.minPortfolio > 0;
+    let reqRow = '';
+    if (!slotOk) {
+      reqRow = `<div style="margin-top:7px"><span class="req-badge">⛔ Нет слота — нужен Менеджер (+2 слота)</span></div>`;
+    } else if (hasReqs) {
+      const chips = [];
+      if (p.minQ > 0) chips.push(
+        `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${qOk?'rgba(63,185,80,.12)':'rgba(248,81,73,.1)'};color:${qOk?'var(--green)':'var(--red)'};font-weight:600">
+          ${qOk?'✓':'✗'} Q: ${curQ}/${p.minQ}${!qOk?' — нанять Дизайнера':''}
+        </span>`);
+      if (p.minV > 0) chips.push(
+        `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${vOk?'rgba(63,185,80,.12)':'rgba(248,81,73,.1)'};color:${vOk?'var(--green)':'var(--red)'};font-weight:600">
+          ${vOk?'✓':'✗'} V: ${curV}/${p.minV}${!vOk?' — нанять Копирайтера':''}
+        </span>`);
+      if (p.requiresDev) chips.push(
+        `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${devOk?'rgba(63,185,80,.12)':'rgba(248,81,73,.1)'};color:${devOk?'var(--green)':'var(--red)'};font-weight:600">
+          ${devOk?'✓':'✗'} Разработчик${!devOk?' — нанять Разработчика':''}
+        </span>`);
+      if (p.minPortfolio > 0) chips.push(
+        `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${portOk?'rgba(168,85,247,.12)':'rgba(248,81,73,.1)'};color:${portOk?'var(--purple)':'var(--red)'};font-weight:600">
+          ${portOk?'✓':'✗'} Портфолио: ${G.portfolio||0}/${p.minPortfolio}${!portOk?' — закрывай проекты':''}
+        </span>`);
+      reqRow = `<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">${chips.join('')}</div>`;
+    }
+
+    const card=document.createElement('div');
+    card.className='project-card'+(canTake?'':' unavailable');
+    card.innerHTML=`
+      <div class="project-top">
+        <div class="project-icon">${p.icon}</div>
+        <div class="project-meta">
+          <div class="project-name">${p.name}</div>
+          <div class="project-desc">${p.desc}</div>
+        </div>
+      </div>
+      <div class="project-bottom">
+        <span class="project-rev">${fmt(p.revenue)}</span>
+        <span class="project-rev-label">${p.oneTime?'разово':'/мес'}</span>
+        <span class="modifier-badge ${p.modBadge}">${p.modifier.label}</span>
+      </div>
+      ${reqRow}
+      ${canTake?`<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px;" onclick="signProject('${p.id}')">Подписать контракт</button>`:''}
+    `;
+    grid.appendChild(card);
+  });
+
+  modal.classList.add('active');
+}
+
+function signProject(pid) {
+  const def=PROJECT_POOL.find(p=>p.id===pid);
+  if (!def) return;
+  if (G.activeClients.length>=getCapacity()){ notify('Нет свободного слота','error'); return; }
+
+  const client={
+    ...def,
+    id: pid+'_'+G.month,
+    _monthsSigned: 0,
+  };
+
+  // nps_start: override starting NPS
+  if (client.modifier.type==='nps_start') {
+    client.npsStart=Math.min(100, (def.npsStart||70)+def.modifier.val);
+  }
+
+  G.activeClients.push(client);
+  G.clientNPS[client.id]=client.npsStart||70;
+  G.clientEarnings[client.id]=0;
+
+  // Immediate modifier effects
+  if (client.modifier.type==='reputation'){
+    const repHit=hasRole('lawyer') ? Math.round(client.modifier.val*0.5) : client.modifier.val;
+    G.reputation=clamp(G.reputation+repHit,0,100);
+    addLog(`⚠️ Репутация: ${repHit} (серая зона${hasRole('lawyer')?' — юрист −50%':''})`,'red');
+  }
+
+  addLog(`✅ Подписан: ${client.name} (${fmt(client.revenue)}${client.oneTime?'разово':'/мес'})`,'green');
+  notify(`${client.icon} ${client.name} — контракт подписан!`,'success');
+  rd(`Подписан: ${client.name}`,'client');
+
+  closeScout();
+  renderGame();
+}
+
+function closeScout() {
+  document.getElementById('scout-modal').classList.remove('active');
+}
+
+// ══════════════════════════════════════════════════════
+//  HIRE
+// ══════════════════════════════════════════════════════
+function hireStaff(id) {
+  const def=STAFF_DEFS.find(d=>d.id===id);
+  if (!def) return;
+  const dayCost=hasRole('hr') ? 1 : HIRE_COST;
+  if (G.actions<dayCost){ notify(`Нужно ≥${dayCost} рабочих дня`,'error'); return; }
+  if (G.money<def.cost*2){ notify('Мало денег — нужен запас ≥2 зарплаты','error'); return; }
+  const instance={...def, _iid: def.id+'_m'+G.month+'_n'+G.staff.length};
+  G.staff.push(instance);
+  G.actions-=dayCost;
+  addLog(`👥 Нанят ${def.name} (−${fmt(def.cost)}/мес, −${dayCost} дня)`,'amber');
+  notify(`${def.name} принят! ${def.icon}`,'success');
+  rd(`Нанят ${def.name}`,'hire');
+  renderGame();
+}
+
+// ══════════════════════════════════════════════════════
+//  Q UPGRADES
+// ══════════════════════════════════════════════════════
+function buyUpgrade(id) {
+  const def = UPGRADES.find(u => u.id === id);
+  if (!def) return;
+  if (def.oneTime && G.upgrades[id]) { notify('Уже куплено ✓','error'); return; }
+  if (!def.oneTime && G.tempQBonus >= def.qBonus) { notify('Фриланс уже активен этот месяц','error'); return; }
+  if (G.actions < def.days) { notify(`Нужно ≥${def.days} дн.`,'error'); return; }
+  if (G.money < def.cost)   { notify('Мало денег','error'); return; }
+
+  G.money   -= def.cost;
+  G.actions -= def.days;
+
+  if (def.oneTime) {
+    G.upgrades[id]    = true;
+    G.qualityBonus   += def.qBonus;
+    if (def.repBonus) G.reputation = clamp(G.reputation + def.repBonus, 0, 100);
+    const extra = def.repBonus ? `, Реп +${def.repBonus}` : '';
+    addLog(`${def.icon} ${def.name}: Q постоянно +${def.qBonus}${extra}`, 'teal');
+    notify(`${def.icon} ${def.name} — Q +${def.qBonus}!`, 'success');
+  } else {
+    G.tempQBonus += def.qBonus;
+    addLog(`${def.icon} ${def.name}: Q +${def.qBonus} до конца месяца`, 'teal');
+    notify(`${def.icon} Фриланс-дизайнер — +${def.qBonus} Q этот месяц`, 'success');
+  }
+  rd(`${def.name} (Q+${def.qBonus})`, 'event');
+  renderGame();
+}
+
+// ══════════════════════════════════════════════════════
+//  CONFIRM HELPER  (reuses event-modal)
+// ══════════════════════════════════════════════════════
+function showConfirm(icon, title, body, confirmText, confirmClass, onConfirm) {
+  document.getElementById('modal-icon').textContent = icon;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent = body;
+  const div = document.getElementById('modal-choices'); div.innerHTML = '';
+
+  const btnOk = document.createElement('button');
+  btnOk.className = 'modal-choice';
+  btnOk.style.borderColor = confirmClass === 'red' ? 'rgba(248,81,73,.4)' : 'rgba(210,153,34,.4)';
+  btnOk.innerHTML = `<div class="choice-title" style="color:var(--${confirmClass})">${confirmText}</div>`;
+  btnOk.onclick = () => {
+    document.getElementById('event-modal').classList.remove('active');
+    onConfirm();
+  };
+
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'modal-choice';
+  btnCancel.innerHTML = `<div class="choice-title">Отмена</div><div class="choice-desc">Ничего не менять</div>`;
+  btnCancel.onclick = () => document.getElementById('event-modal').classList.remove('active');
+
+  div.appendChild(btnOk);
+  div.appendChild(btnCancel);
+  document.getElementById('event-modal').classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════
+//  FIRE STAFF
+// ══════════════════════════════════════════════════════
+function fireStaff(iid) {
+  const s = G.staff.find(x => x._iid === iid);
+  if (!s) return;
+  const severance = Math.round(s.cost * 0.5);
+  showConfirm(
+    '👋', `Уволить ${s.name}?`,
+    `Выходное пособие: ${fmt(severance)} (50% оклада). Потеряете бонусы этого сотрудника к Q/V/слотам.`,
+    `Уволить — выплатить ${fmt(severance)}`, 'red',
+    () => {
+      G.staff = G.staff.filter(x => x._iid !== iid);
+      G.money -= severance;
+      addLog(`👋 ${s.name} уволен. Выходное пособие −${fmt(severance)}`, 'amber');
+      notify(`${s.icon} ${s.name} уволен`, 'warning');
+      rd(`Уволен ${s.name} (−${fmt(severance)})`, 'hire');
+      renderGame();
+    }
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  TERMINATE CONTRACT
+// ══════════════════════════════════════════════════════
+function terminateContract(cid) {
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c) return;
+  showConfirm(
+    '🚫', `Расторгнуть контракт с ${c.name}?`,
+    `Досрочное расторжение: −10 репутации. Клиент уходит недовольным — это повлияет на входящие предложения.`,
+    'Расторгнуть контракт', 'red',
+    () => {
+      G.activeClients = G.activeClients.filter(a => a.id !== cid);
+      delete G.clientNPS[cid];
+      G.reputation = clamp(G.reputation - 10, 0, 100);
+      addLog(`🚫 Расторгнут контракт с ${c.name} (−10 репутации)`, 'red');
+      notify(`${c.icon} Контракт с ${c.name} расторгнут`, 'error');
+      rd(`Расторгнут: ${c.name}`, 'churn');
+      renderGame();
+    }
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  ADVANCE MONTH
+// ══════════════════════════════════════════════════════
+function advanceMonth() {
+  // ① Increment monthsSigned for each client
+  G.activeClients.forEach(c=>{ c._monthsSigned=(c._monthsSigned||0)+1; });
+
+  // ② Revenue this month (with payment_delay_fixed logic)
+  let actualRev=getTotalRevenueThisMonth();
+  if (G.tempDiscount>0) actualRev=Math.round(actualRev*(1-G.tempDiscount));
+
+  // ③ payment_delay: roll per client
+  const delayedNow=[];
+  G.activeClients.forEach(c=>{
+    if (c.modifier?.type==='payment_delay' && Math.random()<c.modifier.val){
+      const rev=getClientRevenueThisMonth(c);
+      actualRev-=rev;
+      delayedNow.push({name:c.name, icon:c.icon, amount:rev});
+    }
+    // random_bonus
+    if (c.modifier?.type==='random_bonus' && Math.random()<0.30){
+      actualRev+=c.modifier.val;
+      addLog(`🎲 ${c.name}: бонус +${fmt(c.modifier.val)}`,'teal');
+    }
+    // nps_penalty
+    if (c.modifier?.type==='nps_penalty'){
+      const nps=G.clientNPS[c.id]??70;
+      if (nps<c.modifier.threshold){
+        const penalty=hasRole('lawyer') ? Math.round(c.modifier.val*0.5) : c.modifier.val;
+        actualRev+=penalty; // val is negative
+        addLog(`📋 KPI-штраф от ${c.name}: ${fmt(penalty)}${hasRole('lawyer')?' (юрист −50%)':''}`,'red');
+      }
+    }
+    // one_time: will be removed after
+    // Accumulate earnings
+    G.clientEarnings[c.id]=(G.clientEarnings[c.id]||0)+getClientRevenueThisMonth(c);
+    // Portfolio: +weight per paying client per month
+    if (getClientRevenueThisMonth(c)>0){
+      G.portfolio=(G.portfolio||0)+(c.portfolioWeight||c.tier||1);
+    }
+  });
+
+  // ④ Delayed income from last month
+  if (G.delayedIncome>0){
+    actualRev+=G.delayedIncome;
+    addLog(`✅ Задержанная оплата получена: +${fmt(G.delayedIncome)}`,'green');
+  }
+  G.delayedIncome=delayedNow.reduce((s,d)=>s+d.amount,0);
+  delayedNow.forEach(d=>addLog(`🕐 ${d.name}: оплата задержана (${fmt(d.amount)} — придут в следующем месяце)`,'amber'));
+
+  // ⑤ Apply cashflow
+  const staffCost=getTotalStaffCost();
+  const net=actualRev-staffCost-OVERHEAD;
+  G.money+=net;
+  G.monthsPlayed++;
+
+  addLog(`${monthLabel()}: +${fmt(actualRev)} −${fmt(staffCost+OVERHEAD)} = ${net>=0?'+':''}${fmt(net)} → ${fmt(G.money)}`,(net>=0?'green':'red'));
+
+  G.tempDiscount=0;
+
+  // ⑥ Remove one-time clients after first payment + portfolio bonus
+  G.activeClients=G.activeClients.filter(c=>{
+    if (c.oneTime && c._monthsSigned>=1){
+      const pfBonus=(c.portfolioWeight||c.tier||1)*2;
+      G.portfolio=(G.portfolio||0)+pfBonus;
+      addLog(`📦 ${c.name}: разовый заказ выполнен (+${pfBonus} портфолио)`,'purple');
+      rd(`${c.name} — разовый заказ закрыт`,'churn');
+      return false;
+    }
+    return true;
+  });
+
+  // ⑦ Reputation slow recovery (×2 при портфолио ≥25)
+  const hasGrey=G.activeClients.some(c=>c.modifier?.type==='reputation');
+  const repRecovery=(G.portfolio||0)>=25?2:1;
+  if (!hasGrey && G.reputation<100) G.reputation=Math.min(100,G.reputation+repRecovery);
+
+  // ⑧ NPS update
+  updateAllNPS();
+
+  G.month++;
+
+  // ⑨ Reset actions + temp bonuses
+  G.actions=ACTIONS_PER_MONTH;
+  G.tempQBonus=0;
+
+  // ⑩ History snapshot
+  G.history.push({month:G.month, money:G.money, label:monthLabel(-1)});
+
+  // Win / Lose
+  if (G.money>=3000000){ renderGame(); endGame(true); return; }
+  if (G.money<=0)       { renderGame(); endGame(false); return; }
+
+  // Random event (40%, skip month 1)
+  if (G.monthsPlayed>1 && Math.random()<0.40){
+    const evs=EVENTS.filter(e=>{
+      if (e.id==='quit' && G.staff.length===0) return false;
+      if (e.id==='conflict' && G.staff.length<2) return false;
+      return true;
+    });
+    showEvent(evs[Math.floor(Math.random()*evs.length)]);
+  } else {
+    renderGame();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  CAPABILITY BAR HELPER  (Q / V visual meter)
+// ══════════════════════════════════════════════════════
+// thresholds: [{val, label}]  — vertical marker lines
+// col: CSS color for the fill
+// hint: shown in amber below bar when current val is 0
+function makeCapBar(cur, maxV, thresholds, col, hint) {
+  const pct = Math.min(100, cur / maxV * 100);
+  const marks = thresholds.map(t => {
+    const x = Math.min(99, t.val / maxV * 100);
+    const reached = cur >= t.val;
+    return `<div style="position:absolute;left:${x}%;top:0;transform:translateX(-50%);text-align:center;pointer-events:none">
+      <div style="width:1px;height:8px;background:${reached ? col : 'var(--border)'};margin:0 auto"></div>
+      <div style="font-size:9px;color:${reached ? col : 'var(--muted)'};white-space:nowrap;margin-top:1px">${t.label}</div>
+    </div>`;
+  }).join('');
+  return `
+    <div style="position:relative;height:5px;background:var(--bg3);border-radius:3px;margin-bottom:2px">
+      <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width .4s"></div>
+    </div>
+    <div style="position:relative;height:22px">${marks}</div>
+    ${cur === 0 && hint ? `<div style="font-size:10px;color:var(--amber);margin-top:-2px;margin-bottom:4px">↑ ${hint}</div>` : ''}`;
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER GAME
+// ══════════════════════════════════════════════════════
+function renderGame() {
+  const spec=SPECS[G.spec];
+  document.getElementById('g-spec-name').textContent=spec.name;
+  document.getElementById('g-month').textContent=monthLabel();
+
+  // Money
+  const mEl=document.getElementById('g-money');
+  mEl.textContent=fmt(G.money);
+  mEl.className='v '+(G.money>100000?'green':G.money>0?'amber':'red');
+
+  // Cashflow
+  const cf=getCashflow();
+  const cfEl=document.getElementById('g-cashflow');
+  cfEl.textContent=(cf>=0?'+':'')+fmt(cf);
+  cfEl.className='v '+(cf>=0?'green':'red');
+
+  // Reputation
+  const repEl=document.getElementById('g-rep');
+  repEl.textContent=Math.round(G.reputation);
+  repEl.className='v '+(G.reputation>=70?'teal':G.reputation>=40?'amber':'red');
+
+  // Portfolio
+  document.getElementById('g-portfolio').textContent=G.portfolio||0;
+
+  // Actions pips
+  const pipsDiv=document.getElementById('g-action-pips');
+  pipsDiv.innerHTML='';
+  for (let i=0;i<ACTIONS_PER_MONTH;i++){
+    const d=document.createElement('div');
+    d.className='pip'+(i>=G.actions?' used':'');
+    pipsDiv.appendChild(d);
+  }
+  document.getElementById('g-action-val').textContent=`${G.actions} / ${ACTIONS_PER_MONTH}`;
+  document.getElementById('btn-scout').disabled=G.actions<SCOUT_COST;
+
+  // ── Active clients ──
+  document.getElementById('g-client-count').textContent=G.activeClients.length+'/'+getCapacity();
+  let chtml='';
+
+  if (G.activeClients.length===0){
+    chtml=`<div style="text-align:center;padding:18px 0;color:var(--sub);">
+      <div style="font-size:26px;margin-bottom:6px">🔍</div>
+      <div style="font-weight:600;color:var(--text);margin-bottom:4px">Нет активных проектов</div>
+      <div style="font-size:11px">Используй Скаутинг в боковой панели</div>
+    </div>`;
+  }
+
+  G.activeClients.forEach(c=>{
+    const nps=Math.round(G.clientNPS[c.id]??c.npsStart??70);
+    const nc=npsColor(nps);
+    const warn=nps<25?'critical':nps<45?'at-risk':'';
+    const rev=getClientRevenue(c);
+    const revNow=getClientRevenueThisMonth(c);
+    const isDeferred=c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0)<=c.modifier.val;
+
+    // Modifier label
+    const ml=c.modifier?.label||'';
+    const mb=c.modBadge||'mb-teal';
+    const affordable=G.money>=20000;
+
+    chtml+=`<div class="client-card ${warn}">
+      <div class="client-row1">
+        <div class="client-icon">${c.icon}</div>
+        <div class="client-info">
+          <div class="client-name">
+            ${c.name}
+            ${warn==='critical'?'<span class="tag red" style="font-size:10px;">⚠ Уходит</span>':
+              warn==='at-risk'?'<span class="tag amber" style="font-size:10px;">Недоволен</span>':''}
+            ${c.oneTime?'<span class="tag purple" style="font-size:10px;">Разовый</span>':''}
+          </div>
+          <div class="client-desc">
+            <span class="modifier-badge ${mb}" style="font-size:10px;padding:2px 6px">${ml}</span>
+          </div>
+        </div>
+        <div class="client-rev">
+          ${isDeferred?`<span style="color:var(--muted);font-size:12px">0₽</span><small style="color:var(--amber)">ожид. ${c.modifier.val-(c._monthsSigned||0)} мес</small>`:
+            `${fmt(rev)}<small>/мес</small>`}
+        </div>
+      </div>
+      <div class="nps-row">
+        <span class="nps-label">NPS</span>
+        <div class="nps-wrap"><div class="nps-fill" style="width:${nps}%;background:${nc}"></div></div>
+        <span class="nps-val" style="color:${nc}">${nps}</span>
+        <span class="nps-btn" style="display:flex;gap:5px;align-items:center">
+          <button class="btn btn-xs btn-ghost" onclick="investInClient('${c.id}')" ${!affordable?'disabled':''} title="−20 000₽ → NPS +25">💬 −20К</button>
+          <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>
+        </span>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('g-clients-list').innerHTML=chtml;
+
+  // ── P&L ──
+  const rev=getTotalRevenue(); const staffCost=getTotalStaffCost();
+  const disc=G.tempDiscount>0?Math.round(rev*G.tempDiscount):0;
+  const baseRev=G.activeClients.reduce((s,c)=>s+c.revenue,0);
+  const prem=rev-baseRev;
+  const net=(rev-disc)-staffCost-OVERHEAD;
+
+  document.getElementById('g-pnl').innerHTML=`
+    <div class="pnl-row"><span>Базовая выручка</span><span class="pos">+${fmt(baseRev)}</span></div>
+    ${prem>0?`<div class="pnl-row"><span style="color:var(--teal)">↑ Премия качества/объёма</span><span class="teal">+${fmt(prem)}</span></div>`:''}
+    ${disc>0?`<div class="pnl-row"><span>Скидка</span><span class="neg">−${fmt(disc)}</span></div>`:''}
+    ${G.delayedIncome>0?`<div class="pnl-row"><span style="color:var(--amber)">🕐 В пути (задержано)</span><span style="color:var(--amber)">+${fmt(G.delayedIncome)}</span></div>`:''}
+    <div class="pnl-row"><span>Зарплаты</span><span class="neg">−${fmt(staffCost)}</span></div>
+    <div class="pnl-row"><span>Overhead</span><span class="neg">−${fmt(OVERHEAD)}</span></div>
+    <div class="divider"></div>
+    <div class="pnl-row total"><span>Итого</span><span class="${net>=0?'pos':'neg'}">${net>=0?'+':''}${fmt(net)}</span></div>`;
+
+  const pct=Math.min(100,Math.round(G.money/3000000*100));
+  document.getElementById('g-progress-pct').textContent=pct+'%';
+  const bar=document.getElementById('g-progress-bar');
+  bar.style.width=pct+'%';
+  bar.className='progress-fill '+(pct>=80?'green':pct>=40?'amber':'');
+
+  // ── Team ──
+  let thtml=`<div class="staff-item">
+    <div class="staff-avatar" style="background:rgba(79,110,247,.2)">👤</div>
+    <div class="staff-info"><div class="staff-name">Ты (Фаундер)</div><div class="staff-role">Продажи + Скаутинг</div></div>
+    <div class="staff-cost" style="color:var(--sub)">бесплатно</div>
+  </div>`;
+  G.staff.forEach(s=>{
+    const iid=s._iid||s.id; // fallback для старых объектов
+    thtml+=`<div class="staff-item">
+      <div class="staff-avatar" style="background:rgba(79,110,247,.15)">${s.icon}</div>
+      <div class="staff-info"><div class="staff-name">${s.name}</div><div class="staff-role">${s.role}</div></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <div class="staff-cost">−${fmt(s.cost)}</div>
+        <button class="btn btn-xs" style="background:rgba(248,81,73,.08);color:var(--red);border:1px solid rgba(248,81,73,.2);font-size:10px;padding:3px 7px;border-radius:5px;font-weight:600;cursor:pointer" onclick="fireStaff('${iid}')" title="Выходное пособие: ${fmt(Math.round(s.cost*0.5))}">Уволить</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('g-team-list').innerHTML=thtml;
+
+  // ── Hire ──
+  const dayCostHire=hasRole('hr') ? 1 : HIRE_COST;
+  let hhtml='';
+  STAFF_DEFS.forEach(def=>{
+    const alreadyCount=countRole(def.id);
+    const ok=G.money>=def.cost*2 && G.actions>=dayCostHire;
+    const bonuses=[];
+    if (def.quality){
+      const imp=G.activeClients.length?'+'+fmtK(G.activeClients.reduce((s,c)=>s+Math.min(def.quality*0.007,.35)*c.revenue,0))+'/мес':'разблокирует проекты';
+      bonuses.push(`Кач +${def.quality} <span style="color:var(--teal);font-size:10px">(${imp})</span>`);
+    }
+    if (def.volume){
+      const imp=G.activeClients.length?'+'+fmtK(G.activeClients.reduce((s,c)=>s+Math.min(def.volume*0.005,.25)*c.revenue,0))+'/мес':'повышает выручку';
+      bonuses.push(`Объём +${def.volume} <span style="color:var(--teal);font-size:10px">(${imp})</span>`);
+    }
+    if (def.capacity) bonuses.push(`+${def.capacity} слот`);
+    // Unique passive bonuses for specialist roles
+    if (def.id==='lawyer')  bonuses.push(`<span style="color:var(--amber);font-size:10px">штрафы/репутация −50%</span>`);
+    if (def.id==='smm')     bonuses.push(`<span style="color:var(--teal);font-size:10px">+1 лид при скаутинге</span>`);
+    if (def.id==='hr')      bonuses.push(`<span style="color:var(--teal);font-size:10px">+3 NPS/мес · найм за 1 день</span>`);
+    if (def.id==='developer') bonuses.push(`<span style="color:var(--accent2);font-size:10px">открывает тех-проекты</span>`);
+
+    const countBadge=alreadyCount>0
+      ? `<span style="font-size:10px;background:rgba(79,110,247,.18);color:var(--accent2);border-radius:4px;padding:1px 6px;margin-right:4px">×${alreadyCount}</span>`
+      : '';
+    hhtml+=`<div class="hire-item">
+      <div class="hire-icon">${def.icon}</div>
+      <div class="hire-info">
+        <div class="hire-name">${countBadge}${def.name}</div>
+        <div class="hire-desc">${bonuses.join(' · ')}</div>
+      </div>
+      <div class="hire-cost">−${fmt(def.cost)}/мес</div>
+      <button class="btn btn-sm btn-primary" style="margin-left:6px;" onclick="hireStaff('${def.id}')" ${!ok?'disabled':''}>${alreadyCount>0?'Ещё':'Нанять'}</button>
+    </div>`;
+  });
+  document.getElementById('g-hire-list').innerHTML=hhtml;
+
+  // ── Upgrades (Q) ──
+  let uhtml='';
+  UPGRADES.forEach(u=>{
+    const bought      = u.oneTime && G.upgrades[u.id];
+    const tempActive  = !u.oneTime && G.tempQBonus >= u.qBonus;
+    const canAfford   = G.money >= u.cost && G.actions >= u.days;
+    const disabled    = bought || tempActive || !canAfford;
+
+    let statusBadge='';
+    if (bought)          statusBadge=`<span style="font-size:10px;color:var(--green);font-weight:700;white-space:nowrap">✓ +${u.qBonus}Q</span>`;
+    else if (tempActive) statusBadge=`<span style="font-size:10px;color:var(--teal);font-weight:700;white-space:nowrap">↻ активен</span>`;
+
+    const costLabel=`−${fmtK(u.cost)} · −${u.days}дн`;
+    const btnLabel=bought?'Куплено':tempActive?'Активен':u.oneTime?'Купить':'Нанять';
+
+    uhtml+=`<div class="hire-item">
+      <div class="hire-icon">${u.icon}</div>
+      <div class="hire-info">
+        <div class="hire-name" style="display:flex;align-items:center;gap:6px">${u.name} ${statusBadge}</div>
+        <div class="hire-desc" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <span>${u.desc}</span>
+          <span style="background:rgba(45,212,191,.15);color:var(--teal);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">Q +${u.qBonus}</span>
+          ${u.repBonus?`<span style="background:rgba(79,110,247,.15);color:var(--accent2);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">Реп +${u.repBonus}</span>`:''}
+          ${!u.oneTime?'<span style="color:var(--amber);font-size:10px">· до конца мес.</span>':''}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+        <div class="hire-cost" style="font-size:10px">${costLabel}</div>
+        <button class="btn btn-sm ${bought||tempActive?'btn-ghost':'btn-teal'}" onclick="buyUpgrade('${u.id}')" ${disabled?'disabled':''}
+          style="font-size:11px;padding:5px 10px">${btnLabel}</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('g-upgrades-list').innerHTML=uhtml;
+
+  // ── Metrics ──
+  const avgNps=G.activeClients.length?Math.round(G.activeClients.reduce((s,c)=>s+(G.clientNPS[c.id]||70),0)/G.activeClients.length):'—';
+  const npsCl=typeof avgNps==='number'?npsColor(avgNps):'var(--sub)';
+  const qv=getQuality(), vv=getVolume();
+  const qCl=qv>=20?'var(--green)':qv>=10?'var(--amber)':'var(--red)';
+  const vCl=vv>=15?'var(--green)':vv>=5?'var(--amber)':'var(--red)';
+  const repC=repColor(G.reputation);
+  const curBase=G.activeClients.reduce((s,c)=>s+c.revenue,0);
+  const curReal=getTotalRevenue(); const qPct=curBase>0?Math.round((curReal-curBase)/curBase*100):0;
+
+  // Q bar: thresholds at 10 (разблокирует стартапы), 20 (корпораты), 30 (госконтракт)
+  const qThresholds = [
+    { val:10, label:'Стартап' },
+    { val:20, label:'Корп.' },
+    { val:30, label:'Гос.' },
+  ];
+  // V bar: thresholds at 5 (стартапы), 10 (корпораты), 15 (ретейнер/гос)
+  const vThresholds = [
+    { val:5,  label:'Стартап' },
+    { val:10, label:'Корп.' },
+    { val:15, label:'Гос./Рет.' },
+  ];
+  const staffQ = G.staff.reduce((s,x)=>s+(x.quality||0),0);
+  const qBar = makeCapBar(qv, 40, qThresholds, qCl, 'Нанять Дизайнера (+20 Q)');
+  const vBar = makeCapBar(vv, 20, vThresholds, vCl, 'Нанять Копирайтера (+15 V)');
+
+  // Q breakdown hint
+  const qBreakdown=[];
+  if (staffQ>0)           qBreakdown.push(`команда +${staffQ}`);
+  if (G.qualityBonus>0)   qBreakdown.push(`апгрейды +${G.qualityBonus}`);
+  if (G.tempQBonus>0)     qBreakdown.push(`<span style="color:var(--amber)">фриланс +${G.tempQBonus}</span>`);
+  const qBreakdownHtml = qBreakdown.length>1
+    ? `<div style="font-size:10px;color:var(--muted);margin-top:-2px;margin-bottom:3px">${qBreakdown.join(' · ')}</div>` : '';
+
+  // Portfolio bar
+  const pf=G.portfolio||0;
+  const pfMult=Math.round((getPortfolioMultiplier()-1)*100);
+  const pfCl=pf>=50?'var(--purple)':pf>=28?'var(--accent2)':pf>=12?'var(--teal)':'var(--muted)';
+  const pfThresholds=[
+    {val:12, label:'📊 Медиа'},
+    {val:28, label:'🌍 Меж.'},
+    {val:50, label:'🤝 Партн.'},
+  ];
+  const pfBar=makeCapBar(pf, 60, pfThresholds, pfCl, '');
+  // Next unlock hint
+  const nextPfUnlock=[12,28,50].find(v=>pf<v);
+  const pfHint=nextPfUnlock
+    ? `<div style="font-size:10px;color:var(--muted);margin-top:-2px;margin-bottom:2px">до следующего проекта: ${nextPfUnlock-pf} балл${(nextPfUnlock-pf)===1?'':'а'}</div>`
+    : `<div style="font-size:10px;color:var(--purple);margin-top:-2px;margin-bottom:2px">все портфолио-проекты открыты 🏆</div>`;
+
+  document.getElementById('g-metrics').innerHTML=`
+    <div style="margin-bottom:10px">
+      <div class="pnl-row" style="margin-bottom:3px">
+        <span style="font-size:12px;color:var(--sub)" title="Накапливается с каждым завершённым месяцем и проектом. Открывает новых клиентов и даёт премию к выручке.">Портфолио</span>
+        <span style="color:${pfCl};font-weight:700;font-size:15px">${pf}</span>
+      </div>
+      ${pfBar}
+      ${pfHint}
+      ${pfMult>0?`<div style="font-size:10px;color:var(--purple);font-weight:600">↑ +${pfMult}% к выручке всех клиентов</div>`:''}
+    </div>
+    <div class="divider" style="margin-bottom:8px"></div>
+    <div style="margin-bottom:8px">
+      <div class="pnl-row" style="margin-bottom:3px">
+        <span style="font-size:12px;color:var(--sub)" title="+0.7%/пункт выше минимума клиента. Влияет на NPS и допуск к проектам.">Качество <span style="font-size:10px">(Q)</span></span>
+        <span style="color:${qCl};font-weight:700;font-size:15px">${qv}</span>
+      </div>
+      ${qBreakdownHtml}
+      ${qBar}
+    </div>
+    <div style="margin-bottom:10px">
+      <div class="pnl-row" style="margin-bottom:3px">
+        <span style="font-size:12px;color:var(--sub)" title="+0.5%/пункт выше минимума клиента. Больше — выше пропускная способность.">Объём <span style="font-size:10px">(V)</span></span>
+        <span style="color:${vCl};font-weight:700;font-size:15px">${vv}</span>
+      </div>
+      ${vBar}
+    </div>
+    ${qPct>0?`<div class="pnl-row" style="margin-bottom:6px"><span style="color:var(--teal);font-size:12px">Q/V премия к выручке</span><span style="color:var(--teal);font-weight:700">+${qPct}%</span></div>`:''}
+    <div class="divider"></div>
+    <div class="pnl-row"><span>Слоты</span><span>${G.activeClients.length}/${getCapacity()}</span></div>
+    <div class="pnl-row"><span>Средний NPS</span><span style="color:${npsCl};font-weight:700">${avgNps}</span></div>
+    <div class="pnl-row">
+      <span>Репутация</span>
+      <span style="color:${repC};font-weight:700">${Math.round(G.reputation)}</span>
+    </div>
+    <div class="rep-row" style="padding-bottom:4px;">
+      <div class="rep-bar-wrap"><div class="rep-bar-fill" style="width:${G.reputation}%;background:${repC}"></div></div>
+    </div>
+    <div class="pnl-row"><span>Overhead/мес</span><span style="color:var(--red)">−${fmt(OVERHEAD)}</span></div>`;
+
+  // ── Log ──
+  const lhtml=G.log.map(l=>`<div class="log-item"><span class="log-month">${l.month} — </span><span class="log-msg ${l.cls}">${l.msg}</span></div>`).join('');
+  document.getElementById('g-log').innerHTML=lhtml||'<div class="log-item"><span class="log-msg">Пока всё тихо…</span></div>';
+}
+
+// ══════════════════════════════════════════════════════
+//  EVENTS
+// ══════════════════════════════════════════════════════
+function showEvent(ev) {
+  document.getElementById('modal-icon').textContent=ev.icon;
+  document.getElementById('modal-title').textContent=ev.title;
+  document.getElementById('modal-body').textContent=ev.body;
+  const div=document.getElementById('modal-choices'); div.innerHTML='';
+  ev.choices.forEach(ch=>{
+    const btn=document.createElement('button');
+    btn.className='modal-choice';
+    btn.innerHTML=`<div class="choice-title">${ch.text}</div><div class="choice-desc">${ch.desc}</div>`;
+    btn.onclick=()=>{
+      ch.fn(G);
+      document.getElementById('event-modal').classList.remove('active');
+      renderGame();
+      if (G.money<=0){endGame(false);return;}
+      if (G.money>=3000000){endGame(true);}
+    };
+    div.appendChild(btn);
+  });
+  document.getElementById('event-modal').classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════
+//  END / DASHBOARD
+// ══════════════════════════════════════════════════════
+function endGame(won) { buildDashboard(won); goTo('screen-results'); }
+
+function buildDashboard(won) {
+  const spec=SPECS[G.spec];
+  document.getElementById('r-icon').textContent=won?'🏆':'💸';
+  document.getElementById('r-title').textContent=won?'Агентство вышло на 3M!':'Деньги кончились';
+  document.getElementById('r-title').style.color=won?'var(--green)':'var(--red)';
+  document.getElementById('r-sub').textContent=won
+    ?`${spec.name} — ${G.monthsPlayed} мес. Инвесторы уже звонят.`
+    :G.monthsPlayed<4?'Кассовый разрыв: расходы съели стартовый капитал до появления стабильных проектов.'
+    :'Рынок суров. NPS деградировал, клиенты ушли раньше, чем выросла выручка.';
+
+  const peak=Math.max(...G.history.map(h=>h.money));
+  const churned=DECISIONS.filter(d=>d.type==='churn').length;
+  const scouts=DECISIONS.filter(d=>d.type==='client').length;
+  document.getElementById('r-kpis').innerHTML=`
+    <div class="kpi-box"><div class="kv" style="color:${won?'var(--green)':'var(--red)'}">${fmtK(G.money)}</div><div class="kl">Итоговый баланс</div></div>
+    <div class="kpi-box"><div class="kv">${G.monthsPlayed}</div><div class="kl">Месяцев</div></div>
+    <div class="kpi-box"><div class="kv" style="color:var(--accent2)">${fmtK(peak)}</div><div class="kl">Пик баланса</div></div>
+    <div class="kpi-box"><div class="kv">${churned}</div><div class="kl">Ушло клиентов</div></div>`;
+
+  buildChart();
+
+  // Breakdown
+  const totalE=Object.values(G.clientEarnings).reduce((s,v)=>s+v,0)||1;
+  const byName={};
+  Object.entries(G.clientEarnings).forEach(([id,e])=>{
+    const def=PROJECT_POOL.find(p=>id.startsWith(p.id))||{name:id,icon:'🏢'};
+    byName[def.name]=(byName[def.name]||{name:def.name,icon:def.icon,e:0});
+    byName[def.name].e+=e;
+  });
+  let bhtml=Object.values(byName).sort((a,b)=>b.e-a.e).map(t=>{
+    const pct=Math.round(t.e/totalE*100);
+    return `<div class="breakdown-row">
+      <div class="breakdown-icon">${t.icon}</div>
+      <div class="breakdown-info">
+        <div class="breakdown-name">${t.name}</div>
+        <div class="breakdown-bar-wrap"><div class="breakdown-bar-fill" style="width:${pct}%;background:var(--accent)"></div></div>
+      </div>
+      <div class="breakdown-val">${fmtK(t.e)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('r-breakdown').innerHTML=bhtml||'<div style="color:var(--sub);font-size:13px">Нет данных</div>';
+
+  // Timeline
+  const dc={hire:'var(--accent)',client:'var(--green)',event:'var(--amber)',churn:'var(--red)'};
+  document.getElementById('r-timeline').innerHTML=DECISIONS.length
+    ?DECISIONS.map(d=>`<div class="tl-item"><div class="tl-dot" style="background:${dc[d.type]||'var(--sub)'}"></div><div class="tl-month">${d.label}</div><div class="tl-text">${d.text}</div></div>`).join('')
+    :'<div style="color:var(--sub);font-size:13px">Решений не зафиксировано</div>';
+
+  // Insights
+  document.getElementById('r-insights').innerHTML=generateInsights(won).map(i=>
+    `<div class="insight-row"><div class="insight-icon">${i.icon}</div><div class="insight-text">${i.text}</div></div>`
+  ).join('');
+}
+
+function buildChart() {
+  const hist=G.history;
+  if (hist.length<2){ document.getElementById('r-chart').innerHTML='<div style="color:var(--sub);padding:16px;text-align:center">Недостаточно данных</div>'; return; }
+  const W=600,H=180,PL=52,PR=12,PT=12,PB=28,cW=W-PL-PR,cH=H-PT-PB;
+  const ms=hist.map(h=>h.money), maxM=Math.max(...ms,500000)*1.08, minM=Math.min(...ms,0), rng=maxM-minM||1;
+  const px=i=>PL+(i/(hist.length-1))*cW, py=m=>PT+cH-((m-minM)/rng)*cH;
+  const pts=hist.map((h,i)=>`${px(i).toFixed(1)},${py(h.money).toFixed(1)}`).join(' ');
+  const area=`M${px(0).toFixed(1)},${(PT+cH).toFixed(1)} `+hist.map((h,i)=>`L${px(i).toFixed(1)},${py(h.money).toFixed(1)}`).join(' ')+` L${px(hist.length-1).toFixed(1)},${(PT+cH).toFixed(1)} Z`;
+  const goalY=py(3000000), showGoal=goalY>=PT&&goalY<=PT+cH;
+  const dc2={hire:'#4F6EF7',client:'#3FB950',event:'#D29922',churn:'#F85149'};
+  const dots=DECISIONS.map(d=>{
+    const idx=Math.min(d.monthIdx,hist.length-1);
+    return `<circle cx="${px(idx).toFixed(1)}" cy="${py(hist[idx]?.money??0).toFixed(1)}" r="5" fill="${dc2[d.type]||'#8B949E'}" stroke="#161B22" stroke-width="2"><title>${d.label}: ${d.text}</title></circle>`;
+  }).join('');
+  const ticks=[minM,(minM+maxM)/2,maxM].map(v=>{
+    const lbl=Math.abs(v)>=1000000?(v/1000000).toFixed(1)+'M':Math.abs(v)>=1000?Math.round(v/1000)+'K':'0';
+    return `<text x="${PL-6}" y="${py(v).toFixed(1)}" fill="#484F58" font-size="10" text-anchor="end" dominant-baseline="middle">${lbl}</text>`;
+  }).join('');
+  const step=Math.max(1,Math.floor(hist.length/5));
+  const xlbls=hist.map((h,i)=>{
+    if (i%step!==0&&i!==hist.length-1) return '';
+    return `<text x="${px(i).toFixed(1)}" y="${PT+cH+14}" fill="#484F58" font-size="9" text-anchor="middle">${h.label.slice(0,3)}</text>`;
+  }).join('');
+  document.getElementById('r-chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4F6EF7" stop-opacity=".25"/><stop offset="100%" stop-color="#4F6EF7" stop-opacity=".01"/></linearGradient></defs>
+    <line x1="${PL}" y1="${PT}" x2="${W-PR}" y2="${PT}" stroke="#1C2330" stroke-width="1"/>
+    <line x1="${PL}" y1="${PT+cH/2}" x2="${W-PR}" y2="${PT+cH/2}" stroke="#1C2330" stroke-width="1"/>
+    <line x1="${PL}" y1="${PT+cH}" x2="${W-PR}" y2="${PT+cH}" stroke="#30363D" stroke-width="1"/>
+    ${minM<0?`<line x1="${PL}" y1="${py(0).toFixed(1)}" x2="${W-PR}" y2="${py(0).toFixed(1)}" stroke="#F85149" stroke-width=".8" stroke-dasharray="3,3" opacity=".5"/>`:''}
+    ${showGoal?`<line x1="${PL}" y1="${goalY.toFixed(1)}" x2="${W-PR}" y2="${goalY.toFixed(1)}" stroke="#3FB950" stroke-width="1" stroke-dasharray="4,3" opacity=".6"/><text x="${W-PR-2}" y="${goalY-4}" fill="#3FB950" font-size="9" text-anchor="end" opacity=".8">Цель 3M</text>`:''}
+    <path d="${area}" fill="url(#cg)"/>
+    <polyline points="${pts}" fill="none" stroke="#4F6EF7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${ticks}${xlbls}
+  </svg>`;
+}
+
+function generateInsights(won) {
+  const ins=[];
+  const churned=DECISIONS.filter(d=>d.type==='churn').length;
+  const scouts=DECISIONS.filter(d=>d.type==='client').length;
+  const hired=DECISIONS.filter(d=>d.type==='hire').length;
+  const ms=G.history.map(h=>h.money);
+  const peak=Math.max(...ms);
+  const peakM=G.history.findIndex(h=>h.money===peak);
+
+  if (scouts===0) ins.push({icon:'🔍',text:'<strong>Ни одного проекта не подписано через скаутинг.</strong> Без активного поиска агентство живёт только на overhead — деньги утекают каждый месяц.'});
+  if (scouts>0)   ins.push({icon:'📋',text:`<strong>Подписано ${scouts} проект${scouts===1?'':scouts<5?'а':'ов'} через скаутинг.</strong> Качество скаутинга зависит от репутации — чем выше, тем лучше пул предложений.`});
+  if (churned>0)  ins.push({icon:'💔',text:`<strong>${churned} клиент${churned===1?'':churned<5?'а':'ов'} ушли органически.</strong> NPS падает без качества и объёма — Дизайнер и Копирайтер напрямую снижают риск оттока.`});
+  if (churned===0&&scouts>0) ins.push({icon:'✅',text:'<strong>Ни одного органического оттока.</strong> NPS держался выше критического уровня на протяжении всей игры.'});
+  if (hired===0) ins.push({icon:'👤',text:'<strong>Команда так и не собрана.</strong> Без Дизайнера и Копирайтера качество/объём равны нулю — это блокирует дорогие проекты и ускоряет NPS-деградацию.'});
+  if (peakM>0&&peakM<G.history.length-2) ins.push({icon:'📉',text:`<strong>Пик достигнут в ${G.history[peakM].label}</strong>, затем кривая пошла вниз. Вероятная причина: отток клиентов или рост постоянных расходов без новых проектов.`});
+  if (won) ins.push({icon:'📊',text:`<strong>Победа за ${G.monthsPlayed} мес. — специализация: ${SPECS[G.spec].name}.</strong> В реальном агентстве этот путь занимает 18–36 месяцев.`});
+  if (!won&&G.monthsPlayed<5) ins.push({icon:'⚡',text:`<strong>Банкротство за ${G.monthsPlayed} мес.</strong> Overhead ${fmt(OVERHEAD)}/мес + зарплаты без выручки — классический кассовый разрыв первого года.`});
+  return ins.slice(0,4);
+}
+
+// ══════════════════════════════════════════════════════
+//  RESET
+// ══════════════════════════════════════════════════════
+function resetGame() {
+  initState();
+  document.querySelectorAll('.spec-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('btn-start-game').disabled=true;
+  goTo('screen-intro');
+}
+
+initState();
+</script>
+</body>
+</html>
