@@ -39,6 +39,7 @@ function initState() {
     caseRepPenalty: 0,      // репутационный штраф/мес от провальных кейсов в портфолио
     scoutPool: null,        // сохранённый пул скаутинга (массив project-def или null)
     loan: null,             // активный кредит { principal, monthlyPayment, monthsRemaining, label }
+    teamFatigue: 0,         // усталость команды 0–100: 30+=напряжение, 60+=выгорание, 85+=кризис
   };
   DECISIONS = [];
 }
@@ -75,7 +76,7 @@ function startGame() {
   G.actions=ACTIONS_PER_MONTH; G.reputation=100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
-  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null;
+  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0;
   DECISIONS=[];
   G.history.push({month:0, money:750000, label:'Старт'});
   addLog('Агентство открыто. Найди первый проект через Скаутинг!','amber');
@@ -129,7 +130,8 @@ function getTotalStaffCost(g=G) {
 
 // Ежемесячный расход (выручка приходит только при завершении проектов)
 function getCashflow(g=G) {
-  return -(getTotalStaffCost(g) + OVERHEAD);
+  const loanPayment = g.loan ? g.loan.monthlyPayment : 0;
+  return -(getTotalStaffCost(g) + OVERHEAD + loanPayment);
 }
 
 function addLog(msg, cls='') {
@@ -249,7 +251,8 @@ function _generateOffers() {
   const shuffled=[...pool].sort(()=>Math.random()-0.5);
   for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
     const p=shuffled[i];
-    if (!G.activeClients.find(c=>c.id.startsWith(p.id))) offers.push(p);
+    if (!G.activeClients.find(c=>c.id.startsWith(p.id)))
+      offers.push({ ...p, _prepaymentPossible: !p.oneTime && Math.random() < 0.25 });
   }
   return offers;
 }
@@ -360,6 +363,21 @@ function showScoutResults(offers) {
         <span class="modifier-badge ${p.modBadge}">${p.modifier.label}</span>
       </div>
       ${loadRow}
+      ${(()=>{
+        if (!p._prepaymentPossible) return '';
+        const [bMin, bMax] = BUDGET_RANGES[p.tier] || [80000, 150000];
+        const advMin = Math.round(bMin * 0.25 / 5000) * 5000;
+        const advMax = Math.round(bMax * 0.35 / 5000) * 5000;
+        const withLawyer = hasRole('lawyer');
+        const chance = withLawyer ? 65 : 50;
+        return `<div style="margin-top:6px;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);border-radius:6px;padding:5px 8px">
+          <div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:2px">💰 Предоплата при подписании</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <span style="font-size:10px;color:var(--sub)">~${fmtK(advMin)}–${fmtK(advMax)} сразу</span>
+            <span style="font-size:10px;font-weight:700;color:var(--green)">${chance}% шанс${withLawyer?' <span style="font-weight:400;color:var(--muted)">(⚖️ +15%)</span>':''}</span>
+          </div>
+        </div>`;
+      })()}
       ${reqRow}
       ${canTake?`<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px;" onclick="signProject('${p.id}')">Подписать контракт</button>`:''}
     `;
@@ -385,7 +403,8 @@ function signProject(pid) {
     // Дедлайн: явный duration из дефиниции или тир-дефолт (tier1=3, tier2=4, tier3=5 мес.)
     _duration: def.oneTime ? 1 : (def.duration || (def.tier===1 ? 3 : def.tier===2 ? 4 : 5)),
     _totalBudget: totalBudget,
-    _progress: 0,  // 0–100%
+    _progress: 0,   // 0–100%
+    _focus: 50,     // вес фокуса 0–100; итоговый % = _focus / Σ(active _focus) * 100
   };
 
   // nps_start: override starting NPS
@@ -397,6 +416,14 @@ function signProject(pid) {
   G.clientNPS[client.id]=client.npsStart||70;
   G.clientEarnings[client.id]=0;
 
+  // Redistribute focus equally among all non-oneTime projects (sum = 100%)
+  const _fAll = G.activeClients.filter(c=>!c.oneTime);
+  if (_fAll.length > 0) {
+    const _base = Math.floor(100 / _fAll.length);
+    let   _rem  = 100 - _base * _fAll.length;
+    _fAll.forEach(fc => { fc._focus = _base + (_rem-- > 0 ? 1 : 0); });
+  }
+
   // Immediate modifier effects
   if (client.modifier.type==='reputation'){
     const repHit=hasRole('lawyer') ? Math.round(client.modifier.val*0.5) : client.modifier.val;
@@ -407,6 +434,20 @@ function signProject(pid) {
   addLog(`✅ Подписан: ${client.name} — бюджет ${fmtK(totalBudget)} при сдаче`,'green');
   notify(`${client.icon} ${client.name} — контракт подписан!`,'success');
   rd(`Подписан: ${client.name}`,'client');
+
+  // ── Предоплата ──────────────────────────────────────
+  if (def._prepaymentPossible) {
+    const boost = hasRole('lawyer') ? 0.15 : 0;  // юрист даёт +15% к шансу
+    if (Math.random() < 0.50 + boost) {
+      const pct = 0.25 + Math.random() * 0.10;   // аванс 25–35% от бюджета
+      const adv = Math.round(totalBudget * pct / 5000) * 5000;
+      client._prepaidAmount  = adv;
+      client._totalBudget    = Math.max(0, client._totalBudget - adv);
+      G.money += adv;
+      addLog(`💰 Предоплата «${client.name}»: +${fmtK(adv)} — остаток при сдаче ${fmtK(client._totalBudget)}`, 'green');
+      notify(`💰 Аванс одобрен: +${fmtK(adv)}`, 'success');
+    }
+  }
 
   // Убираем подписанный проект из пула; пул остаётся открытым если ещё есть офферы
   if (G.scoutPool) G.scoutPool=G.scoutPool.filter(p=>p.id!==pid);
@@ -429,6 +470,7 @@ function closeScout() {
 function hireStaff(id) {
   const def=STAFF_DEFS.find(d=>d.id===id);
   if (!def) return;
+  if ((G.teamFatigue||0) >= 85) { notify('🔥 Кризис усталости — найм временно недоступен','error'); return; }
   const dayCost=hasRole('hr') ? 1 : HIRE_COST;
   if (G.actions<dayCost){ notify(`Нужно ≥${dayCost} рабочих дня`,'error'); return; }
   if (G.money<def.cost*2){ notify('Мало денег — нужен запас ≥2 зарплаты','error'); return; }
@@ -755,6 +797,70 @@ function takeLoan() {
   renderGame();
 }
 
+function setFocus(cid, pct) {
+  pct = Math.max(0, Math.min(100, Math.round(+pct)));
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c) return;
+  c._focus = pct;
+  renderGame();
+}
+
+// Живое обновление фокуса во время дрэга — без полного re-render, без авто-перераспределения
+function liveUpdateFocus(cid, pct) {
+  pct = Math.max(0, Math.min(100, Math.round(+pct)));
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c) return;
+  c._focus = pct;
+
+  // Обновляем DOM текущего проекта
+  const rangeEl = document.getElementById('focus-range-' + cid);
+  const valEl   = document.getElementById('focus-val-'   + cid);
+  const prevEl  = document.getElementById('focus-prev-'  + cid);
+  if (rangeEl) { rangeEl.value = pct; rangeEl.style.setProperty('--fill', pct + '%'); }
+  if (valEl)   valEl.value = pct;
+
+  // Пересчитываем суммарный фокус и обновляем баннер
+  const focusable  = G.activeClients.filter(c2 => !c2.oneTime);
+  const totalPct   = focusable.reduce((s, c2) => s + (c2._focus ?? 50), 0);
+  const isOver     = totalPct > 100;
+  const warnEl     = document.getElementById('focus-total-warn');
+  const resEl      = document.getElementById('focus-reserve');
+  if (warnEl) {
+    warnEl.style.display = isOver ? 'flex' : 'none';
+    if (isOver) warnEl.querySelector('span').textContent =
+      `⚠ Суммарный фокус: ${totalPct}% — освободи ${totalPct - 100}% у других проектов`;
+  }
+  if (resEl) {
+    resEl.style.display = isOver ? 'none' : 'flex';
+    if (!isOver) resEl.querySelector('span').textContent = `✦ Резерв: ${100 - totalPct}%`;
+  }
+  // Обновляем подсветку строк фокуса у всех проектов
+  focusable.forEach(fc => {
+    const rowEl = document.getElementById('focus-row-' + fc.id);
+    if (rowEl) rowEl.style.borderColor = isOver ? 'rgba(248,81,73,.3)' : 'transparent';
+  });
+
+  // Обновляем превью текущего проекта
+  if (prevEl) {
+    const thr      = getTeamThroughput();
+    const totLoad  = getTotalLoad();
+    const lratio   = totLoad > 0 ? Math.min(1, thr / totLoad) : 1;
+    const totalFocusW = focusable.reduce((s, c2) => s + (c2._focus ?? 50), 0);
+    const fMult    = totalFocusW > 0 ? (pct / totalFocusW) * focusable.length : 1;
+    const perMonth = Math.round((100 / (c._duration||3)) * lratio * fMult * 10) / 10;
+    const remain   = Math.max(0, 100 - (c._progress||0));
+    const mthsLeft = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
+    prevEl.style.color = pct >= 60 ? 'var(--green)' : pct >= 30 ? 'var(--teal)' : 'var(--amber)';
+    prevEl.textContent = '+' + perMonth + '%/мес · ~' + mthsLeft + ' мес. до завершения';
+  }
+}
+
+function adjustFocusBy(cid, delta) {
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c) return;
+  setFocus(cid, (c._focus || 0) + delta);
+}
+
 // ══════════════════════════════════════════════════════
 //  ADVANCE MONTH
 // ══════════════════════════════════════════════════════
@@ -762,22 +868,68 @@ function advanceMonth() {
   // ① Счётчик месяцев у каждого клиента
   G.activeClients.forEach(c=>{ c._monthsSigned=(c._monthsSigned||0)+1; });
 
-  // ② Прогресс проектов (не-разовые)
+  // ② Прогресс проектов (не-разовые) с учётом фокуса команды
   const throughput = getTeamThroughput();
   const totalLoad  = getTotalLoad();         // учитывает payment_delay_fixed
   const loadRatio  = totalLoad > 0 ? throughput / totalLoad : 1;
   const overloaded = loadRatio < 0.95;
 
+  // ── Усталость команды (п.11) ─────────────────────────
+  {
+    const hasHR = hasRole('hr');
+    let fd = loadRatio >= 1.0 ? 10 : loadRatio >= 0.85 ? 4 : loadRatio >= 0.60 ? 1 : -5;
+    if (fd > 0 && hasHR) fd = Math.round(fd * 0.7);  // HR снижает рост на 30%
+    G.teamFatigue = clamp((G.teamFatigue||0) + fd, 0, 100);
+  }
+  const fatigueMult = G.teamFatigue >= 85 ? 0.70 : G.teamFatigue >= 60 ? 0.85 : G.teamFatigue >= 30 ? 0.95 : 1.0;
+
+  // Фокус: список активных проектов, получающих производительность в этом месяце
+  const focusActive = G.activeClients.filter(c =>
+    !c.oneTime && !(c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val)
+  );
+  const focusCount  = focusActive.length;
+  const totalFocusW = focusActive.reduce((s,c) => s + (c._focus ?? Math.floor(100/Math.max(1,focusActive.length))), 0);
+
   G.activeClients.filter(c=>!c.oneTime).forEach(c=>{
     // payment_delay_fixed: прогресс не идёт пока не истёк период ожидания
     if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return;
-    const monthProg = (100 / (c._duration||3)) * Math.min(1, loadRatio);
+    // focusMult: нормализован так, что при равном фокусе = 1.0x у всех
+    const _cFocus = c._focus ?? Math.floor(100/Math.max(1,focusCount));
+    const focusMult = (focusCount > 0 && totalFocusW > 0)
+      ? (_cFocus / totalFocusW) * focusCount
+      : 1;
+    const monthProg = (100 / (c._duration||3)) * Math.min(1, loadRatio) * focusMult * fatigueMult;
     c._progress = Math.min(100, (c._progress||0) + monthProg);
   });
 
   if (overloaded && G.activeClients.filter(c=>!c.oneTime).length > 0) {
     const eff = Math.round(loadRatio * 100);
     addLog(`⚠️ Команда перегружена (нагрузка ${Math.round(totalLoad)} > произв. ${Math.round(throughput)}) — прогресс ×${eff}%`, 'amber');
+  }
+
+  // ── Эффекты усталости ────────────────────────────────
+  if (G.teamFatigue >= 30) {
+    const npsHit = G.teamFatigue >= 85 ? -8 : G.teamFatigue >= 60 ? -5 : -3;
+    const stateLabel = G.teamFatigue >= 85 ? '🔥 Кризис' : G.teamFatigue >= 60 ? '😓 Выгорание' : '😰 Напряжение';
+    const victims = G.activeClients.filter(c => !c.oneTime);
+    if (victims.length > 0) {
+      const target = victims[Math.floor(Math.random() * victims.length)];
+      G.clientNPS[target.id] = clamp((G.clientNPS[target.id]||70) + npsHit, 0, 100);
+      addLog(`${stateLabel} (усталость ${Math.round(G.teamFatigue)}): NPS «${target.name}» ${npsHit}`, 'amber');
+    }
+    // Уход сотрудника при выгорании/кризисе
+    if (G.teamFatigue >= 60 && G.staff.length > 0) {
+      const quitChance = G.teamFatigue >= 85 ? 0.20 : 0.10;
+      const leaver = G.staff.find(() => Math.random() < quitChance);
+      if (leaver) {
+        G.staff = G.staff.filter(s => s._iid !== leaver._iid);
+        addLog(`🚪 ${leaver.name} уволился из-за усталости команды!`, 'red');
+        notify(`${leaver.name} уволился — команда выгорает!`, 'error');
+      }
+    }
+    if (G.teamFatigue >= 85) {
+      addLog(`🔥 Кризис: найм заблокирован до снижения усталости ниже 85`, 'red');
+    }
   }
 
   // ③ Задержанные выплаты с прошлого месяца (от payment_delay при завершении)

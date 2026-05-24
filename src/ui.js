@@ -81,6 +81,27 @@ function renderGame() {
     </div>`;
   }
 
+  const focusable    = G.activeClients.filter(c => !c.oneTime);
+  const totalFocusW  = focusable.reduce((s,c) => s + (c._focus??50), 0);
+  const totalFocusPct= focusable.reduce((s,c) => s + (c._focus??50), 0); // raw сумма %
+  const showFocus    = focusable.length >= 2;
+  const focusIsOver  = showFocus && totalFocusPct > 100;
+  const focusReserve = 100 - totalFocusPct;
+
+  // Баннер суммарного фокуса (показывается над карточками)
+  if (showFocus) {
+    chtml += focusIsOver
+      ? `<div id="focus-total-warn" style="display:flex;align-items:center;gap:6px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:7px;padding:6px 10px;margin-bottom:8px">
+          <span style="font-size:18px;line-height:1">⚠️</span>
+          <span style="font-size:11px;color:var(--red);font-weight:600">Суммарный фокус: ${totalFocusPct}% — освободи ${totalFocusPct - 100}% у других проектов</span>
+         </div>
+         <div id="focus-reserve" style="display:none"></div>`
+      : `<div id="focus-total-warn" style="display:none"></div>
+         <div id="focus-reserve" style="display:flex;align-items:center;gap:6px;background:rgba(45,212,191,.07);border:1px solid rgba(45,212,191,.2);border-radius:7px;padding:5px 10px;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--teal)">✦ Резерв фокуса: <strong>${focusReserve}%</strong></span>
+         </div>`;
+  }
+
   G.activeClients.forEach(c=>{
     const nps       = Math.round(G.clientNPS[c.id]??c.npsStart??70);
     const nc        = npsColor(nps);
@@ -133,6 +154,54 @@ function renderGame() {
         </div>
       </div>` : '';
 
+    // Контролы фокуса (показываем только когда 2+ активных не-разовых проекта)
+    const myFocus = c._focus != null ? c._focus : Math.floor(100 / Math.max(1, focusable.length));
+    const focusBar = (!c.oneTime && showFocus) ? (()=>{
+      // Превью прогресса при текущем фокусе
+      const thr      = getTeamThroughput();
+      const totLoad  = getTotalLoad();
+      const lratio   = totLoad > 0 ? Math.min(1, thr / totLoad) : 1;
+      const fMult    = totalFocusW > 0 ? (myFocus / totalFocusW) * focusable.length : 1;
+      const perMonth = Math.round((100 / (c._duration||3)) * lratio * fMult * 10) / 10;
+      const remain   = Math.max(0, 100 - (c._progress||0));
+      const mthsLeft = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
+      const previewColor = myFocus >= 60 ? 'var(--green)' : myFocus >= 30 ? 'var(--teal)' : 'var(--amber)';
+      const rowBorder = focusIsOver ? 'rgba(248,81,73,.3)' : 'transparent';
+      return `
+      <div id="focus-row-${c.id}" style="margin-top:7px;border:1px solid ${rowBorder};border-radius:6px;padding:${focusIsOver?'6px 7px':'0'};transition:border-color .2s,padding .2s">
+        <!-- Ряд 1: слайдер + ввод % + пресет -->
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+          <span style="font-size:10px;color:var(--sub);flex-shrink:0">Фокус</span>
+          <input type="range" min="0" max="100" value="${myFocus}"
+            id="focus-range-${c.id}" class="focus-range" style="--fill:${myFocus}%"
+            oninput="liveUpdateFocus('${c.id}',this.value)"
+            onchange="renderGame()">
+          <input type="number" min="0" max="100" value="${myFocus}"
+            id="focus-val-${c.id}" class="focus-val"
+            onchange="setFocus('${c.id}',this.value)"
+            onclick="this.select()">
+          <span style="font-size:10px;color:var(--sub);flex-shrink:0">%</span>
+          <select class="focus-preset" onchange="setFocus('${c.id}',this.value)">
+            <option value="" disabled selected>···</option>
+            <option value="0">0%</option>
+            <option value="20">20%</option>
+            <option value="40">40%</option>
+            <option value="60">60%</option>
+            <option value="80">80%</option>
+            <option value="100">100%</option>
+          </select>
+        </div>
+        <!-- Ряд 2: кнопки ±1/±10 + превью -->
+        <div style="display:flex;align-items:center;gap:3px">
+          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',-10)">−10</button>
+          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',-1)">−1</button>
+          <span style="flex:1;text-align:center;font-size:10px;color:${previewColor}" id="focus-prev-${c.id}">+${perMonth}%/мес · ~${mthsLeft} мес. до завершения</span>
+          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',+1)">+1</button>
+          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',+10)">+10</button>
+        </div>
+      </div>`;
+    })() : '';
+
     chtml+=`<div class="client-card ${warn}">
       <div class="client-row1">
         <div class="client-icon">${c.icon}</div>
@@ -148,8 +217,14 @@ function renderGame() {
             <span class="modifier-badge ${mb}" style="font-size:10px;padding:2px 6px">${ml}</span>
           </div>
           ${progressBar}
+          ${focusBar}
         </div>
-        <div class="client-rev">${budgetStr}</div>
+        <div class="client-rev">
+          ${budgetStr}
+          ${c._prepaidAmount ? `
+            <div style="font-size:10px;color:var(--green);margin-top:3px;white-space:nowrap;font-weight:600">💰 ${fmtK(c._prepaidAmount)}</div>
+            <div style="font-size:9px;color:var(--muted);white-space:nowrap">получено авансом</div>` : ''}
+        </div>
       </div>
       <div class="nps-row">
         <span class="nps-label">NPS</span>
@@ -168,7 +243,8 @@ function renderGame() {
 
   // ── P&L ──
   const staffCost = getTotalStaffCost();
-  const burnRate  = staffCost + OVERHEAD;
+  const loanCost  = G.loan ? G.loan.monthlyPayment : 0;
+  const burnRate  = staffCost + OVERHEAD + loanCost;
   const pipeline  = G.activeClients.filter(c=>!c.oneTime).reduce((s,c)=>s+(c._totalBudget||0),0);
   const oneTimeV  = G.activeClients.filter(c=>c.oneTime).reduce((s,c)=>s+(c._totalBudget||0),0);
 
@@ -179,29 +255,27 @@ function renderGame() {
     ${(pipeline>0||oneTimeV>0)?'<div class="divider"></div>':''}
     <div class="pnl-row"><span>Зарплаты</span><span class="neg">−${fmt(staffCost)}</span></div>
     <div class="pnl-row"><span>Overhead</span><span class="neg">−${fmt(OVERHEAD)}</span></div>
+    ${G.loan ? `<div class="pnl-row">
+        <span style="color:var(--amber)">🏦 Кредит «${G.loan.label}»</span>
+        <span style="color:var(--amber);font-weight:600">−${fmt(G.loan.monthlyPayment)}</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:3px;padding-left:2px">ещё ${G.loan.monthsRemaining} мес. · остаток долга ${fmtK(G.loan.monthlyPayment * G.loan.monthsRemaining)}</div>` : ''}
     <div class="divider"></div>
     <div class="pnl-row total"><span>Расход/мес</span><span class="neg">−${fmt(burnRate)}</span></div>
     <div style="font-size:10px;color:var(--muted);margin-top:5px">Выручка — при завершении проектов</div>
     ${(()=>{
-      if (G.loan) {
-        const remaining = G.loan.monthsRemaining;
-        return `<div class="divider" style="margin:8px 0"></div>
-          <div class="pnl-row">
-            <span style="color:var(--amber)">🏦 Кредит «${G.loan.label}»</span>
-            <span style="color:var(--amber);font-weight:700">−${fmt(G.loan.monthlyPayment)}/мес</span>
-          </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Осталось: ${remaining} мес. · Итого: ${fmtK(G.loan.monthlyPayment * remaining)}</div>`;
-      }
-      const loanTier = getLoanTier(G.reputation);
-      if (loanTier) {
-        return `<div class="divider" style="margin:8px 0"></div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <div>
-              <div style="font-size:11px;color:var(--sub)">🏦 Кредитная линия</div>
-              <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtK(loanTier.principal)} · ${fmtK(loanTier.monthlyPayment)}/мес × ${loanTier.months} мес. (${loanTier.label})</div>
-            </div>
-            <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:4px 10px;flex-shrink:0;white-space:nowrap" onclick="takeLoan()">Взять кредит</button>
-          </div>`;
+      if (!G.loan) {
+        const loanTier = getLoanTier(G.reputation);
+        if (loanTier) {
+          return `<div class="divider" style="margin:8px 0"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+              <div>
+                <div style="font-size:11px;color:var(--sub)">🏦 Кредитная линия</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtK(loanTier.principal)} · ${fmtK(loanTier.monthlyPayment)}/мес × ${loanTier.months} мес. (${loanTier.label})</div>
+              </div>
+              <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:4px 10px;flex-shrink:0;white-space:nowrap" onclick="takeLoan()">Взять кредит</button>
+            </div>`;
+        }
       }
       return '';
     })()}`;
@@ -266,8 +340,10 @@ function renderGame() {
         <div class="hire-name">${countBadge}${def.name}</div>
         <div class="hire-desc">${bonuses.join(' · ')}</div>
       </div>
-      <div class="hire-cost">−${fmt(def.cost)}/мес</div>
-      <button class="btn btn-sm btn-primary" style="margin-left:6px;align-self:center;flex-shrink:0;" onclick="hireStaff('${def.id}')" ${!ok?'disabled':''}>${alreadyCount>0?'Ещё':'Нанять'}</button>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;">
+        <div class="hire-cost">−${fmt(def.cost)}/мес</div>
+        <button class="btn btn-sm btn-primary" onclick="hireStaff('${def.id}')" ${!ok?'disabled':''}>${alreadyCount>0?'Ещё':'Нанять'}</button>
+      </div>
     </div>`;
   });
   document.getElementById('g-hire-list').innerHTML=hhtml;
@@ -402,6 +478,20 @@ function renderGame() {
       return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Нагрузка / Произв.</span><span style="color:${loadCol};font-weight:700">${Math.round(tld)} / ${thr}</span></div>
         <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:3px;overflow:hidden"><div style="height:100%;width:${Math.min(100,loadPct)}%;background:${loadCol};border-radius:2px"></div></div>
         ${overloaded?`<div style="font-size:10px;color:var(--red)">⚠ Перегруз — прогресс ×${loadPct}%</div>`:`<div style="font-size:10px;color:var(--muted)">эффективность ${loadPct}%</div>`}`;
+    })()}
+    <div class="divider" style="margin:6px 0"></div>
+    ${(()=>{
+      const ft = G.teamFatigue || 0;
+      const ftCol = ft >= 85 ? 'var(--red)' : ft >= 60 ? 'var(--amber)' : ft >= 30 ? '#e8a838' : 'var(--green)';
+      const ftLabel = ft >= 85 ? 'Кризис' : ft >= 60 ? 'Выгорание' : ft >= 30 ? 'Напряжение' : 'Норма';
+      const ftMult  = ft >= 85 ? '×70%' : ft >= 60 ? '×85%' : ft >= 30 ? '×95%' : '';
+      return `<div class="pnl-row" style="margin-bottom:3px">
+        <span style="font-size:12px;color:var(--sub)" title="Усталость команды. Норма (0–30): нет эффектов. Напряжение (30–60): −5% прогресс, NPS снижается. Выгорание (60–85): −15% прогресс, сотрудники уходят. Кризис (85+): −30% прогресс, найм заблокирован.">Усталость</span>
+        <span style="color:${ftCol};font-weight:700;font-size:13px">${Math.round(ft)} <span style="font-size:11px;font-weight:400">${ftLabel}${ftMult ? ' ' + ftMult : ''}</span></span>
+      </div>
+      <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:4px;overflow:hidden">
+        <div style="height:100%;width:${ft}%;background:${ftCol};border-radius:2px;transition:width 0.3s"></div>
+      </div>`;
     })()}
     <div class="divider" style="margin:6px 0"></div>
     <div class="pnl-row"><span>Overhead/мес</span><span style="color:var(--red)">−${fmt(OVERHEAD)}</span></div>`;
