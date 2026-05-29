@@ -1,7 +1,25 @@
 // ══════════════════════════════════════════════════════
 //  ENGINE — стейт, хелперы, игровая логика
-//  Зависит от: data.js
+//  Зависит от: constants.js, scenarios/{id}.js
 // ══════════════════════════════════════════════════════
+
+// ── Scenario bindings ─────────────────────────────────
+// SCENARIO объявляется в scenarios/{id}.js и загружается до engine.js.
+// Алиасы дают обратную совместимость: весь код внутри engine.js
+// продолжает использовать прежние имена без изменений.
+const STAFF_DEFS        = SCENARIO.staff;
+const STAFF_ROLES       = SCENARIO.staffRoles;
+const ROLE_LABELS       = SCENARIO.roleLabels;
+const PROJECT_POOL      = SCENARIO.projects;
+const BUDGET_RANGES     = SCENARIO.budgetRanges;
+const UPGRADES          = SCENARIO.upgrades;
+const SPECS             = SCENARIO.specs;
+const EVENTS            = SCENARIO.events;
+const OVERHEAD          = SCENARIO.settings.overhead;
+const ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
+const SCOUT_COST        = SCENARIO.settings.scoutCost;
+const HIRE_COST         = SCENARIO.settings.hireCost;
+
 // ══════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -74,14 +92,14 @@ function selectSpec(id) {
 
 function startGame() {
   if (!G.spec) return;
-  G.money=1000000; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[];
+  G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[];
   G.tempDiscount=0; G.monthsPlayed=0;
   G.actions=ACTIONS_PER_MONTH; G.reputation=100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
   G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
   DECISIONS=[];
-  G.history.push({month:0, money:1000000, label:'Старт'});
+  G.history.push({month:0, money:SCENARIO.settings.startMoney, label:'Старт'});
   addLog('Агентство открыто. Найди первый проект через Скаутинг!','amber');
   addLog(`Выручка начисляется при завершении проекта. Overhead −${fmt(OVERHEAD)}/мес`,'red');
   renderGame(); goTo('screen-game');
@@ -1207,7 +1225,7 @@ function advanceMonth() {
   G.history.push({month:G.month, money:G.money, label:monthLabel(-1)});
 
   // Win / Lose
-  if (G.money>=3000000){ renderGame(); endGame(true); return; }
+  if (G.money>=SCENARIO.settings.winCondition){ renderGame(); endGame(true); return; }
   if (G.money<=0)       { renderGame(); endGame(false); return; }
 
   // Случайное событие (40%, пропуск 1-го месяца)

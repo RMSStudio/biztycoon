@@ -1,5 +1,15 @@
 # BizTycoon — Changelog
 
+## v0.21 — Сценарная архитектура (2026-05-29)
+- **Архитектура**: бизнес-данные вынесены из `src/data.js` в отдельный слой сценариев
+- **`scenarios/agency.js`** — единый файл текущего сценария «Диджитал-агентство»; содержит `SCENARIO` объект с полями: `settings`, `specs`, `staff`, `staffRoles`, `roleLabels`, `budgetRanges`, `projects`, `upgrades`, `events`
+- **`src/constants.js`** — сценарно-независимые данные: `MONTHS`, `CASE_GRADES`
+- **`src/data.js`** — упразднён, оставлен как tombstone с комментарием
+- **`src/engine.js`** и **`src/ui.js`** — получают данные через алиасы (`const STAFF_DEFS = SCENARIO.staff` и т.д.); внутренний код не изменился
+- **`build/build.js`** — поддерживает флаг `--scenario=<id>`; порядок сборки: constants → scenario → engine → ui
+- **`index.html`** — обновлён порядок `<script>` тегов под новую архитектуру
+- **Добавить новый сценарий**: скопировать `scenarios/agency.js` → `scenarios/bank.js`, заменить данные, запустить `node build/build.js --scenario=bank`
+
 ## v0.20 — Фикс расчёта фокуса (2026-05-29)
 - **П.22 [БАГ]** Исправлен некорректный расчёт `focusMult` в `advanceMonth`: ранее нормировался через `totalFocusW` (сумму выставленных фокусов), из-за чего 20%+0%+0% давало проекту ×3.0 вместо ×0.20 — нагрузка не снижалась, усталость росла
 - `focusMult = _cFocus / 100` — теперь нормируется через 100; `effectiveLoad = totalLoad × (totalFocusW/100)` — усталость считается по реальной доле работы; `loadRatio = throughput / effectiveLoad`
