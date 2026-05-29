@@ -131,16 +131,47 @@ function renderGame() {
     const isWaiting = c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0)<=c.modifier.val;
     const waitMos   = isWaiting ? c.modifier.val-(c._monthsSigned||0) : 0;
 
-    // Бюджет
+    // Бюджет (П.9: показываем portfolio-бонус чтобы игрок видел эффект мультипликатора)
     const budget    = c._totalBudget||0;
+    const pfM       = getPortfolioMultiplier();
+    const pfBoostPct= Math.round((pfM - 1) * 100);
     const budgetStr = c.oneTime
       ? `${fmtK(budget)}<small> разово</small>`
       : isWaiting
         ? `<span style="color:var(--muted);font-size:12px">${fmtK(budget)}</span><small style="color:var(--amber)"> старт через ${waitMos} мес.</small>`
-        : `${fmtK(budget)}<small> при сдаче</small>`;
+        : (() => {
+            const origStr = (c._originalBudget && c._originalBudget !== budget && (c._milestonesPaid||[]).length > 0)
+              ? `<div style="font-size:9px;color:var(--sub);text-decoration:line-through">${fmtK(c._originalBudget)} полный</div>` : '';
+            const pfStr = pfBoostPct > 0 ? `<div style="font-size:9px;color:var(--purple);font-weight:600;margin-top:1px">+${pfBoostPct}% портфолио</div>` : '';
+            return `${origStr}${fmtK(budget)}<small> при сдаче</small>${pfStr}`;
+          })();
 
     // Кнопка «Завершить» — только при progress === 100
     const canComplete = !c.oneTime && progress >= 100;
+
+    // Milestone-маркеры и инфо
+    const hasMilestones = (c._milestones||[]).length > 0;
+    const milestoneMarkers = hasMilestones
+      ? (c._milestones).map((thr, idx) => {
+          const paid = (c._milestonesPaid||[]).includes(idx);
+          const col  = paid ? 'var(--green)' : 'var(--amber)';
+          const amt  = Math.round((c._originalBudget||c._totalBudget) * (c._milestonePcts||[])[idx] / 5000) * 5000;
+          return `<div style="position:absolute;left:${thr}%;top:-2px;width:2px;height:8px;background:${col};border-radius:1px" title="${paid?'✅':'⏳'} Milestone ${thr}%: ${fmtK(amt)}"></div>`;
+        }).join('')
+      : '';
+    const milestoneSummary = hasMilestones ? (()=>{
+      const totalPaid = (c._milestonesPaid||[]).reduce((s, idx) => {
+        return s + Math.round((c._originalBudget||0) * (c._milestonePcts||[])[idx] / 5000) * 5000;
+      }, 0);
+      const next = (c._milestones).find((thr, idx) => !(c._milestonesPaid||[]).includes(idx));
+      if (totalPaid > 0) {
+        return `<div style="font-size:9px;color:var(--green);margin-top:2px">💵 Получено milestone: +${fmtK(totalPaid)}</div>`;
+      } else if (next != null) {
+        const nextAmt = Math.round((c._originalBudget||0) * (c._milestonePcts||[])[0] / 5000) * 5000;
+        return `<div style="font-size:9px;color:var(--amber);margin-top:2px">⏳ Milestone при ${next}%: +${fmtK(nextAmt)}</div>`;
+      }
+      return '';
+    })() : '';
 
     // Прогресс-бар (не для разовых)
     const progressBar = !c.oneTime ? `
@@ -149,23 +180,35 @@ function renderGame() {
           <span style="font-size:10px;color:var(--sub)">Прогресс</span>
           <span style="font-size:10px;font-weight:700;color:${progColor}">${progress}%</span>
         </div>
-        <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+        <div style="position:relative;height:4px;background:var(--bg3);border-radius:2px;overflow:visible">
           <div style="height:100%;width:${progress}%;background:${progColor};border-radius:2px;transition:width .4s"></div>
+          ${milestoneMarkers}
         </div>
+        ${milestoneSummary}
       </div>` : '';
 
     // Контролы фокуса (показываем только когда 2+ активных не-разовых проекта)
     const myFocus = c._focus != null ? c._focus : Math.floor(100 / Math.max(1, focusable.length));
     const focusBar = (!c.oneTime && showFocus) ? (()=>{
-      // Превью прогресса при текущем фокусе
+      // Превью прогресса при текущем фокусе (фикс п.22: нормируем через 100)
       const thr      = getTeamThroughput();
       const totLoad  = getTotalLoad();
-      const lratio   = totLoad > 0 ? Math.min(1, thr / totLoad) : 1;
-      const fMult    = totalFocusW > 0 ? (myFocus / totalFocusW) * focusable.length : 1;
-      const perMonth = Math.round((100 / (c._duration||3)) * lratio * fMult * 10) / 10;
-      const remain   = Math.max(0, 100 - (c._progress||0));
-      const mthsLeft = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
-      const previewColor = myFocus >= 60 ? 'var(--green)' : myFocus >= 30 ? 'var(--teal)' : 'var(--amber)';
+      // Эффективная нагрузка = полная нагрузка × доля реально использованного фокуса
+      const _activeFocusPct = focusable.length > 0 ? Math.min(1, totalFocusW / 100) : 1;
+      const _effectiveLoad  = totLoad * _activeFocusPct;
+      const lratio   = _effectiveLoad > 0 ? Math.min(1, thr / _effectiveLoad) : 1;
+      // focusMult = доля фокуса конкретного проекта от 100% (не от суммы выставленных)
+      const fMult    = myFocus / 100;
+      // П.10: учитываем fatigueMult; П.13: целочисленный результат (без десятых)
+      const _fatigueMult = getFatigueMult();
+      const basePerMonth = Math.round((100 / (c._duration||3)) * lratio * fMult);
+      const perMonth     = Math.round(basePerMonth * _fatigueMult);
+      const remain       = Math.max(0, 100 - (c._progress||0));
+      const mthsLeft     = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
+      // П.16: конкретный дельта усталости (если есть)
+      const fatigueDelta  = basePerMonth - perMonth;
+      const fatigueLabel  = fatigueDelta > 0 ? ` <span style="color:var(--red);font-size:9px">(Усталость: −${fatigueDelta}%)</span>` : '';
+      const previewColor  = myFocus >= 60 ? 'var(--green)' : myFocus >= 30 ? 'var(--teal)' : 'var(--amber)';
       const rowBorder = focusIsOver ? 'rgba(248,81,73,.3)' : 'transparent';
       return `
       <div id="focus-row-${c.id}" style="margin-top:7px;border:1px solid ${rowBorder};border-radius:6px;padding:${focusIsOver?'6px 7px':'0'};transition:border-color .2s,padding .2s">
@@ -176,7 +219,7 @@ function renderGame() {
             id="focus-range-${c.id}" class="focus-range" style="--fill:${myFocus}%"
             oninput="liveUpdateFocus('${c.id}',this.value)"
             onchange="renderGame()">
-          <input type="number" min="0" max="100" value="${myFocus}"
+          <input type="number" min="0" max="100" step="1" value="${myFocus}"
             id="focus-val-${c.id}" class="focus-val"
             onchange="setFocus('${c.id}',this.value)"
             onclick="this.select()">
@@ -195,7 +238,7 @@ function renderGame() {
         <div style="display:flex;align-items:center;gap:3px">
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',-10)">−10</button>
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',-1)">−1</button>
-          <span style="flex:1;text-align:center;font-size:10px;color:${previewColor}" id="focus-prev-${c.id}">+${perMonth}%/мес · ~${mthsLeft} мес. до завершения</span>
+          <span style="flex:1;text-align:center;font-size:10px;color:${previewColor}" id="focus-prev-${c.id}">+${perMonth}%/мес${fatigueLabel} · ~${mthsLeft} мес. до завершения</span>
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',+1)">+1</button>
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',+10)">+10</button>
         </div>
@@ -240,6 +283,13 @@ function renderGame() {
   });
 
   document.getElementById('g-clients-list').innerHTML=chtml;
+
+  // П.8 — блокировка «Завершить месяц» при суммарном фокусе >100%
+  const advBtn = document.getElementById('btn-advance');
+  if (advBtn) {
+    advBtn.disabled = focusIsOver;
+    advBtn.title = focusIsOver ? 'Суммарный фокус превышает 100% — скорректируй распределение' : '';
+  }
 
   // ── P&L ──
   const staffCost = getTotalStaffCost();
@@ -305,46 +355,67 @@ function renderGame() {
   });
   document.getElementById('g-team-list').innerHTML=thtml;
 
-  // ── Hire ──
+  // ── Hire — сгруппировано по роли, коллапсируемые секции ──
   const dayCostHire=hasRole('hr') ? 1 : HIRE_COST;
   let hhtml='';
-  STAFF_DEFS.forEach(def=>{
-    const alreadyCount=countRole(def.id);
-    const ok=G.money>=def.cost*2 && G.actions>=dayCostHire;
-    const bonuses=[];
-    if (def.quality){
-      bonuses.push(`Кач +${def.quality} <span style="color:var(--teal);font-size:10px">(улучшает Q-гейтинг проектов)</span>`);
-    }
-    if (def.volume){
-      bonuses.push(`Объём +${def.volume} <span style="color:var(--teal);font-size:10px">(V-гейтинг проектов)</span>`);
-    }
-    if (def.throughput){
-      const curT=getTeamThroughput(), newT=curT+def.throughput;
-      const tl=getTotalLoad();
-      const hint=tl>0?`нагрузка ${Math.round(tl)} → произв. ${newT}`:`произв. +${def.throughput}`;
-      bonuses.push(`Произв. +${def.throughput} <span style="color:var(--accent2);font-size:10px">(${hint})</span>`);
-    }
-    if (def.capacity) bonuses.push(`+${def.capacity} слот`);
-    // Unique passive bonuses for specialist roles
-    if (def.id==='lawyer')  bonuses.push(`<span style="color:var(--amber);font-size:10px">штрафы/репутация −50%</span>`);
-    if (def.id==='smm')     bonuses.push(`<span style="color:var(--teal);font-size:10px">+1 лид при скаутинге</span>`);
-    if (def.id==='hr')      bonuses.push(`<span style="color:var(--teal);font-size:10px">+3 NPS/мес · найм за 1 день</span>`);
-    if (def.id==='developer') bonuses.push(`<span style="color:var(--accent2);font-size:10px">открывает тех-проекты</span>`);
-
-    const countBadge=alreadyCount>0
-      ? `<span style="font-size:10px;background:rgba(79,110,247,.18);color:var(--accent2);border-radius:4px;padding:1px 6px;margin-right:4px">×${alreadyCount}</span>`
+  STAFF_ROLES.forEach(role=>{
+    const rl = ROLE_LABELS[role];
+    const grades = STAFF_DEFS.filter(d=>d.role===role);
+    const totalInTeam = countRole(role);
+    const roleBadge = totalInTeam > 0
+      ? `<span style="font-size:10px;background:rgba(79,110,247,.18);color:var(--accent2);border-radius:4px;padding:1px 6px;margin-left:6px">×${totalInTeam}</span>`
       : '';
-    hhtml+=`<div class="hire-item">
-      <div class="hire-icon">${def.icon}</div>
-      <div class="hire-info">
-        <div class="hire-name">${countBadge}${def.name}</div>
-        <div class="hire-desc">${bonuses.join(' · ')}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;">
-        <div class="hire-cost">−${fmt(def.cost)}/мес</div>
-        <button class="btn btn-sm btn-primary" onclick="hireStaff('${def.id}')" ${!ok?'disabled':''}>${alreadyCount>0?'Ещё':'Нанять'}</button>
-      </div>
-    </div>`;
+    hhtml += `<div style="margin-bottom:6px;border:1px solid rgba(255,255,255,.06);border-radius:8px;overflow:hidden">
+      <button onclick="(function(el){var b=el.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none';})(this)"
+        style="width:100%;background:rgba(255,255,255,.03);border:none;color:var(--fg);padding:8px 10px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;text-align:left">
+        <span>${rl.icon}</span><span>${rl.name}</span>${roleBadge}
+        <span style="margin-left:auto;font-size:10px;color:var(--muted)">▾</span>
+      </button>
+      <div style="display:none;padding:4px 6px 6px">`;
+
+    grades.forEach(def=>{
+      const gradeColor = def.grade==='sr'?'var(--purple)':def.grade==='jr'?'var(--muted)':'var(--sub)';
+      const locked = def.unlockCond && (
+        (def.unlockCond.minRep       && G.reputation    < def.unlockCond.minRep) ||
+        (def.unlockCond.minPortfolio && (G.portfolio||0) < def.unlockCond.minPortfolio)
+      );
+      const ok = !locked && G.money >= def.cost*2 && G.actions >= dayCostHire;
+      const alreadyCount = G.staff.filter(s=>s.id===def.id).length;
+
+      const bonuses=[];
+      if (def.quality)    bonuses.push(`Q +${def.quality}`);
+      if (def.volume)     bonuses.push(`V +${def.volume}`);
+      if (def.capacity)   bonuses.push(`+${def.capacity} слот`);
+      if (def.throughput) bonuses.push(`Произв. +${def.throughput}`);
+      if (def.speedBonus) bonuses.push(`<span style="color:var(--green)">Speed +${Math.round(def.speedBonus*100)}%</span>`);
+      if (role==='lawyer')    bonuses.push(`<span style="color:var(--amber);font-size:10px">риски −${def.grade==='sr'?70:def.grade==='jr'?30:50}%</span>`);
+      if (role==='smm')       bonuses.push(`<span style="color:var(--teal);font-size:10px">+1 лид/скаут</span>`);
+      if (role==='hr')        bonuses.push(`<span style="color:var(--teal);font-size:10px">NPS +${def.grade==='sr'?4:def.grade==='jr'?2:3}/мес · найм 1 дн</span>`);
+      if (role==='developer') bonuses.push(`<span style="color:var(--accent2);font-size:10px">тех-проекты</span>`);
+
+      let lockHint = '';
+      if (def.unlockCond?.minRep)       lockHint = `🔒 Реп ≥${def.unlockCond.minRep} (сейчас ${Math.round(G.reputation)})`;
+      if (def.unlockCond?.minPortfolio) lockHint = `🔒 Портфолио ≥${def.unlockCond.minPortfolio}`;
+
+      const countBadge = alreadyCount > 0
+        ? `<span style="font-size:10px;background:rgba(79,110,247,.18);color:var(--accent2);border-radius:4px;padding:1px 5px;margin-right:4px">×${alreadyCount}</span>`
+        : '';
+
+      hhtml += `<div class="hire-item" style="${locked?'opacity:.55':''}">
+        <div style="width:6px;border-radius:3px;background:${gradeColor};align-self:stretch;margin-right:4px;flex-shrink:0"></div>
+        <div class="hire-info">
+          <div class="hire-name" style="font-size:12px">${countBadge}${def.name}
+            <span style="font-size:10px;color:${gradeColor};font-weight:700;margin-left:4px">${def.gradeLabel}</span>
+          </div>
+          <div class="hire-desc" style="font-size:10px">${bonuses.join(' · ')}${locked?` · <span style="color:var(--red)">${lockHint}</span>`:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:auto">
+          <div class="hire-cost" style="font-size:11px">−${fmt(def.cost)}/мес</div>
+          <button class="btn btn-sm btn-primary" onclick="hireStaff('${def.id}')" ${!ok?'disabled':''}>${alreadyCount>0?'Ещё':'Нанять'}</button>
+        </div>
+      </div>`;
+    });
+    hhtml += `</div></div>`;
   });
   document.getElementById('g-hire-list').innerHTML=hhtml;
 
@@ -352,16 +423,42 @@ function renderGame() {
   let uhtml='';
   UPGRADES.forEach(u=>{
     const bought      = u.oneTime && G.upgrades[u.id];
-    const tempActive  = !u.oneTime && G.tempQBonus >= u.qBonus;
+    const tempActive  = !u.oneTime && !u.fatigueReduce && G.tempQBonus >= u.qBonus;
+    // Кулдаун действий восстановления усталости
+    const fatigueCd   = u.fatigueReduce ? ((G.fatigueActionCooldowns||{})[u.id] || 0) : 0;
+    const onCooldown  = fatigueCd > 0;
+    // minFatigue: отпуск доступен только при усталости ≥ порога
+    const ftGate      = u.minFatigue && (G.teamFatigue||0) < u.minFatigue;
     const canAfford   = G.money >= u.cost && G.actions >= u.days;
-    const disabled    = bought || tempActive || !canAfford;
+    const disabled    = bought || tempActive || onCooldown || ftGate || !canAfford;
 
     let statusBadge='';
-    if (bought)          statusBadge=`<span style="font-size:10px;color:var(--green);font-weight:700;white-space:nowrap">✓ +${u.qBonus}Q</span>`;
-    else if (tempActive) statusBadge=`<span style="font-size:10px;color:var(--teal);font-weight:700;white-space:nowrap">↻ активен</span>`;
+    if (bought) {
+      const bl = u.speedBonus ? `Speed +${Math.round(u.speedBonus*100)}%` : `+${u.qBonus}Q`;
+      statusBadge=`<span style="font-size:10px;color:var(--green);font-weight:700;white-space:nowrap">✓ ${bl}</span>`;
+    } else if (tempActive) {
+      statusBadge=`<span style="font-size:10px;color:var(--teal);font-weight:700;white-space:nowrap">↻ активен</span>`;
+    } else if (onCooldown) {
+      statusBadge=`<span style="font-size:10px;color:var(--muted);font-weight:700;white-space:nowrap">⏳ через ${fatigueCd} мес.</span>`;
+    }
 
     const costLabel=`−${fmtK(u.cost)} · −${u.days}дн`;
-    const btnLabel=bought?'Куплено':tempActive?'Активен':u.oneTime?'Купить':'Нанять';
+    const btnLabel = bought ? 'Куплено'
+      : tempActive ? 'Активен'
+      : onCooldown ? `${fatigueCd} мес.`
+      : ftGate     ? `≥${u.minFatigue} уст.`
+      : u.oneTime  ? 'Купить' : 'Провести';
+
+    // Бейдж эффекта
+    const effectBadge = u.fatigueReduce
+      ? `<span style="background:rgba(63,185,80,.12);color:var(--green);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">😴 Усталость −${u.fatigueReduce}</span>`
+      : u.speedBonus
+        ? `<span style="background:rgba(63,185,80,.12);color:var(--green);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">⚡ Speed +${Math.round(u.speedBonus*100)}%</span>`
+        : `<span style="background:rgba(45,212,191,.15);color:var(--teal);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">Q +${u.qBonus}</span>`;
+    const cdNote = u.fatigueReduce && u.cooldownMonths
+      ? `<span style="color:var(--muted);font-size:10px">· кулдаун ${u.cooldownMonths} мес.</span>` : '';
+    const ftGateNote = u.minFatigue
+      ? `<span style="color:var(--amber);font-size:10px">· при усталости ≥${u.minFatigue}</span>` : '';
 
     uhtml+=`<div class="hire-item">
       <div class="hire-icon">${u.icon}</div>
@@ -369,14 +466,15 @@ function renderGame() {
         <div class="hire-name" style="display:flex;align-items:center;gap:6px">${u.name} ${statusBadge}</div>
         <div class="hire-desc" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
           <span>${u.desc}</span>
-          <span style="background:rgba(45,212,191,.15);color:var(--teal);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">Q +${u.qBonus}</span>
+          ${effectBadge}
           ${u.repBonus?`<span style="background:rgba(79,110,247,.15);color:var(--accent2);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">Реп +${u.repBonus}</span>`:''}
-          ${!u.oneTime?'<span style="color:var(--amber);font-size:10px">· до конца мес.</span>':''}
+          ${cdNote}${ftGateNote}
+          ${!u.oneTime && !u.fatigueReduce?'<span style="color:var(--amber);font-size:10px">· до конца мес.</span>':''}
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
         <div class="hire-cost" style="font-size:10px">${costLabel}</div>
-        <button class="btn btn-sm ${bought||tempActive?'btn-ghost':'btn-teal'}" onclick="buyUpgrade('${u.id}')" ${disabled?'disabled':''}
+        <button class="btn btn-sm ${bought||tempActive||onCooldown||ftGate?'btn-ghost':'btn-teal'}" onclick="buyUpgrade('${u.id}')" ${disabled?'disabled':''}
           style="font-size:11px;padding:5px 10px">${btnLabel}</button>
       </div>
     </div>`;
@@ -471,11 +569,17 @@ function renderGame() {
     <div class="divider" style="margin:6px 0"></div>
     ${(()=>{
       const thr=getTeamThroughput(), tld=getTotalLoad();
-      if(tld===0) return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Производительность</span><span style="font-weight:700">${thr}</span></div><div style="font-size:10px;color:var(--muted)">нет активных проектов</div>`;
-      const ratio=thr/tld, overloaded=ratio<0.95;
+      const fMult=getFatigueMult();
+      const effThr=Math.round(thr*fMult);
+      const fatDelta=thr-effThr;
+      const fatNote=fatDelta>0
+        ? `<span style="color:var(--red);font-size:10px;font-weight:400"> (Усталость: −${fatDelta})</span>`
+        : '';
+      if(tld===0) return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Производительность</span><span style="font-weight:700">${effThr}${fatNote}</span></div><div style="font-size:10px;color:var(--muted)">нет активных проектов</div>`;
+      const ratio=effThr/tld, overloaded=ratio<0.95;
       const loadCol=overloaded?'var(--red)':ratio<1.1?'var(--amber)':'var(--green)';
       const loadPct=Math.round(ratio*100);
-      return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Нагрузка / Произв.</span><span style="color:${loadCol};font-weight:700">${Math.round(tld)} / ${thr}</span></div>
+      return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Нагрузка / Произв.</span><span style="color:${loadCol};font-weight:700">${Math.round(tld)} / ${effThr}${fatNote}</span></div>
         <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:3px;overflow:hidden"><div style="height:100%;width:${Math.min(100,loadPct)}%;background:${loadCol};border-radius:2px"></div></div>
         ${overloaded?`<div style="font-size:10px;color:var(--red)">⚠ Перегруз — прогресс ×${loadPct}%</div>`:`<div style="font-size:10px;color:var(--muted)">эффективность ${loadPct}%</div>`}`;
     })()}
@@ -484,14 +588,57 @@ function renderGame() {
       const ft = G.teamFatigue || 0;
       const ftCol = ft >= 85 ? 'var(--red)' : ft >= 60 ? 'var(--amber)' : ft >= 30 ? '#e8a838' : 'var(--green)';
       const ftLabel = ft >= 85 ? 'Кризис' : ft >= 60 ? 'Выгорание' : ft >= 30 ? 'Напряжение' : 'Норма';
-      const ftMult  = ft >= 85 ? '×70%' : ft >= 60 ? '×85%' : ft >= 30 ? '×95%' : '';
+      // Прогноз: считаем fd по текущей нагрузке (зеркалим формулу advanceMonth + фикс п.22)
+      const _focusableLen = G.activeClients.filter(c=>!c.oneTime).length;
+      const _totalFocusW  = G.activeClients.filter(c=>!c.oneTime).reduce((s,c)=>s+(c._focus??50),0);
+      const _activeFocusPct = _focusableLen > 0 ? Math.min(1, _totalFocusW / 100) : 1;
+      const _effectiveLoad = getTotalLoad() * _activeFocusPct;
+      const _loadPct = getTeamThroughput() > 0 ? _effectiveLoad / getTeamThroughput() : 0;
+      let _fd = _loadPct >= 1.0 ? 10 : _loadPct >= 0.85 ? 4 : _loadPct >= 0.70 ? 1 : -8;
+      const _hrSr = G.staff.some(s=>s.id==='hr_sr'), _hrMd = G.staff.some(s=>s.id==='hr'), _hrJr = G.staff.some(s=>s.id==='hr_jr');
+      if (_fd > 0 && _hrSr) _fd = Math.round(_fd * 0.55);
+      else if (_fd > 0 && _hrMd) _fd = Math.round(_fd * 0.70);
+      else if (_fd > 0 && _hrJr) _fd = Math.round(_fd * 0.80);
+      if (_hrSr) _fd -= 2;
+      const _fdSign = _fd >= 0 ? `+${_fd}` : `${_fd}`;
+      const _fdCol = _fd > 0 ? 'var(--red)' : _fd < 0 ? 'var(--green)' : 'var(--muted)';
+      // Сколько месяцев до безопасного порога (≤30)
+      let _forecast = '';
+      if (_fd < 0 && ft > 30) {
+        const moToSafe = Math.ceil((ft - 30) / Math.abs(_fd));
+        _forecast = `· Норма через ~${moToSafe} мес.`;
+      } else if (_fd < 0 && ft <= 30) {
+        _forecast = '· восстановление';
+      } else if (_fd > 0 && ft >= 60) {
+        _forecast = '· рекомендуется Тимбилдинг';
+      }
       return `<div class="pnl-row" style="margin-bottom:3px">
         <span style="font-size:12px;color:var(--sub)" title="Усталость команды. Норма (0–30): нет эффектов. Напряжение (30–60): −5% прогресс, NPS снижается. Выгорание (60–85): −15% прогресс, сотрудники уходят. Кризис (85+): −30% прогресс, найм заблокирован.">Усталость</span>
-        <span style="color:${ftCol};font-weight:700;font-size:13px">${Math.round(ft)} <span style="font-size:11px;font-weight:400">${ftLabel}${ftMult ? ' ' + ftMult : ''}</span></span>
+        <span style="color:${ftCol};font-weight:700;font-size:13px">${Math.round(ft)} <span style="font-size:11px;font-weight:400">${ftLabel}</span></span>
       </div>
       <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:4px;overflow:hidden">
         <div style="height:100%;width:${ft}%;background:${ftCol};border-radius:2px;transition:width 0.3s"></div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:2px">
+        <span style="color:${_fdCol};font-weight:600">${_fdSign}/мес</span> при текущей нагрузке
+        ${_forecast ? `<span style="color:var(--sub)"> ${_forecast}</span>` : ''}
       </div>`;
+    })()}
+    <div class="divider" style="margin:6px 0"></div>
+    ${(()=>{
+      const spd = getSpeed();
+      const spdPct = Math.round(spd * 100);
+      const spdCol = spdPct >= 130 ? 'var(--purple)' : spdPct >= 115 ? 'var(--green)' : spdPct >= 105 ? 'var(--teal)' : 'var(--muted)';
+      const staffSpdBonus = G.staff.reduce((s,x)=>(s+(x.speedBonus||0)),0);
+      const hint = [
+        staffSpdBonus > 0 ? `специалисты +${Math.round(staffSpdBonus*100)}%` : null,
+        (G.speedUpgrades||0) > 0 ? `перки +${Math.round(G.speedUpgrades*100)}%` : null,
+      ].filter(Boolean).join(', ') || 'базовая';
+      return `<div class="pnl-row" style="margin-bottom:2px">
+        <span style="font-size:12px;color:var(--sub)" title="Скорость выполнения проектов. Прокачивается через Agile/Scrum/Автоматизацию в апгрейдах и грейды Менеджера/Разработчика.">Скорость</span>
+        <span style="color:${spdCol};font-weight:700;font-size:13px">${spdPct}%</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${hint}</div>`;
     })()}
     <div class="divider" style="margin:6px 0"></div>
     <div class="pnl-row"><span>Overhead/мес</span><span style="color:var(--red)">−${fmt(OVERHEAD)}</span></div>`;
@@ -501,7 +648,8 @@ function renderGame() {
   document.getElementById('g-log').innerHTML=lhtml||'<div class="log-item"><span class="log-msg">Пока всё тихо…</span></div>';
 
   // ── Portfolio tab badge ──
-  const available=(G.completedProjects||[]).filter(p=>!p._cased).length;
+  // П.18: отмененные и провальные проекты не идут в портфолио
+  const available=(G.completedProjects||[]).filter(p=>!p._cased && !p.terminated && !p.failed).length;
   const tabBadge=document.getElementById('tab-portfolio-badge');
   if (tabBadge){
     tabBadge.textContent=available;
@@ -665,7 +813,8 @@ function renderPortfolioTab() {
   if (!container) return;
 
   const cases=G.cases||[];
-  const available=(G.completedProjects||[]).filter(p=>!p._cased);
+  // П.18: расторгнутые и провальные — не в портфолио
+  const available=(G.completedProjects||[]).filter(p=>!p._cased && !p.terminated && !p.failed);
   const cased=(G.completedProjects||[]).filter(p=>p._cased);
 
   // ── Total bonuses summary ──

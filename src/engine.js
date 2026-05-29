@@ -39,7 +39,10 @@ function initState() {
     caseRepPenalty: 0,      // репутационный штраф/мес от провальных кейсов в портфолио
     scoutPool: null,        // сохранённый пул скаутинга (массив project-def или null)
     loan: null,             // активный кредит { principal, monthlyPayment, monthsRemaining, label }
-    teamFatigue: 0,         // усталость команды 0–100: 30+=напряжение, 60+=выгорание, 85+=кризис
+    teamFatigue: 0,              // усталость команды 0–100: 30+=напряжение, 60+=выгорание, 85+=кризис
+    fatigueActionCooldowns: {},  // { paid_leave:N, teambuilding:N, corp_vacation:N } — мес. до доступности
+    oneTimeCooldown: 0,          // мес. до следующего oneTime с cooldown (0 = доступен)
+    speedUpgrades: 0,            // суммарный бонус Speed от перков (0.10/0.15/0.20 за Agile/Scrum/Auto)
   };
   DECISIONS = [];
 }
@@ -71,14 +74,14 @@ function selectSpec(id) {
 
 function startGame() {
   if (!G.spec) return;
-  G.money=750000; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[];
+  G.money=1000000; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[];
   G.tempDiscount=0; G.monthsPlayed=0;
   G.actions=ACTIONS_PER_MONTH; G.reputation=100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
-  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0;
+  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
   DECISIONS=[];
-  G.history.push({month:0, money:750000, label:'Старт'});
+  G.history.push({month:0, money:1000000, label:'Старт'});
   addLog('Агентство открыто. Найди первый проект через Скаутинг!','amber');
   addLog(`Выручка начисляется при завершении проекта. Overhead −${fmt(OVERHEAD)}/мес`,'red');
   renderGame(); goTo('screen-game');
@@ -94,10 +97,23 @@ function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function getQuality(g=G){ return g.staff.reduce((s,x)=>s+(x.quality||0),0)+(g.qualityBonus||0)+(g.tempQBonus||0)+(g.caseQBonus||0); }
 function getVolume(g=G) { return g.staff.reduce((s,x)=>s+(x.volume||0),0); }
 function getCapacity(g=G){ return 2+g.staff.reduce((s,x)=>s+(x.capacity||0),0); }
-function hasRole(id,g=G){ return !!g.staff.find(s=>s.id===id); }
-function countRole(id,g=G){ return g.staff.filter(s=>s.id===id).length; }
+// hasRole/countRole проверяют по полю role (новые грейды) или id (обратная совместимость)
+function hasRole(id,g=G){ return !!g.staff.find(s=>(s.role||s.id)===id); }
+function countRole(id,g=G){ return g.staff.filter(s=>(s.role||s.id)===id).length; }
+
+// Скорость выполнения проектов: 1.0 база + бонус от специалистов + перки
+function getSpeed(g=G) {
+  const staffBonus = g.staff.reduce((s,x) => s + (x.speedBonus||0), 0);
+  return 1.0 + staffBonus + (g.speedUpgrades||0);
+}
 // +0.4% выручки за каждый балл портфолио, cap +20% при 50 баллах
 function getPortfolioMultiplier(g=G){ return 1+Math.min((g.portfolio||0)*0.004, 0.20); }
+
+// Множитель прогресса от усталости команды
+function getFatigueMult(g=G) {
+  const ft = g.teamFatigue || 0;
+  return ft >= 85 ? 0.70 : ft >= 60 ? 0.85 : ft >= 30 ? 0.95 : 1.0;
+}
 
 // ── THROUGHPUT / LOAD ────────────────────────────────────
 // Производительность команды (базовая = 10 у фаундера + throughput каждого сотрудника)
@@ -240,19 +256,38 @@ function _generateOffers() {
   if (hasRole('smm')) offerCount=Math.min(3, offerCount+1);
   if (G.caseScoutBonus>0) offerCount=Math.min(3, offerCount+(G.caseScoutBonus||0));
 
-  const maxTier = G.reputation>=70?3 : G.reputation>=40?2 : 1;
+  const maxTier = G.reputation>=80?4 : G.reputation>=70?3 : G.reputation>=40?2 : 1;
+
+  // Rarity weights: epic только при rep≥80, rare при rep≥60
+  const rarityOk = r => {
+    if (r==='epic')    return G.reputation >= 80;
+    if (r==='rare')    return G.reputation >= 60;
+    return true; // common/uncommon всегда
+  };
+
   const pool=PROJECT_POOL.filter(p=>
     p.tier<=maxTier &&
+    rarityOk(p.rarity||'common') &&
     (!p.requiresDev  || hasRole('developer')) &&
     (!p.minPortfolio || (G.portfolio||0)>=p.minPortfolio)
   );
 
+  // Взвешенный выбор: вероятность из поля prob; epic/rare имеют меньший prob
   const offers=[];
-  const shuffled=[...pool].sort(()=>Math.random()-0.5);
+  const available = pool.filter(p => !G.activeClients.find(c=>c.id.startsWith(p.id)));
+  const shuffled  = [...available].sort(()=>Math.random()-0.5);
   for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
     const p=shuffled[i];
-    if (!G.activeClients.find(c=>c.id.startsWith(p.id)))
+    if (Math.random() < (p.prob||0.5))
       offers.push({ ...p, _prepaymentPossible: !p.oneTime && Math.random() < 0.25 });
+  }
+  // Если не набрали нужное количество — берём без prob-фильтра
+  if (offers.length < offerCount) {
+    for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
+      const p=shuffled[i];
+      if (!offers.find(o=>o.id===p.id))
+        offers.push({ ...p, _prepaymentPossible: !p.oneTime && Math.random() < 0.25 });
+    }
   }
   return offers;
 }
@@ -300,12 +335,15 @@ function showScoutResults(offers) {
     const devOk  = !p.requiresDev  || hasRole('developer');
     const portOk = !p.minPortfolio || (G.portfolio||0) >= p.minPortfolio;
     const slotOk = G.activeClients.length < getCapacity();
-    const canTake = slotOk && qOk && vOk && devOk && portOk;
+    const onCooldown = !!(p.oneTime && p.cooldown && (G.oneTimeCooldown||0) > 0);
+    const canTake = slotOk && qOk && vOk && devOk && portOk && !onCooldown;
 
     // Build req row: always show when there are any requirements
     const hasReqs = p.minQ > 0 || p.minV > 0 || p.requiresDev || p.minPortfolio > 0;
     let reqRow = '';
-    if (!slotOk) {
+    if (onCooldown) {
+      reqRow = `<div style="margin-top:7px"><span class="req-badge" style="background:rgba(168,85,247,.12);color:var(--purple);border-color:rgba(168,85,247,.3)">⏳ Следующий разовый заказ через ${G.oneTimeCooldown} мес.</span></div>`;
+    } else if (!slotOk) {
       reqRow = `<div style="margin-top:7px"><span class="req-badge">⛔ Нет слота — нужен Менеджер (+2 слота)</span></div>`;
     } else if (hasReqs) {
       const chips = [];
@@ -347,19 +385,45 @@ function showScoutResults(offers) {
       ${loadNote}
     </div>`;
 
+    // ── Rarity badge ──
+    const rarityMeta = {
+      uncommon: { label:'Uncommon', col:'var(--teal)',   bg:'rgba(45,212,191,.12)', border:'rgba(45,212,191,.3)' },
+      rare:     { label:'Rare',     col:'var(--purple)', bg:'rgba(168,85,247,.12)', border:'rgba(168,85,247,.3)' },
+      epic:     { label:'✦ Epic',   col:'#f59e0b',       bg:'rgba(245,158,11,.12)', border:'rgba(245,158,11,.35)' },
+    };
+    const rMeta = rarityMeta[p.rarity];
+    const rarityBadge = rMeta
+      ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:${rMeta.bg};color:${rMeta.col};border:1px solid ${rMeta.border};letter-spacing:.3px;text-transform:uppercase">${rMeta.label}</span>`
+      : '';
+
     const card=document.createElement('div');
     card.className='project-card'+(canTake?'':' unavailable');
+    if (p.rarity==='epic') card.style.cssText='border-color:rgba(245,158,11,.35);box-shadow:0 0 0 1px rgba(245,158,11,.15)';
+    else if (p.rarity==='rare') card.style.cssText='border-color:rgba(168,85,247,.35)';
     card.innerHTML=`
       <div class="project-top">
         <div class="project-icon">${p.icon}</div>
         <div class="project-meta">
-          <div class="project-name">${p.name}</div>
+          <div class="project-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${p.name}${rarityBadge}</div>
           <div class="project-desc">${p.desc}</div>
         </div>
       </div>
       <div class="project-bottom">
-        <span class="project-rev">${fmt(p.revenue)}</span>
-        <span class="project-rev-label">${p.oneTime?'разово':'/мес'}</span>
+        ${(()=>{
+          if (p.oneTime) {
+            const revStr = (() => {
+              const fb = p.fixedBudget;
+              if (Array.isArray(fb)) return `${fmtK(fb[0])}–${fmtK(fb[1])}`;
+              if (fb) return fmtK(fb);
+              const [bMin, bMax] = BUDGET_RANGES[p.tier] || [90000, 165000];
+              return `${fmtK(bMin)}–${fmtK(bMax)}`;
+            })();
+            return `<span class="project-rev">${revStr}</span>
+        <span class="project-rev-label">разово</span>`;
+          }
+          return `<span class="project-rev">${fmt(p.revenue)}</span>
+        <span class="project-rev-label">/мес</span>`;
+        })()}
         <span class="modifier-badge ${p.modBadge}">${p.modifier.label}</span>
       </div>
       ${loadRow}
@@ -392,9 +456,24 @@ function signProject(pid) {
   if (!def) return;
   if (G.activeClients.length>=getCapacity()){ notify('Нет свободного слота','error'); return; }
 
-  // Генерируем бюджет проекта из диапазона тира
-  const [bMin, bMax] = BUDGET_RANGES[def.tier] || BUDGET_RANGES[1];
-  const totalBudget = Math.round((bMin + Math.random() * (bMax - bMin)) / 5000) * 5000;
+  // Блокируем oneTime-проект с cooldown, пока кулдаун активен
+  if (def.oneTime && def.cooldown && (G.oneTimeCooldown||0) > 0) {
+    notify(`⏳ Разовый заказ доступен через ${G.oneTimeCooldown} мес.`, 'error');
+    return;
+  }
+
+  // Бюджет: диапазон/число из fixedBudget (oneTime) или случайный из BUDGET_RANGES тира
+  const totalBudget = (() => {
+    const fb = def.fixedBudget;
+    if (Array.isArray(fb)) return Math.round((fb[0] + Math.random() * (fb[1] - fb[0])) / 1000) * 1000;
+    if (fb) return fb;
+    const [bMin, bMax] = BUDGET_RANGES[def.tier] || BUDGET_RANGES[1];
+    return Math.round((bMin + Math.random() * (bMax - bMin)) / 5000) * 5000;
+  })();
+
+  // Milestone-выплаты: T2 — 30% при 50%; T3 — 25% при 33% и 25% при 66%
+  const _mThresholds = def.oneTime ? [] : def.tier===2 ? [50] : def.tier===3 ? [33,66] : [];
+  const _mPayPcts    = def.oneTime ? [] : def.tier===2 ? [0.30] : def.tier===3 ? [0.25,0.25] : [];
 
   const client={
     ...def,
@@ -402,9 +481,13 @@ function signProject(pid) {
     _monthsSigned: 0,
     // Дедлайн: явный duration из дефиниции или тир-дефолт (tier1=3, tier2=4, tier3=5 мес.)
     _duration: def.oneTime ? 1 : (def.duration || (def.tier===1 ? 3 : def.tier===2 ? 4 : 5)),
+    _originalBudget: totalBudget,  // для расчёта milestone — до вычета аванса
     _totalBudget: totalBudget,
     _progress: 0,   // 0–100%
     _focus: 50,     // вес фокуса 0–100; итоговый % = _focus / Σ(active _focus) * 100
+    _milestones: _mThresholds,     // массив порогов прогресса [%]
+    _milestonePcts: _mPayPcts,     // доля от _originalBudget для каждого milestone
+    _milestonesPaid: [],           // индексы уже выплаченных milestone
   };
 
   // nps_start: override starting NPS
@@ -436,7 +519,9 @@ function signProject(pid) {
   rd(`Подписан: ${client.name}`,'client');
 
   // ── Предоплата ──────────────────────────────────────
-  if (def._prepaymentPossible) {
+  // _prepaymentPossible задаётся в _generateOffers на записи scoutPool, а не в PROJECT_POOL
+  const poolEntry = G.scoutPool ? G.scoutPool.find(p => p.id === pid) : null;
+  if (poolEntry?._prepaymentPossible) {
     const boost = hasRole('lawyer') ? 0.15 : 0;  // юрист даёт +15% к шансу
     if (Math.random() < 0.50 + boost) {
       const pct = 0.25 + Math.random() * 0.10;   // аванс 25–35% от бюджета
@@ -447,6 +532,12 @@ function signProject(pid) {
       addLog(`💰 Предоплата «${client.name}»: +${fmtK(adv)} — остаток при сдаче ${fmtK(client._totalBudget)}`, 'green');
       notify(`💰 Аванс одобрен: +${fmtK(adv)}`, 'success');
     }
+  }
+
+  // Устанавливаем кулдаун для oneTime-проектов с ограничением
+  if (def.oneTime && def.cooldown) {
+    G.oneTimeCooldown = def.cooldown;
+    addLog(`⏳ Следующий разовый заказ доступен через ${def.cooldown} мес.`, 'muted');
   }
 
   // Убираем подписанный проект из пула; пул остаётся открытым если ещё есть офферы
@@ -471,6 +562,15 @@ function hireStaff(id) {
   const def=STAFF_DEFS.find(d=>d.id===id);
   if (!def) return;
   if ((G.teamFatigue||0) >= 85) { notify('🔥 Кризис усталости — найм временно недоступен','error'); return; }
+  // Проверка unlock-условий грейда
+  if (def.unlockCond) {
+    if (def.unlockCond.minRep && G.reputation < def.unlockCond.minRep) {
+      notify(`🔒 ${def.name} — нужна репутация ≥${def.unlockCond.minRep}`, 'error'); return;
+    }
+    if (def.unlockCond.minPortfolio && (G.portfolio||0) < def.unlockCond.minPortfolio) {
+      notify(`🔒 ${def.name} — нужно портфолио ≥${def.unlockCond.minPortfolio}`, 'error'); return;
+    }
+  }
   const dayCost=hasRole('hr') ? 1 : HIRE_COST;
   if (G.actions<dayCost){ notify(`Нужно ≥${dayCost} рабочих дня`,'error'); return; }
   if (G.money<def.cost*2){ notify('Мало денег — нужен запас ≥2 зарплаты','error'); return; }
@@ -490,26 +590,53 @@ function buyUpgrade(id) {
   const def = UPGRADES.find(u => u.id === id);
   if (!def) return;
   if (def.oneTime && G.upgrades[id]) { notify('Уже куплено ✓','error'); return; }
-  if (!def.oneTime && G.tempQBonus >= def.qBonus) { notify('Фриланс уже активен этот месяц','error'); return; }
+  if (!def.oneTime && !def.fatigueReduce && G.tempQBonus >= def.qBonus) { notify('Фриланс уже активен этот месяц','error'); return; }
   if (G.actions < def.days) { notify(`Нужно ≥${def.days} дн.`,'error'); return; }
   if (G.money < def.cost)   { notify('Мало денег','error'); return; }
+
+  // ── Действия восстановления усталости ───────────────
+  if (def.fatigueReduce) {
+    const cd = (G.fatigueActionCooldowns||{})[def.id] || 0;
+    if (cd > 0) { notify(`⏳ Доступно через ${cd} мес.`, 'error'); return; }
+    if (def.minFatigue && (G.teamFatigue||0) < def.minFatigue) {
+      notify(`Усталость команды ещё слишком низкая — нужно ≥${def.minFatigue}`, 'error'); return;
+    }
+    G.money   -= def.cost;
+    G.actions -= def.days;
+    const before = Math.round(G.teamFatigue||0);
+    G.teamFatigue = clamp((G.teamFatigue||0) - def.fatigueReduce, 0, 100);
+    const after = Math.round(G.teamFatigue);
+    if (!G.fatigueActionCooldowns) G.fatigueActionCooldowns = {};
+    if (def.cooldownMonths) G.fatigueActionCooldowns[def.id] = def.cooldownMonths;
+    const ftLabel = after >= 85 ? 'Кризис' : after >= 60 ? 'Выгорание' : after >= 30 ? 'Напряжение' : 'Норма';
+    addLog(`${def.icon} ${def.name}: усталость ${before} → ${after} (${ftLabel})`, 'green');
+    notify(`${def.icon} ${def.name} — усталость −${before - after} → ${after} (${ftLabel})`, 'success');
+    rd(`${def.name}`, 'event');
+    renderGame();
+    return;
+  }
 
   G.money   -= def.cost;
   G.actions -= def.days;
 
   if (def.oneTime) {
     G.upgrades[id]    = true;
-    G.qualityBonus   += def.qBonus;
-    if (def.repBonus) G.reputation = clamp(G.reputation + def.repBonus, 0, 100);
-    const extra = def.repBonus ? `, Реп +${def.repBonus}` : '';
-    addLog(`${def.icon} ${def.name}: Q постоянно +${def.qBonus}${extra}`, 'teal');
-    notify(`${def.icon} ${def.name} — Q +${def.qBonus}!`, 'success');
+    if (def.qBonus)    G.qualityBonus += def.qBonus;
+    if (def.speedBonus) G.speedUpgrades = Math.round(((G.speedUpgrades||0) + def.speedBonus) * 1000) / 1000;
+    if (def.repBonus)  G.reputation = clamp(G.reputation + def.repBonus, 0, 100);
+    const parts = [];
+    if (def.qBonus)    parts.push(`Q +${def.qBonus}`);
+    if (def.speedBonus) parts.push(`Speed +${Math.round(def.speedBonus*100)}%`);
+    if (def.repBonus)  parts.push(`Реп +${def.repBonus}`);
+    const label = parts.join(', ') || '✓';
+    addLog(`${def.icon} ${def.name}: ${label}`, 'teal');
+    notify(`${def.icon} ${def.name} — ${label}!`, 'success');
   } else {
     G.tempQBonus += def.qBonus;
     addLog(`${def.icon} ${def.name}: Q +${def.qBonus} до конца месяца`, 'teal');
     notify(`${def.icon} Фриланс-дизайнер — +${def.qBonus} Q этот месяц`, 'success');
   }
-  rd(`${def.name} (Q+${def.qBonus})`, 'event');
+  rd(`${def.name}`, 'event');
   renderGame();
 }
 
@@ -570,9 +697,13 @@ function fireStaff(iid) {
 function terminateContract(cid) {
   const c = G.activeClients.find(a => a.id === cid);
   if (!c) return;
+  const prepaid = c._prepaidAmount || 0;
+  const prepaidReturnNote = prepaid > 0
+    ? ` Аванс ${fmtK(prepaid)} придётся вернуть${hasRole('lawyer') ? ' (юрист: −50% штрафа → ' + fmtK(Math.round(prepaid*0.5)) + ')' : ''}.`
+    : '';
   showConfirm(
     '🚫', `Расторгнуть контракт с ${c.name}?`,
-    `Досрочное расторжение: −10 репутации. Клиент уходит недовольным — это повлияет на входящие предложения.`,
+    `Досрочное расторжение: −10 репутации. Клиент уходит недовольным — это повлияет на входящие предложения.${prepaidReturnNote}`,
     'Расторгнуть контракт', 'red',
     () => {
       G.completedProjects=G.completedProjects||[];
@@ -585,6 +716,12 @@ function terminateContract(cid) {
       delete G.clientNPS[cid];
       G.reputation = clamp(G.reputation - 10, 0, 100);
       addLog(`🚫 Расторгнут контракт с ${c.name} (−10 репутации)`, 'red');
+      // П.15: возврат аванса клиенту при расторжении
+      if (prepaid > 0) {
+        const returnAmt = hasRole('lawyer') ? Math.round(prepaid * 0.5) : prepaid;
+        G.money = clamp(G.money - returnAmt, -Infinity, Infinity);
+        addLog(`💸 Возврат аванса «${c.name}»: −${fmtK(returnAmt)}${hasRole('lawyer') ? ' (юрист −50%)' : ''}`, 'red');
+      }
       notify(`${c.icon} Контракт с ${c.name} расторгнут`, 'error');
       rd(`Расторгнут: ${c.name}`, 'churn');
       renderGame();
@@ -697,8 +834,8 @@ function completeProject(cid) {
   const c = G.activeClients.find(a => a.id === cid);
   if (!c) return;
 
-  // Блокировка: прогресс должен быть 100%
-  if ((c._progress||0) < 100) {
+  // Блокировка: прогресс должен быть 100% (Math.round убирает float-погрешность ≤0.5%)
+  if (Math.round(c._progress||0) < 100) {
     notify('Проект ещё не завершён — прогресс < 100%', 'error');
     return;
   }
@@ -847,7 +984,8 @@ function liveUpdateFocus(cid, pct) {
     const lratio   = totLoad > 0 ? Math.min(1, thr / totLoad) : 1;
     const totalFocusW = focusable.reduce((s, c2) => s + (c2._focus ?? 50), 0);
     const fMult    = totalFocusW > 0 ? (pct / totalFocusW) * focusable.length : 1;
-    const perMonth = Math.round((100 / (c._duration||3)) * lratio * fMult * 10) / 10;
+    // П.10: fatigueMult; П.13: целое число (убираем десятые)
+    const perMonth = Math.round((100 / (c._duration||3)) * lratio * fMult * getFatigueMult());
     const remain   = Math.max(0, 100 - (c._progress||0));
     const mthsLeft = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
     prevEl.style.color = pct >= 60 ? 'var(--green)' : pct >= 30 ? 'var(--teal)' : 'var(--amber)';
@@ -865,47 +1003,87 @@ function adjustFocusBy(cid, delta) {
 //  ADVANCE MONTH
 // ══════════════════════════════════════════════════════
 function advanceMonth() {
-  // ① Счётчик месяцев у каждого клиента
+  // ① Счётчик месяцев у каждого клиента + декремент кулдаунов
   G.activeClients.forEach(c=>{ c._monthsSigned=(c._monthsSigned||0)+1; });
+  if ((G.oneTimeCooldown||0) > 0) G.oneTimeCooldown--;
+  // Декремент кулдаунов действий восстановления усталости
+  if (G.fatigueActionCooldowns) {
+    Object.keys(G.fatigueActionCooldowns).forEach(k => {
+      if (G.fatigueActionCooldowns[k] > 0) G.fatigueActionCooldowns[k]--;
+    });
+  }
 
   // ② Прогресс проектов (не-разовые) с учётом фокуса команды
   const throughput = getTeamThroughput();
   const totalLoad  = getTotalLoad();         // учитывает payment_delay_fixed
-  const loadRatio  = totalLoad > 0 ? throughput / totalLoad : 1;
-  const overloaded = loadRatio < 0.95;
-
-  // ── Усталость команды (п.11) ─────────────────────────
-  {
-    const hasHR = hasRole('hr');
-    let fd = loadRatio >= 1.0 ? 10 : loadRatio >= 0.85 ? 4 : loadRatio >= 0.60 ? 1 : -5;
-    if (fd > 0 && hasHR) fd = Math.round(fd * 0.7);  // HR снижает рост на 30%
-    G.teamFatigue = clamp((G.teamFatigue||0) + fd, 0, 100);
-  }
-  const fatigueMult = G.teamFatigue >= 85 ? 0.70 : G.teamFatigue >= 60 ? 0.85 : G.teamFatigue >= 30 ? 0.95 : 1.0;
 
   // Фокус: список активных проектов, получающих производительность в этом месяце
   const focusActive = G.activeClients.filter(c =>
     !c.oneTime && !(c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val)
   );
   const focusCount  = focusActive.length;
+  // totalFocusW — сумма выставленных фокусов (0–100 каждый); дефолт — равномерное распределение
   const totalFocusW = focusActive.reduce((s,c) => s + (c._focus ?? Math.floor(100/Math.max(1,focusActive.length))), 0);
+  // Доля реально используемой мощности: если суммарный фокус 20% → команда работает на 20%
+  // Фикс п.22: нормируем через 100, а не через totalFocusW
+  const activeFocusPct = focusCount > 0 ? clamp(totalFocusW / 100, 0, 1) : 1;
+  // Эффективная нагрузка с учётом фокуса — именно она давит на команду в этом месяце
+  const effectiveLoad = totalLoad * activeFocusPct;
+  const loadRatio  = effectiveLoad > 0 ? throughput / effectiveLoad : 1;
+  const overloaded = loadRatio < 0.95;
+
+  // ── Усталость команды (п.11, fix п.17, rework п.21, fix п.22) ─────
+  {
+    const hrGrade = G.staff.find(s => s.id === 'hr_sr') ? 'sr' : G.staff.find(s => s.id === 'hr') ? 'md' : G.staff.find(s => s.id === 'hr_jr') ? 'jr' : null;
+    // loadPct = эффективная нагрузка / мощность; >1 = перегруз; учитывает фокус (п.22)
+    const loadPct = throughput > 0 ? effectiveLoad / throughput : 0;
+    // Улучшенная формула: порог восстановления поднят до <70%, скорость −8/мес (было −5 при <60%)
+    let fd = loadPct >= 1.0 ? 10 : loadPct >= 0.85 ? 4 : loadPct >= 0.70 ? 1 : -8;
+    // HR снижает рост усталости (только при положительном fd): Jr −20%, Md −30%, Sr −45%
+    if (fd > 0 && hrGrade === 'jr') fd = Math.round(fd * 0.80);
+    if (fd > 0 && hrGrade === 'md') fd = Math.round(fd * 0.70);
+    if (fd > 0 && hrGrade === 'sr') fd = Math.round(fd * 0.55);
+    // HR Sr дополнительно даёт пассивное восстановление −2/мес всегда
+    if (hrGrade === 'sr') fd -= 2;
+    G.teamFatigue = clamp((G.teamFatigue||0) + fd, 0, 100);
+  }
+  const fatigueMult = getFatigueMult();
 
   G.activeClients.filter(c=>!c.oneTime).forEach(c=>{
     // payment_delay_fixed: прогресс не идёт пока не истёк период ожидания
     if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return;
-    // focusMult: нормализован так, что при равном фокусе = 1.0x у всех
+    // focusMult: доля фокуса проекта от 100 (фикс п.22: нормируем через 100, а не totalFocusW)
+    // При равном фокусе 3 проектов (33%+33%+33%) → ×0.33 каждый, суммарно ×1.0 команды
+    // При 20%+0%+0% → проект A ×0.20, остальные 0, эффективная нагрузка 20%
     const _cFocus = c._focus ?? Math.floor(100/Math.max(1,focusCount));
-    const focusMult = (focusCount > 0 && totalFocusW > 0)
-      ? (_cFocus / totalFocusW) * focusCount
-      : 1;
-    const monthProg = (100 / (c._duration||3)) * Math.min(1, loadRatio) * focusMult * fatigueMult;
-    c._progress = Math.min(100, (c._progress||0) + monthProg);
+    const focusMult = _cFocus / 100;
+    const speedMult  = getSpeed();
+    const monthProg = (100 / (c._duration||3)) * Math.min(1, loadRatio) * focusMult * fatigueMult * speedMult;
+    // Округляем до 2 знаков — устраняет накопление float-погрешности (баг П.13)
+    c._progress = Math.min(100, Math.round(((c._progress||0) + monthProg) * 100) / 100);
   });
 
   if (overloaded && G.activeClients.filter(c=>!c.oneTime).length > 0) {
     const eff = Math.round(loadRatio * 100);
     addLog(`⚠️ Команда перегружена (нагрузка ${Math.round(totalLoad)} > произв. ${Math.round(throughput)}) — прогресс ×${eff}%`, 'amber');
   }
+
+  // ── Milestone-выплаты T2/T3 ──────────────────────────
+  G.activeClients.forEach(c => {
+    if (!c._milestones || c._milestones.length === 0 || c.oneTime) return;
+    const progress = c._progress || 0;
+    (c._milestones).forEach((threshold, idx) => {
+      if (progress >= threshold && !(c._milestonesPaid||[]).includes(idx)) {
+        const payout = Math.round((c._originalBudget||c._totalBudget) * (c._milestonePcts||[])[idx] / 5000) * 5000;
+        c._totalBudget = Math.max(0, (c._totalBudget||0) - payout);
+        G.money += payout;
+        c._milestonesPaid = [...(c._milestonesPaid||[]), idx];
+        addLog(`💵 Milestone «${c.name}» (${threshold}%): +${fmtK(payout)} получено`, 'green');
+        notify(`💵 ${c.icon} ${c.name} — milestone ${threshold}%: +${fmtK(payout)}`, 'success');
+        rd(`Milestone: ${c.name} +${fmtK(payout)}`,'client');
+      }
+    });
+  });
 
   // ── Эффекты усталости ────────────────────────────────
   if (G.teamFatigue >= 30) {
