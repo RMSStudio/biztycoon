@@ -32,6 +32,7 @@ if (!fs.existsSync(scenarioPath)) {
 const html      = fs.readFileSync(path.join(ROOT, 'index.html'),          'utf8');
 const css       = fs.readFileSync(path.join(ROOT, 'styles', 'game.css'), 'utf8');
 const constants = fs.readFileSync(path.join(ROOT, 'src', 'constants.js'), 'utf8');
+const events    = fs.readFileSync(path.join(ROOT, 'src', 'events.js'),   'utf8');
 const scenario  = fs.readFileSync(scenarioPath,                           'utf8');
 const eng       = fs.readFileSync(path.join(ROOT, 'src', 'engine.js'),   'utf8');
 const ui        = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'),       'utf8');
@@ -46,22 +47,24 @@ let out = html.replace(
 // ── JS: 4 тега → 1 инлайн-блок ───────────────────────
 const scriptBlock = [
   '<script src="src/constants.js"></script>',
+  '<script src="src/events.js"></script>',
   `<script src="scenarios/${SCENARIO_ID}.js"></script>`,
   '<script src="src/engine.js"></script>',
   '<script src="src/ui.js"></script>',
   '<script src="src/saves.js"></script>',
-  '<script>initState();</script>',
+  '<script>initState(); initEventBus();</script>',
 ].join('\n');
 
 const inlined = [
   `<script>`,
   constants,
+  events,
   scenario,
   eng,
   ui,
   saves,
   `</script>`,
-  `<script>initState();</script>`,
+  `<script>initState(); initEventBus();</script>`,
 ].join('\n\n');
 
 out = out.replace(scriptBlock, inlined);

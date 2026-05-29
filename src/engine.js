@@ -77,17 +77,9 @@ function monthLabel(offset=0) {
 // ══════════════════════════════════════════════════════
 //  NAV / SPEC / START
 // ══════════════════════════════════════════════════════
-function goTo(id) {
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0,0);
-}
-
 function selectSpec(id) {
-  document.querySelectorAll('.spec-card').forEach(c=>c.classList.remove('selected'));
-  document.getElementById('spec-'+id).classList.add('selected');
-  G.spec=id;
-  document.getElementById('btn-start-game').disabled=false;
+  G.spec = id;                                 // чистая мутация стейта
+  EventBus.emit('spec_selected', { id });      // UI обновит выделение карточки
 }
 
 function startGame() {
@@ -102,7 +94,7 @@ function startGame() {
   G.history.push({month:0, money:SCENARIO.settings.startMoney, label:'Старт'});
   addLog('Агентство открыто. Найди первый проект через Скаутинг!','amber');
   addLog(`Выручка начисляется при завершении проекта. Overhead −${fmt(OVERHEAD)}/мес`,'red');
-  renderGame(); goTo('screen-game');
+  _emitRender(); goTo('screen-game');
 }
 
 // ══════════════════════════════════════════════════════
@@ -173,11 +165,22 @@ function addLog(msg, cls='') {
   if (G.log.length>30) G.log.pop();
 }
 
+// ── Сигналы (Godot: emit_signal) ─────────────────────
+// Engine не знает о DOM. Все UI-эффекты — через EventBus.
+// При переносе в Godot: заменить EventBus.emit → emit_signal
+
 function notify(msg, type='info') {
-  const el=document.getElementById('notif');
-  el.textContent=msg; el.className='notif show '+type;
-  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'),3000);
+  EventBus.emit('notify', { msg, type });
 }
+
+function goTo(id) {
+  EventBus.emit('navigate', { screen: id });
+}
+
+// Ре-рендер всего игрового поля (вызов UI из engine → через сигнал)
+function _emitRender()     { EventBus.emit('render'); }
+function _emitShowEvent(ev){ EventBus.emit('show_event', { ev }); }
+function _emitEndGame(won) { EventBus.emit('end_game',   { won }); }
 
 function npsColor(v) {
   return v>=65?'var(--green)':v>=42?'var(--amber)':'var(--red)';
@@ -254,7 +257,7 @@ function investInClient(cid) {
   addLog(`💬 Инвестиция в ${c.name}: NPS ${before}→${Math.round(G.clientNPS[cid])}`,'teal');
   notify(`NPS ${c.name}: ${before}→${Math.round(G.clientNPS[cid])} 📈`,'success');
   rd(`Инвестиция в ${c.name}:  NPS+25`,'event');
-  renderGame();
+  _emitRender();
 }
 
 // ══════════════════════════════════════════════════════
@@ -321,7 +324,7 @@ function doScouting() {
   addLog(`🔍 Скаутинг проектов (−${SCOUT_COST} дня)`,'teal');
   G.scoutPool=_generateOffers();
   showScoutResults(G.scoutPool);
-  renderGame();
+  _emitRender();
 }
 
 function refreshScoutPool() {
@@ -331,10 +334,26 @@ function refreshScoutPool() {
   addLog(`🔄 Пул заказов обновлён (−${SCOUT_COST} дня)`,'teal');
   G.scoutPool=_generateOffers();
   showScoutResults(G.scoutPool);
-  renderGame();
+  _emitRender();
 }
 
+// showScoutResults / closeScout / showConfirm — DOM-реализации в ui.js
+// Engine emit-ит сигналы, UI рендерит модалы
 function showScoutResults(offers) {
+  EventBus.emit('show_scout', { offers });
+}
+
+function closeScout() {
+  EventBus.emit('close_scout');
+}
+
+function showConfirm(icon, title, body, confirmText, confirmClass, onConfirm) {
+  EventBus.emit('show_confirm', { icon, title, body, confirmText, confirmClass, onConfirm });
+}
+
+// ── Старые DOM-реализации (перенесены в ui.js как _uiShowScout/_uiCloseScout/_uiShowConfirm)
+// Оставлены ниже как tombstone для истории, удаляются после переноса в Godot
+function _legacyShowScout(offers) {
   const modal=document.getElementById('scout-modal');
   document.getElementById('scout-title').textContent=
     offers.length ? `Найдено проектов: ${offers.length}` : 'Скаутинг не дал результатов';
@@ -467,7 +486,7 @@ function showScoutResults(offers) {
   });
 
   modal.classList.add('active');
-}
+} // end _legacyShowScout
 
 function signProject(pid) {
   const def=PROJECT_POOL.find(p=>p.id===pid);
@@ -560,17 +579,13 @@ function signProject(pid) {
 
   // Убираем подписанный проект из пула; пул остаётся открытым если ещё есть офферы
   if (G.scoutPool) G.scoutPool=G.scoutPool.filter(p=>p.id!==pid);
-  renderGame();
+  _emitRender();
   if (G.scoutPool && G.scoutPool.length>0) {
     showScoutResults(G.scoutPool);
   } else {
     G.scoutPool=null;
     closeScout();
   }
-}
-
-function closeScout() {
-  document.getElementById('scout-modal').classList.remove('active');
 }
 
 // ══════════════════════════════════════════════════════
@@ -598,7 +613,7 @@ function hireStaff(id) {
   addLog(`👥 Нанят ${def.name} (−${fmt(def.cost)}/мес, −${dayCost} дня)`,'amber');
   notify(`${def.name} принят! ${def.icon}`,'success');
   rd(`Нанят ${def.name}`,'hire');
-  renderGame();
+  _emitRender();
 }
 
 // ══════════════════════════════════════════════════════
@@ -630,7 +645,7 @@ function buyUpgrade(id) {
     addLog(`${def.icon} ${def.name}: усталость ${before} → ${after} (${ftLabel})`, 'green');
     notify(`${def.icon} ${def.name} — усталость −${before - after} → ${after} (${ftLabel})`, 'success');
     rd(`${def.name}`, 'event');
-    renderGame();
+    _emitRender();
     return;
   }
 
@@ -655,38 +670,12 @@ function buyUpgrade(id) {
     notify(`${def.icon} Фриланс-дизайнер — +${def.qBonus} Q этот месяц`, 'success');
   }
   rd(`${def.name}`, 'event');
-  renderGame();
+  _emitRender();
 }
 
 // ══════════════════════════════════════════════════════
 //  CONFIRM HELPER  (reuses event-modal)
 // ══════════════════════════════════════════════════════
-function showConfirm(icon, title, body, confirmText, confirmClass, onConfirm) {
-  document.getElementById('modal-icon').textContent = icon;
-  document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-body').textContent = body;
-  const div = document.getElementById('modal-choices'); div.innerHTML = '';
-
-  const btnOk = document.createElement('button');
-  btnOk.className = 'modal-choice';
-  const borderMap = { red:'rgba(248,81,73,.4)', amber:'rgba(210,153,34,.4)', teal:'rgba(45,212,191,.4)', green:'rgba(74,222,128,.4)' };
-  btnOk.style.borderColor = borderMap[confirmClass] || borderMap.amber;
-  btnOk.innerHTML = `<div class="choice-title" style="color:var(--${confirmClass})">${confirmText}</div>`;
-  btnOk.onclick = () => {
-    document.getElementById('event-modal').classList.remove('active');
-    onConfirm();
-  };
-
-  const btnCancel = document.createElement('button');
-  btnCancel.className = 'modal-choice';
-  btnCancel.innerHTML = `<div class="choice-title">Отмена</div><div class="choice-desc">Ничего не менять</div>`;
-  btnCancel.onclick = () => document.getElementById('event-modal').classList.remove('active');
-
-  div.appendChild(btnOk);
-  div.appendChild(btnCancel);
-  document.getElementById('event-modal').classList.add('active');
-}
-
 // ══════════════════════════════════════════════════════
 //  FIRE STAFF
 // ══════════════════════════════════════════════════════
@@ -704,7 +693,7 @@ function fireStaff(iid) {
       addLog(`👋 ${s.name} уволен. Выходное пособие −${fmt(severance)}`, 'amber');
       notify(`${s.icon} ${s.name} уволен`, 'warning');
       rd(`Уволен ${s.name} (−${fmt(severance)})`, 'hire');
-      renderGame();
+      _emitRender();
     }
   );
 }
@@ -742,7 +731,7 @@ function terminateContract(cid) {
       }
       notify(`${c.icon} Контракт с ${c.name} расторгнут`, 'error');
       rd(`Расторгнут: ${c.name}`, 'churn');
-      renderGame();
+      _emitRender();
     }
   );
 }
@@ -822,7 +811,7 @@ function buildCase(projectId, daysSpent) {
   notify(`${gd.icon} Кейс собран: ${gd.label}`, 'success');
   rd(`Кейс: ${project.name} (${gd.label})`, 'event');
   renderPortfolioTab();
-  renderGame();
+  _emitRender();
 }
 
 function removeCase(caseId) {
@@ -843,7 +832,7 @@ function removeCase(caseId) {
       if (p) p._cased=false;
       addLog(`🗑️ Кейс «${c.name}» убран из портфолио`,'amber');
       renderPortfolioTab();
-      renderGame();
+      _emitRender();
     }
   );
 }
@@ -923,7 +912,7 @@ function completeProject(cid) {
   rd(`Завершён: ${c.name} → +${fmtK(immediatePayment)} ${timeTag}`, 'event');
 
   renderPortfolioTab();
-  renderGame();
+  _emitRender();
 }
 
 // ══════════════════════════════════════════════════════
@@ -949,7 +938,7 @@ function takeLoan() {
   addLog(`🏦 Кредит «${tier.label}»: +${fmtK(tier.principal)}, платёж ${fmtK(tier.monthlyPayment)}/мес × ${tier.months} мес.`, 'teal');
   notify(`🏦 Кредит ${fmtK(tier.principal)} одобрен`, 'success');
   rd(`Кредит «${tier.label}» +${fmtK(tier.principal)}`, 'event');
-  renderGame();
+  _emitRender();
 }
 
 function setFocus(cid, pct) {
@@ -957,58 +946,38 @@ function setFocus(cid, pct) {
   const c = G.activeClients.find(a => a.id === cid);
   if (!c) return;
   c._focus = pct;
-  renderGame();
+  _emitRender();
 }
 
-// Живое обновление фокуса во время дрэга — без полного re-render, без авто-перераспределения
+// Живое обновление фокуса — чистая логика + сигнал с данными для UI
+// Godot: emit_signal("focus_changed", data)
 function liveUpdateFocus(cid, pct) {
   pct = Math.max(0, Math.min(100, Math.round(+pct)));
   const c = G.activeClients.find(a => a.id === cid);
   if (!c) return;
   c._focus = pct;
 
-  // Обновляем DOM текущего проекта
-  const rangeEl = document.getElementById('focus-range-' + cid);
-  const valEl   = document.getElementById('focus-val-'   + cid);
-  const prevEl  = document.getElementById('focus-prev-'  + cid);
-  if (rangeEl) { rangeEl.value = pct; rangeEl.style.setProperty('--fill', pct + '%'); }
-  if (valEl)   valEl.value = pct;
+  // ── Вычисляем данные для UI (чистая математика из стейта) ─
+  const focusable = G.activeClients.filter(c2 => !c2.oneTime);
+  const totalPct  = focusable.reduce((s, c2) => s + (c2._focus ?? 50), 0);
+  const isOver    = totalPct > 100;
 
-  // Пересчитываем суммарный фокус и обновляем баннер
-  const focusable  = G.activeClients.filter(c2 => !c2.oneTime);
-  const totalPct   = focusable.reduce((s, c2) => s + (c2._focus ?? 50), 0);
-  const isOver     = totalPct > 100;
-  const warnEl     = document.getElementById('focus-total-warn');
-  const resEl      = document.getElementById('focus-reserve');
-  if (warnEl) {
-    warnEl.style.display = isOver ? 'flex' : 'none';
-    if (isOver) warnEl.querySelector('span').textContent =
-      `⚠ Суммарный фокус: ${totalPct}% — освободи ${totalPct - 100}% у других проектов`;
-  }
-  if (resEl) {
-    resEl.style.display = isOver ? 'none' : 'flex';
-    if (!isOver) resEl.querySelector('span').textContent = `✦ Резерв: ${100 - totalPct}%`;
-  }
-  // Обновляем подсветку строк фокуса у всех проектов
-  focusable.forEach(fc => {
-    const rowEl = document.getElementById('focus-row-' + fc.id);
-    if (rowEl) rowEl.style.borderColor = isOver ? 'rgba(248,81,73,.3)' : 'transparent';
+  const thr             = getTeamThroughput();
+  const totLoad         = getTotalLoad();
+  const activeFocusPct  = focusable.length > 0 ? Math.min(1, totalPct / 100) : 1;
+  const effectiveLoad   = totLoad * activeFocusPct;
+  const lratio          = effectiveLoad > 0 ? Math.min(1, thr / effectiveLoad) : 1;
+  const fMult           = pct / 100;
+  const perMonth        = Math.round((100 / (c._duration||3)) * lratio * fMult * getFatigueMult());
+  const remain          = Math.max(0, 100 - (c._progress||0));
+  const mthsLeft        = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
+
+  // ── Сигнал → UI обновляет слайдеры и превью ──────────
+  EventBus.emit('focus_changed', {
+    cid, pct, totalPct, isOver,
+    preview:      { perMonth, mthsLeft },
+    focusableIds: focusable.map(fc => fc.id),
   });
-
-  // Обновляем превью текущего проекта
-  if (prevEl) {
-    const thr      = getTeamThroughput();
-    const totLoad  = getTotalLoad();
-    const lratio   = totLoad > 0 ? Math.min(1, thr / totLoad) : 1;
-    const totalFocusW = focusable.reduce((s, c2) => s + (c2._focus ?? 50), 0);
-    const fMult    = totalFocusW > 0 ? (pct / totalFocusW) * focusable.length : 1;
-    // П.10: fatigueMult; П.13: целое число (убираем десятые)
-    const perMonth = Math.round((100 / (c._duration||3)) * lratio * fMult * getFatigueMult());
-    const remain   = Math.max(0, 100 - (c._progress||0));
-    const mthsLeft = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
-    prevEl.style.color = pct >= 60 ? 'var(--green)' : pct >= 30 ? 'var(--teal)' : 'var(--amber)';
-    prevEl.textContent = '+' + perMonth + '%/мес · ~' + mthsLeft + ' мес. до завершения';
-  }
 }
 
 function adjustFocusBy(cid, delta) {
@@ -1228,8 +1197,8 @@ function advanceMonth() {
   if (typeof autoSave === 'function') autoSave();
 
   // Win / Lose
-  if (G.money>=SCENARIO.settings.winCondition){ renderGame(); endGame(true); return; }
-  if (G.money<=0)       { renderGame(); endGame(false); return; }
+  if (G.money>=SCENARIO.settings.winCondition){ _emitRender(); _emitEndGame(true); return; }
+  if (G.money<=0)       { _emitRender(); _emitEndGame(false); return; }
 
   // Случайное событие (40%, пропуск 1-го месяца)
   if (G.monthsPlayed>1 && Math.random()<0.40){
@@ -1238,9 +1207,9 @@ function advanceMonth() {
       if (e.id==='conflict' && G.staff.length<2)  return false;
       return true;
     });
-    showEvent(evs[Math.floor(Math.random()*evs.length)]);
+    _emitShowEvent(evs[Math.floor(Math.random()*evs.length)]);
   } else {
-    renderGame();
+    _emitRender();
   }
 }
 

@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════
 //  SAVES — система сохранений
-//  Зависит от: engine.js (G, DECISIONS, renderGame, goTo, notify, monthLabel)
+//  Зависит от: events.js (EventBus), engine.js (G, DECISIONS, notify, monthLabel)
 //
 //  Два типа сохранений:
 //    auto   — создаётся автоматически после каждого advanceMonth
@@ -96,8 +96,8 @@ function loadSave(id) {
   if (!entry) { notify('Сохранение не найдено', 'error'); return; }
   try {
     _restore(entry.state);
-    renderGame();
-    goTo('screen-game');
+    EventBus.emit('render');
+    EventBus.emit('navigate', { screen: 'screen-game' });
     closeSaveModal();
     notify(`⏮ Загружено: ${entry.label}`, 'success');
   } catch(e) {

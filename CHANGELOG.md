@@ -1,5 +1,13 @@
 # BizTycoon — Changelog
 
+## v0.23 — EventBus / Godot-совместимая архитектура (2026-05-29)
+- **`src/events.js`** — новый модуль EventBus: `on/off/emit`; аналог сигналов Godot; загружается первым; содержит справочник всех 10 сигналов с Godot-эквивалентами
+- **engine.js DOM-free**: все прямые вызовы DOM убраны из engine; `notify/goTo` → `EventBus.emit`; `renderGame/showEvent/endGame` → `_emitRender/_emitShowEvent/_emitEndGame`; `showScoutResults/closeScout/showConfirm` → emit; `liveUpdateFocus` вычисляет данные и emit-ит `focus_changed` вместо прямого DOM-обновления
+- **ui.js — подписчик**: `initEventBus()` биндит все 10 сигналов на реальные DOM-функции (`_uiNotify`, `_uiNavigate`, `_uiSelectSpec`, `_uiShowScout`, `_uiCloseScout`, `_uiShowConfirm`, `_uiFocusChanged`); `resetGame` вызывает `initEventBus()` после `initState()`
+- **saves.js** обновлён: `renderGame()/goTo()` → `EventBus.emit('render'/'navigate')`
+- **`_legacyShowScout`** — tombstone-функция в engine.js, временно используется ui.js для рендера карточек скаутинга; помечена к полному переносу при миграции в Godot
+- **Порядок сборки**: constants → events → scenario → engine → ui → saves
+
 ## v0.22 — Система сохранений (2026-05-29)
 - **`src/saves.js`** — новый модуль: авто-сохранения после каждого месяца (кольцевой буфер 48 слотов) + ручные сохранения (10 слотов); полный откат на любой шаг через `loadSave(id)`
 - **Ctrl+S / Cmd+S** — быстрое ручное сохранение из любого места игры; Escape закрывает модал

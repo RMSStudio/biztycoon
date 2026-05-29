@@ -1,10 +1,125 @@
 // ══════════════════════════════════════════════════════
 //  UI — рендер, скаутинг-модал, события, дашборд
-//  Зависит от: constants.js, scenarios/{id}.js, engine.js
+//  Зависит от: events.js (EventBus), constants.js, scenarios/{id}.js, engine.js
+//
+//  Godot-совместимая архитектура:
+//    UI не вызывается из engine напрямую.
+//    Engine emit-ит сигналы → UI подписывается и рендерит.
+//    При переносе: заменить EventBus.on → connect("signal", ...)
 // ══════════════════════════════════════════════════════
 
 // Scenario bindings объявлены в engine.js (загружается раньше).
 // ui.js использует те же алиасы: STAFF_DEFS, PROJECT_POOL, UPGRADES, SPECS и др.
+
+// ── DOM-реализации сигналов (Godot: обработчики connect) ─
+// В Godot эти функции становятся методами UI-нода, подключёнными через connect()
+
+function _uiNotify(msg, type = 'info') {
+  const el = document.getElementById('notif');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'notif show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function _uiNavigate(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(screen);
+  if (el) el.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function _uiSelectSpec(id) {
+  document.querySelectorAll('.spec-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('spec-' + id);
+  if (card) card.classList.add('selected');
+  const btn = document.getElementById('btn-start-game');
+  if (btn) btn.disabled = false;
+}
+
+function _uiShowScout(offers) {
+  const modal = document.getElementById('scout-modal');
+  document.getElementById('scout-title').textContent =
+    offers.length ? `Найдено проектов: ${offers.length}` : 'Скаутинг не дал результатов';
+  document.getElementById('scout-sub').textContent =
+    offers.length
+      ? 'Можно взять несколько. Пул сохраняется — закрой, докупи перки и вернись.'
+      : 'На рынке тишина. Попробуй снова в следующем месяце или улучши репутацию.';
+  // Рендер карточек скаутинга делегируем legacy-функции из engine (временно)
+  // В Godot: заменить на GDScript-метод, строящий карточки из offers[]
+  _legacyShowScout(offers);
+}
+
+function _uiCloseScout() {
+  document.getElementById('scout-modal').classList.remove('active');
+}
+
+function _uiShowConfirm(icon, title, body, confirmText, confirmClass, onConfirm) {
+  document.getElementById('modal-icon').textContent  = icon;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent  = body;
+  const div = document.getElementById('modal-choices');
+  div.innerHTML = '';
+
+  const borderMap = { red:'rgba(248,81,73,.4)', amber:'rgba(210,153,34,.4)', teal:'rgba(45,212,191,.4)', green:'rgba(74,222,128,.4)' };
+  const btnOk = document.createElement('button');
+  btnOk.className = 'modal-choice';
+  btnOk.style.borderColor = borderMap[confirmClass] || borderMap.amber;
+  btnOk.innerHTML = `<div class="choice-title" style="color:var(--${confirmClass})">${confirmText}</div>`;
+  btnOk.onclick = () => { document.getElementById('event-modal').classList.remove('active'); onConfirm(); };
+
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'modal-choice';
+  btnCancel.innerHTML = `<div class="choice-title">Отмена</div><div class="choice-desc">Ничего не менять</div>`;
+  btnCancel.onclick = () => document.getElementById('event-modal').classList.remove('active');
+
+  div.appendChild(btnOk);
+  div.appendChild(btnCancel);
+  document.getElementById('event-modal').classList.add('active');
+}
+
+function _uiFocusChanged({ cid, pct, totalPct, isOver, preview, focusableIds }) {
+  const rangeEl = document.getElementById('focus-range-' + cid);
+  const valEl   = document.getElementById('focus-val-'   + cid);
+  const prevEl  = document.getElementById('focus-prev-'  + cid);
+  if (rangeEl) { rangeEl.value = pct; rangeEl.style.setProperty('--fill', pct + '%'); }
+  if (valEl)   valEl.value = pct;
+
+  const warnEl = document.getElementById('focus-total-warn');
+  const resEl  = document.getElementById('focus-reserve');
+  if (warnEl) {
+    warnEl.style.display = isOver ? 'flex' : 'none';
+    if (isOver) { const sp = warnEl.querySelector('span'); if (sp) sp.textContent = `⚠ Суммарный фокус: ${totalPct}% — освободи ${totalPct - 100}% у других проектов`; }
+  }
+  if (resEl) {
+    resEl.style.display = isOver ? 'none' : 'flex';
+    if (!isOver) { const sp = resEl.querySelector('span'); if (sp) sp.textContent = `✦ Резерв: ${100 - totalPct}%`; }
+  }
+  (focusableIds || []).forEach(fid => {
+    const rowEl = document.getElementById('focus-row-' + fid);
+    if (rowEl) rowEl.style.borderColor = isOver ? 'rgba(248,81,73,.3)' : 'transparent';
+  });
+  if (prevEl) {
+    prevEl.style.color = pct >= 60 ? 'var(--green)' : pct >= 30 ? 'var(--teal)' : 'var(--amber)';
+    prevEl.textContent = `+${preview.perMonth}%/мес · ~${preview.mthsLeft} мес. до завершения`;
+  }
+}
+
+// ── EventBus → DOM биндинги (Godot: вызовы connect в _ready) ─
+function initEventBus() {
+  EventBus.on('notify',       ({ msg, type })                              => _uiNotify(msg, type));
+  EventBus.on('navigate',     ({ screen })                                 => _uiNavigate(screen));
+  EventBus.on('render',       ()                                           => renderGame());
+  EventBus.on('show_event',   ({ ev })                                     => showEvent(ev));
+  EventBus.on('end_game',     ({ won })                                    => endGame(won));
+  EventBus.on('spec_selected',({ id })                                     => _uiSelectSpec(id));
+  EventBus.on('show_scout',   ({ offers })                                 => _uiShowScout(offers));
+  EventBus.on('close_scout',  ()                                           => _uiCloseScout());
+  EventBus.on('show_confirm', ({ icon, title, body, confirmText, confirmClass, onConfirm }) =>
+    _uiShowConfirm(icon, title, body, confirmText, confirmClass, onConfirm));
+  EventBus.on('focus_changed', data => _uiFocusChanged(data));
+}
 // ══════════════════════════════════════════════════════
 //  CAPABILITY BAR HELPER  (Q / V visual meter)
 // ══════════════════════════════════════════════════════
@@ -687,7 +802,7 @@ function showEvent(ev) {
 // ══════════════════════════════════════════════════════
 //  END / DASHBOARD
 // ══════════════════════════════════════════════════════
-function endGame(won) { buildDashboard(won); goTo('screen-results'); }
+function endGame(won) { buildDashboard(won); _uiNavigate('screen-results'); }
 
 function buildDashboard(won) {
   const spec=SPECS[G.spec];
@@ -942,9 +1057,8 @@ function renderPortfolioTab() {
 // ══════════════════════════════════════════════════════
 function resetGame() {
   initState();
+  initEventBus();
   document.querySelectorAll('.spec-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('btn-start-game').disabled=true;
-  goTo('screen-intro');
+  _uiNavigate('screen-intro');
 }
-
-initState();
