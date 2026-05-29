@@ -73,6 +73,7 @@
       <div class="hstat"><div class="v teal" id="g-rep">100</div><div class="l">Репутация</div></div>
       <div class="hstat"><div class="v" id="g-portfolio" style="color:var(--purple)">0</div><div class="l">Портфолио</div></div>
     </div>
+    <button onclick="openSaveModal()" title="Сохранения (Ctrl+S)" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:14px;padding:5px 9px;transition:color .15s,border-color .15s" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">💾</button>
   </div>
 
   <!-- Actions bar -->
@@ -228,10 +229,26 @@
 
 <div class="notif" id="notif"></div>
 
+<!-- ══ SAVE MODAL ══ -->
+<div class="modal-overlay" id="save-modal" onclick="if(event.target===this)closeSaveModal()">
+  <div class="modal modal-wide">
+    <div class="scout-header">
+      <h3>💾 Сохранения</h3>
+      <p>Ручные сохранения и авто-сохранения по месяцам · <span style="color:var(--sub)">Ctrl+S — быстрое сохранение</span></p>
+    </div>
+    <div style="margin-bottom:12px">
+      <button class="btn btn-primary" onclick="quickSave()" style="width:100%;justify-content:center">💾 Сохранить сейчас</button>
+    </div>
+    <div id="save-list"></div>
+    <button class="btn btn-ghost" onclick="closeSaveModal()" style="width:100%;justify-content:center;margin-top:10px">Закрыть</button>
+  </div>
+</div>
+
 <script src="src/constants.js"></script>
 <script src="scenarios/agency.js"></script>
 <script src="src/engine.js"></script>
 <script src="src/ui.js"></script>
+<script src="src/saves.js"></script>
 <script>initState();</script>
 </body>
 </html>

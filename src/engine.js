@@ -1224,6 +1224,9 @@ function advanceMonth() {
   // ⑫ Снимок истории
   G.history.push({month:G.month, money:G.money, label:monthLabel(-1)});
 
+  // ⑬ Авто-сохранение (до win/lose чтобы откат работал с любого состояния)
+  if (typeof autoSave === 'function') autoSave();
+
   // Win / Lose
   if (G.money>=SCENARIO.settings.winCondition){ renderGame(); endGame(true); return; }
   if (G.money<=0)       { renderGame(); endGame(false); return; }
