@@ -11,6 +11,33 @@
 // Scenario bindings объявлены в engine.js (загружается раньше).
 // ui.js использует те же алиасы: STAFF_DEFS, PROJECT_POOL, UPGRADES, SPECS и др.
 
+// ── Accordion state — переживает renderGame(), сбрасывается при перезагрузке ─
+const _acc = {
+  upg_quality:  false,  // Качество — закрыт
+  upg_speed:    false,  // Скорость — закрыт
+  upg_recovery: false,  // Восстановление — закрыт
+  hire:         true,   // Найм — открыт
+  metrics:      true,   // Метрики — открыты
+};
+
+function toggleAcc(key) {
+  _acc[key] = !_acc[key];
+  const body  = document.getElementById('acc-' + key);
+  const arrow = document.getElementById('acc-arrow-' + key);
+  if (body)  body.style.display  = _acc[key] ? 'block' : 'none';
+  if (arrow) arrow.textContent   = _acc[key] ? '▾' : '▸';
+}
+
+// Тултип метрики — показывается по клику на "?"
+function toggleMetricTip(id) {
+  const el = document.getElementById('mtip-' + id);
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  // Закрыть все открытые тултипы метрик
+  document.querySelectorAll('[id^="mtip-"]').forEach(t => { t.style.display = 'none'; });
+  if (!isOpen) el.style.display = 'block';
+}
+
 // ── DOM-реализации сигналов (Godot: обработчики connect) ─
 // В Godot эти функции становятся методами UI-нода, подключёнными через connect()
 
@@ -537,15 +564,26 @@ function renderGame() {
   });
   document.getElementById('g-hire-list').innerHTML=hhtml;
 
-  // ── Upgrades (Q) ──
-  let uhtml='';
-  UPGRADES.forEach(u=>{
+  // Синхронизируем видимость секции найма с _acc.hire
+  { const el = document.getElementById('acc-hire'); if (el) el.style.display = _acc.hire ? 'block' : 'none'; }
+  { const el = document.getElementById('acc-arrow-hire'); if (el) el.textContent = _acc.hire ? '▾' : '▸'; }
+
+  // Синхронизируем видимость блока метрик с _acc.metrics
+  { const el = document.getElementById('acc-metrics'); if (el) el.style.display = _acc.metrics ? 'block' : 'none'; }
+  { const el = document.getElementById('acc-arrow-metrics'); if (el) el.textContent = _acc.metrics ? '▾' : '▸'; }
+
+  // ── Upgrades — аккордеон по категориям ──
+  const upgradeGroups = [
+    { key: 'upg_quality',  label: '🎯 Качество',       ids: ['tools_q','training_q','consultant_q','freelance_q'] },
+    { key: 'upg_speed',    label: '⚡ Скорость',        ids: ['agile','scrum','automation'] },
+    { key: 'upg_recovery', label: '😴 Восстановление',  ids: ['paid_leave','teambuilding','corp_vacation'] },
+  ];
+
+  const renderUpgradeItem = u => {
     const bought      = u.oneTime && G.upgrades[u.id];
     const tempActive  = !u.oneTime && !u.fatigueReduce && G.tempQBonus >= u.qBonus;
-    // Кулдаун действий восстановления усталости
     const fatigueCd   = u.fatigueReduce ? ((G.fatigueActionCooldowns||{})[u.id] || 0) : 0;
     const onCooldown  = fatigueCd > 0;
-    // minFatigue: отпуск доступен только при усталости ≥ порога
     const ftGate      = u.minFatigue && (G.teamFatigue||0) < u.minFatigue;
     const canAfford   = G.money >= u.cost && G.actions >= u.days;
     const disabled    = bought || tempActive || onCooldown || ftGate || !canAfford;
@@ -561,24 +599,21 @@ function renderGame() {
     }
 
     const costLabel=`−${fmtK(u.cost)} · −${u.days}дн`;
-    const btnLabel = bought ? 'Куплено'
-      : tempActive ? 'Активен'
-      : onCooldown ? `${fatigueCd} мес.`
-      : ftGate     ? `≥${u.minFatigue} уст.`
-      : u.oneTime  ? 'Купить' : 'Провести';
+    const btnLabel = bought ? 'Куплено' : tempActive ? 'Активен' : onCooldown ? `${fatigueCd} мес.`
+      : ftGate ? `≥${u.minFatigue} уст.` : u.oneTime ? 'Купить' : 'Провести';
 
-    // Бейдж эффекта
     const effectBadge = u.fatigueReduce
-      ? `<span style="background:rgba(63,185,80,.12);color:var(--green);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">😴 Усталость −${u.fatigueReduce}</span>`
+      ? `<span style="background:rgba(63,185,80,.12);color:var(--green);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">😴 −${u.fatigueReduce}</span>`
       : u.speedBonus
-        ? `<span style="background:rgba(63,185,80,.12);color:var(--green);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">⚡ Speed +${Math.round(u.speedBonus*100)}%</span>`
+        ? `<span style="background:rgba(63,185,80,.12);color:var(--green);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">⚡ +${Math.round(u.speedBonus*100)}%</span>`
         : `<span style="background:rgba(45,212,191,.15);color:var(--teal);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap">Q +${u.qBonus}</span>`;
-    const cdNote = u.fatigueReduce && u.cooldownMonths
-      ? `<span style="color:var(--muted);font-size:10px">· кулдаун ${u.cooldownMonths} мес.</span>` : '';
-    const ftGateNote = u.minFatigue
-      ? `<span style="color:var(--amber);font-size:10px">· при усталости ≥${u.minFatigue}</span>` : '';
 
-    uhtml+=`<div class="hire-item">
+    const cdNote = u.fatigueReduce && u.cooldownMonths
+      ? `<span style="color:var(--muted);font-size:10px">· кд ${u.cooldownMonths} мес.</span>` : '';
+    const ftGateNote = u.minFatigue
+      ? `<span style="color:var(--amber);font-size:10px">· при уст. ≥${u.minFatigue}</span>` : '';
+
+    return `<div class="hire-item" style="${bought||tempActive?'opacity:.7':''}">
       <div class="hire-icon">${u.icon}</div>
       <div class="hire-info">
         <div class="hire-name" style="display:flex;align-items:center;gap:6px">${u.name} ${statusBadge}</div>
@@ -596,7 +631,34 @@ function renderGame() {
           style="font-size:11px;padding:5px 10px">${btnLabel}</button>
       </div>
     </div>`;
-  });
+  };
+
+  let uhtml = upgradeGroups.map(grp => {
+    const items = UPGRADES.filter(u => grp.ids.includes(u.id));
+    const isOpen = _acc[grp.key];
+    // Считаем сколько активных/купленных в группе для суммарного бейджа
+    const activeCount = items.filter(u =>
+      (u.oneTime && G.upgrades[u.id]) ||
+      (!u.oneTime && !u.fatigueReduce && G.tempQBonus >= u.qBonus) ||
+      (u.fatigueReduce && ((G.fatigueActionCooldowns||{})[u.id]||0) === 0 && G.money >= u.cost)
+    ).length;
+    const boughtCount = items.filter(u => u.oneTime && G.upgrades[u.id]).length;
+    const groupBadge = boughtCount > 0
+      ? `<span style="font-size:10px;background:rgba(63,185,80,.15);color:var(--green);border-radius:4px;padding:1px 6px;margin-left:6px">✓ ${boughtCount}</span>` : '';
+
+    return `
+    <div style="margin-bottom:6px;border:1px solid rgba(255,255,255,.06);border-radius:8px;overflow:hidden">
+      <button onclick="toggleAcc('${grp.key}')"
+        style="width:100%;background:rgba(255,255,255,.03);border:none;color:var(--fg);padding:8px 10px;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;text-align:left">
+        <span>${grp.label}</span>${groupBadge}
+        <span style="margin-left:auto;font-size:11px" id="acc-arrow-${grp.key}">${isOpen?'▾':'▸'}</span>
+      </button>
+      <div id="acc-${grp.key}" style="display:${isOpen?'block':'none'};padding:4px 4px 6px">
+        ${items.map(renderUpgradeItem).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
   document.getElementById('g-upgrades-list').innerHTML=uhtml;
 
   // ── Metrics ──
@@ -648,118 +710,114 @@ function renderGame() {
     ? `<div style="font-size:10px;color:var(--muted);margin-top:-2px;margin-bottom:2px">до следующего проекта: ${nextPfUnlock-pf} балл${(nextPfUnlock-pf)===1?'':'а'}</div>`
     : `<div style="font-size:10px;color:var(--purple);margin-top:-2px;margin-bottom:2px">все портфолио-проекты открыты 🏆</div>`;
 
+  // ── Метрики — grid-карточки ──────────────────────────
+  // Вспомогательная функция: одна метрика-карточка
+  const mc = ({ id, label, value, valueColor='var(--fg)', sub='', bar='', tip='', full=false }) => `
+    <div style="background:var(--bg2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;position:relative;${full?'grid-column:1/-1;':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+        <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">${label}</span>
+        <button onclick="toggleMetricTip('${id}')"
+          style="background:none;border:1px solid rgba(255,255,255,.14);border-radius:50%;width:15px;height:15px;color:var(--muted);font-size:8px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;line-height:1">?</button>
+      </div>
+      <div style="font-size:${full?'17':'19'}px;font-weight:700;color:${valueColor};line-height:1.1;margin-bottom:${sub||bar?'3':'0'}px">${value}</div>
+      ${sub?`<div style="font-size:10px;color:var(--muted);margin-bottom:${bar?'3':'0'}px">${sub}</div>`:''}
+      ${bar}
+      <div id="mtip-${id}" style="display:none;margin-top:5px;font-size:10px;color:var(--sub);background:rgba(255,255,255,.04);border-radius:5px;padding:5px 7px;line-height:1.4;border-left:2px solid rgba(79,110,247,.4)">${tip}</div>
+    </div>`;
+
+  // Данные нагрузки
+  const thr=getTeamThroughput(), tld=getTotalLoad();
+  const fMult=getFatigueMult();
+  const effThr=Math.round(thr*fMult);
+  const fatDelta=thr-effThr;
+  const ratio=tld>0?effThr/tld:1, overloaded=tld>0&&ratio<0.95;
+  const loadCol=overloaded?'var(--red)':tld===0?'var(--muted)':ratio<1.1?'var(--amber)':'var(--green)';
+  const loadPct=Math.round(ratio*100);
+  const loadBar=tld>0?`<div style="height:3px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="height:100%;width:${Math.min(100,loadPct)}%;background:${loadCol};border-radius:2px"></div></div>`:'';
+  const loadSub=tld===0?'нет активных проектов':overloaded?`⚠ прогресс ×${loadPct}%`:`эффективность ${loadPct}%`;
+  const loadSubCol=overloaded?'color:var(--red)':'color:var(--muted)';
+  const loadVal=tld===0?`${effThr}`:`${Math.round(tld)} / ${effThr}${fatDelta>0?` <span style="font-size:11px;color:var(--red);font-weight:400">−${fatDelta}уст.</span>`:''}`;
+
+  // Данные усталости
+  const ft = G.teamFatigue || 0;
+  const ftCol = ft>=85?'var(--red)':ft>=60?'var(--amber)':ft>=30?'#e8a838':'var(--green)';
+  const ftLabel = ft>=85?'Кризис':ft>=60?'Выгорание':ft>=30?'Напряжение':'Норма';
+  const _focusableLen = G.activeClients.filter(c=>!c.oneTime).length;
+  const _totalFocusW  = G.activeClients.filter(c=>!c.oneTime).reduce((s,c)=>s+(c._focus??50),0);
+  const _activeFocusPct = _focusableLen>0?Math.min(1,_totalFocusW/100):1;
+  const _effectiveLoad = getTotalLoad()*_activeFocusPct;
+  const _loadPct2 = getTeamThroughput()>0?_effectiveLoad/getTeamThroughput():0;
+  let _fd = _loadPct2>=1.0?10:_loadPct2>=0.85?4:_loadPct2>=0.70?1:-8;
+  const _hrSr=G.staff.some(s=>s.id==='hr_sr'),_hrMd=G.staff.some(s=>s.id==='hr'),_hrJr=G.staff.some(s=>s.id==='hr_jr');
+  if (_fd>0&&_hrSr) _fd=Math.round(_fd*0.55); else if(_fd>0&&_hrMd)_fd=Math.round(_fd*0.70); else if(_fd>0&&_hrJr)_fd=Math.round(_fd*0.80);
+  if (_hrSr) _fd-=2;
+  const _fdSign=_fd>=0?`+${_fd}`:`${_fd}`;
+  const _fdCol=_fd>0?'var(--red)':_fd<0?'var(--green)':'var(--muted)';
+  let _forecast='';
+  if(_fd<0&&ft>30) _forecast=`· Норма ~${Math.ceil((ft-30)/Math.abs(_fd))} мес.`;
+  else if(_fd<0&&ft<=30) _forecast='· восстановление';
+  else if(_fd>0&&ft>=60) _forecast='· нужен Тимбилдинг';
+  const ftBar=`<div style="height:3px;background:var(--bg3);border-radius:2px;margin-bottom:2px;overflow:hidden"><div style="height:100%;width:${ft}%;background:${ftCol};border-radius:2px;transition:width .3s"></div></div>`;
+  const ftSub=`<span style="color:${_fdCol};font-weight:600">${_fdSign}/мес</span>${_forecast?` <span style="color:var(--sub)">${_forecast}</span>`:''}`;
+
+  // Скорость
+  const spd=getSpeed(), spdPct=Math.round(spd*100);
+  const spdCol=spdPct>=130?'var(--purple)':spdPct>=115?'var(--green)':spdPct>=105?'var(--teal)':'var(--muted)';
+  const staffSpdBonus=G.staff.reduce((s,x)=>s+(x.speedBonus||0),0);
+  const spdHint=[
+    staffSpdBonus>0?`специалисты +${Math.round(staffSpdBonus*100)}%`:null,
+    (G.speedUpgrades||0)>0?`перки +${Math.round(G.speedUpgrades*100)}%`:null,
+  ].filter(Boolean).join(', ')||'базовая';
+
+  // Репутация
+  const repBar=`<div style="height:3px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="height:100%;width:${G.reputation}%;background:${repC};border-radius:2px"></div></div>`;
+
   document.getElementById('g-metrics').innerHTML=`
-    <div style="margin-bottom:10px">
-      <div class="pnl-row" style="margin-bottom:3px">
-        <span style="font-size:12px;color:var(--sub)" title="Накапливается с каждым завершённым месяцем и проектом. Открывает новых клиентов и даёт премию к выручке.">Портфолио</span>
-        <span style="color:${pfCl};font-weight:700;font-size:15px">${pf}</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+
+      ${mc({ id:'q', label:'Качество (Q)', value:qv, valueColor:qCl, full:true,
+        sub: qBreakdown.length>0 ? qBreakdown.join(' · ') : '',
+        bar: qBar,
+        tip: 'Открывает доступ к проектам: Стартап ≥10, Корп. ≥20, Гос. ≥30. Растёт от Дизайнера, апгрейдов и фриланс-помощи.' })}
+
+      ${mc({ id:'v', label:'Объём (V)', value:vv, valueColor:vCl, full:true,
+        bar: vBar,
+        tip: 'Нужен для контент-проектов: Стартап ≥5, Корп. ≥10, Гос./Ретейнер ≥15. Даёт Копирайтер и SMM.' })}
+
+      ${mc({ id:'pf', label:'Портфолио', value:pf, valueColor:pfCl, full:true,
+        sub: pfMult>0 ? `+${pfMult}% к выручке · ${nextPfUnlock?`до следующего клиента: ${nextPfUnlock-pf} балл${(nextPfUnlock-pf)===1?'':'а'}`:'все клиенты открыты 🏆'}` : (nextPfUnlock?`до следующего: ${nextPfUnlock-pf}`:''),
+        bar: pfBar,
+        tip: 'Накапливается с завершёнными проектами. Открывает закрытых клиентов при 12/28/50 баллах. Даёт +0.4%/балл к выручке (макс +20%).' })}
+
+      ${mc({ id:'slots', label:'Слоты', value:`${G.activeClients.length} / ${getCapacity()}`,
+        tip: 'Параллельные проекты. База: 2 слота. Менеджер Jr +1 · Md +2 · Sr +3.' })}
+
+      ${mc({ id:'nps', label:'Средний NPS', value:avgNps, valueColor:npsCl,
+        tip: 'Удовлетворённость клиентов (0–100). При NPS < 40 клиент расторгает контракт. Повышается инвестицией и бонус-событиями.' })}
+
+      ${mc({ id:'rep', label:'Репутация', value:Math.round(G.reputation), valueColor:repC,
+        bar: repBar,
+        tip: 'Открывает тиры проектов и специалистов. Т2 ≥40, Т3 ≥60, Эндгейм ≥80. Падает при серой зоне, просрочках и невыплате кредита.' })}
+
+      ${mc({ id:'spd', label:'Скорость', value:spdPct+'%', valueColor:spdCol,
+        sub: spdHint,
+        tip: 'Множитель скорости выполнения проектов. Прокачивается Agile (+10%) / Scrum (+15%) / Автоматизация (+20%) и грейдами Менеджера/Разработчика.' })}
+
+      ${mc({ id:'load', label:'Нагрузка / Произв.', value:loadVal, valueColor:loadCol,
+        bar: loadBar,
+        sub: `<span style="${loadSubCol}">${loadSub}</span>`,
+        tip: 'Суммарная нагрузка проектов vs эффективная производительность команды. При перегрузе (нагрузка > произв.) прогресс замедляется. Усталость снижает производительность.' })}
+
+      ${mc({ id:'fat', label:`Усталость · ${ftLabel}`, value:`${Math.round(ft)}`, valueColor:ftCol,
+        bar: ftBar,
+        sub: ftSub,
+        tip: 'Норма (0–30): без эффектов. Напряжение (30–60): −5% прогресс, −3 NPS/мес. Выгорание (60–85): −15% прогресс, сотрудники уходят. Кризис (85+): −30%, найм заблокирован.' })}
+
+      <div style="grid-column:1/-1;padding:4px 2px">
+        <span style="font-size:10px;color:var(--muted)">Overhead/мес</span>
+        <span style="font-size:10px;color:var(--red);font-weight:600;margin-left:6px">−${fmt(OVERHEAD)}</span>
       </div>
-      ${pfBar}
-      ${pfHint}
-      ${pfMult>0?`<div style="font-size:10px;color:var(--purple);font-weight:600">↑ +${pfMult}% к выручке всех клиентов</div>`:''}
-    </div>
-    <div class="divider" style="margin-bottom:8px"></div>
-    <div style="margin-bottom:8px">
-      <div class="pnl-row" style="margin-bottom:3px">
-        <span style="font-size:12px;color:var(--sub)" title="+0.7%/пункт выше минимума клиента. Влияет на NPS и допуск к проектам.">Качество <span style="font-size:10px">(Q)</span></span>
-        <span style="color:${qCl};font-weight:700;font-size:15px">${qv}</span>
-      </div>
-      ${qBreakdownHtml}
-      ${qBar}
-    </div>
-    <div style="margin-bottom:10px">
-      <div class="pnl-row" style="margin-bottom:3px">
-        <span style="font-size:12px;color:var(--sub)" title="+0.5%/пункт выше минимума клиента. Больше — выше пропускная способность.">Объём <span style="font-size:10px">(V)</span></span>
-        <span style="color:${vCl};font-weight:700;font-size:15px">${vv}</span>
-      </div>
-      ${vBar}
-    </div>
-    <div class="divider"></div>
-    <div class="pnl-row"><span>Слоты</span><span>${G.activeClients.length}/${getCapacity()}</span></div>
-    <div class="pnl-row"><span>Средний NPS</span><span style="color:${npsCl};font-weight:700">${avgNps}</span></div>
-    <div class="pnl-row">
-      <span>Репутация</span>
-      <span style="color:${repC};font-weight:700">${Math.round(G.reputation)}</span>
-    </div>
-    <div class="rep-row" style="padding-bottom:4px;">
-      <div class="rep-bar-wrap"><div class="rep-bar-fill" style="width:${G.reputation}%;background:${repC}"></div></div>
-    </div>
-    <div class="divider" style="margin:6px 0"></div>
-    ${(()=>{
-      const thr=getTeamThroughput(), tld=getTotalLoad();
-      const fMult=getFatigueMult();
-      const effThr=Math.round(thr*fMult);
-      const fatDelta=thr-effThr;
-      const fatNote=fatDelta>0
-        ? `<span style="color:var(--red);font-size:10px;font-weight:400"> (Усталость: −${fatDelta})</span>`
-        : '';
-      if(tld===0) return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Производительность</span><span style="font-weight:700">${effThr}${fatNote}</span></div><div style="font-size:10px;color:var(--muted)">нет активных проектов</div>`;
-      const ratio=effThr/tld, overloaded=ratio<0.95;
-      const loadCol=overloaded?'var(--red)':ratio<1.1?'var(--amber)':'var(--green)';
-      const loadPct=Math.round(ratio*100);
-      return `<div class="pnl-row"><span style="color:var(--sub);font-size:12px">Нагрузка / Произв.</span><span style="color:${loadCol};font-weight:700">${Math.round(tld)} / ${effThr}${fatNote}</span></div>
-        <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:3px;overflow:hidden"><div style="height:100%;width:${Math.min(100,loadPct)}%;background:${loadCol};border-radius:2px"></div></div>
-        ${overloaded?`<div style="font-size:10px;color:var(--red)">⚠ Перегруз — прогресс ×${loadPct}%</div>`:`<div style="font-size:10px;color:var(--muted)">эффективность ${loadPct}%</div>`}`;
-    })()}
-    <div class="divider" style="margin:6px 0"></div>
-    ${(()=>{
-      const ft = G.teamFatigue || 0;
-      const ftCol = ft >= 85 ? 'var(--red)' : ft >= 60 ? 'var(--amber)' : ft >= 30 ? '#e8a838' : 'var(--green)';
-      const ftLabel = ft >= 85 ? 'Кризис' : ft >= 60 ? 'Выгорание' : ft >= 30 ? 'Напряжение' : 'Норма';
-      // Прогноз: считаем fd по текущей нагрузке (зеркалим формулу advanceMonth + фикс п.22)
-      const _focusableLen = G.activeClients.filter(c=>!c.oneTime).length;
-      const _totalFocusW  = G.activeClients.filter(c=>!c.oneTime).reduce((s,c)=>s+(c._focus??50),0);
-      const _activeFocusPct = _focusableLen > 0 ? Math.min(1, _totalFocusW / 100) : 1;
-      const _effectiveLoad = getTotalLoad() * _activeFocusPct;
-      const _loadPct = getTeamThroughput() > 0 ? _effectiveLoad / getTeamThroughput() : 0;
-      let _fd = _loadPct >= 1.0 ? 10 : _loadPct >= 0.85 ? 4 : _loadPct >= 0.70 ? 1 : -8;
-      const _hrSr = G.staff.some(s=>s.id==='hr_sr'), _hrMd = G.staff.some(s=>s.id==='hr'), _hrJr = G.staff.some(s=>s.id==='hr_jr');
-      if (_fd > 0 && _hrSr) _fd = Math.round(_fd * 0.55);
-      else if (_fd > 0 && _hrMd) _fd = Math.round(_fd * 0.70);
-      else if (_fd > 0 && _hrJr) _fd = Math.round(_fd * 0.80);
-      if (_hrSr) _fd -= 2;
-      const _fdSign = _fd >= 0 ? `+${_fd}` : `${_fd}`;
-      const _fdCol = _fd > 0 ? 'var(--red)' : _fd < 0 ? 'var(--green)' : 'var(--muted)';
-      // Сколько месяцев до безопасного порога (≤30)
-      let _forecast = '';
-      if (_fd < 0 && ft > 30) {
-        const moToSafe = Math.ceil((ft - 30) / Math.abs(_fd));
-        _forecast = `· Норма через ~${moToSafe} мес.`;
-      } else if (_fd < 0 && ft <= 30) {
-        _forecast = '· восстановление';
-      } else if (_fd > 0 && ft >= 60) {
-        _forecast = '· рекомендуется Тимбилдинг';
-      }
-      return `<div class="pnl-row" style="margin-bottom:3px">
-        <span style="font-size:12px;color:var(--sub)" title="Усталость команды. Норма (0–30): нет эффектов. Напряжение (30–60): −5% прогресс, NPS снижается. Выгорание (60–85): −15% прогресс, сотрудники уходят. Кризис (85+): −30% прогресс, найм заблокирован.">Усталость</span>
-        <span style="color:${ftCol};font-weight:700;font-size:13px">${Math.round(ft)} <span style="font-size:11px;font-weight:400">${ftLabel}</span></span>
-      </div>
-      <div style="height:4px;background:var(--bg3);border-radius:2px;margin-bottom:4px;overflow:hidden">
-        <div style="height:100%;width:${ft}%;background:${ftCol};border-radius:2px;transition:width 0.3s"></div>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:2px">
-        <span style="color:${_fdCol};font-weight:600">${_fdSign}/мес</span> при текущей нагрузке
-        ${_forecast ? `<span style="color:var(--sub)"> ${_forecast}</span>` : ''}
-      </div>`;
-    })()}
-    <div class="divider" style="margin:6px 0"></div>
-    ${(()=>{
-      const spd = getSpeed();
-      const spdPct = Math.round(spd * 100);
-      const spdCol = spdPct >= 130 ? 'var(--purple)' : spdPct >= 115 ? 'var(--green)' : spdPct >= 105 ? 'var(--teal)' : 'var(--muted)';
-      const staffSpdBonus = G.staff.reduce((s,x)=>(s+(x.speedBonus||0)),0);
-      const hint = [
-        staffSpdBonus > 0 ? `специалисты +${Math.round(staffSpdBonus*100)}%` : null,
-        (G.speedUpgrades||0) > 0 ? `перки +${Math.round(G.speedUpgrades*100)}%` : null,
-      ].filter(Boolean).join(', ') || 'базовая';
-      return `<div class="pnl-row" style="margin-bottom:2px">
-        <span style="font-size:12px;color:var(--sub)" title="Скорость выполнения проектов. Прокачивается через Agile/Scrum/Автоматизацию в апгрейдах и грейды Менеджера/Разработчика.">Скорость</span>
-        <span style="color:${spdCol};font-weight:700;font-size:13px">${spdPct}%</span>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${hint}</div>`;
-    })()}
-    <div class="divider" style="margin:6px 0"></div>
-    <div class="pnl-row"><span>Overhead/мес</span><span style="color:var(--red)">−${fmt(OVERHEAD)}</span></div>`;
+    </div>`;
 
   // ── Log ──
   const lhtml=G.log.map(l=>`<div class="log-item"><span class="log-month">${l.month} — </span><span class="log-msg ${l.cls}">${l.msg}</span></div>`).join('');

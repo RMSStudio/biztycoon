@@ -95,8 +95,11 @@
   <!-- Main tab -->
   <div id="tab-panel-main" class="tab-panel active">
   <div class="game-body">
-    <!-- LEFT -->
+
+    <!-- LEFT — проекты + аналитика -->
     <div class="col-main">
+
+      <button id="btn-advance" class="advance-btn" onclick="advanceMonth()">⏭ Завершить месяц</button>
 
       <div class="panel">
         <div class="panel-title">
@@ -115,7 +118,17 @@
         </div>
       </div>
 
-      <button id="btn-advance" class="advance-btn" onclick="advanceMonth()">⏭ Завершить месяц</button>
+      <!-- Метрики переехали сюда — рядом с проектами и P&L -->
+      <div class="panel" style="padding-bottom:0">
+        <div class="panel-title" onclick="toggleAcc('metrics')"
+          style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none">
+          <span>Метрики</span>
+          <span id="acc-arrow-metrics" style="font-size:11px;color:var(--muted)">▾</span>
+        </div>
+        <div id="acc-metrics" style="padding-bottom:10px">
+          <div id="g-metrics"></div>
+        </div>
+      </div>
 
       <div class="panel">
         <div class="panel-title">История</div>
@@ -123,37 +136,40 @@
       </div>
     </div>
 
-    <!-- RIGHT -->
+    <!-- RIGHT — действия + команда + апгрейды -->
     <div class="col-side">
 
-      <!-- Scout action -->
+      <!-- Скаутинг -->
       <div class="panel">
         <div class="panel-title">Действия</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
-            🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>
+        <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
+          🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>
+        </button>
+      </div>
+
+      <!-- Команда + Найм (объединённая панель) -->
+      <div class="panel">
+        <div class="panel-title">👥 Команда</div>
+        <div id="g-team-list"></div>
+
+        <!-- Секция найма — раскрывается по клику -->
+        <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,.06);padding-top:6px">
+          <button onclick="toggleAcc('hire')"
+            style="width:100%;background:none;border:none;color:var(--sub);display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 2px;font-size:12px;font-weight:600;text-align:left">
+            <span>Нанять</span>
+            <span style="color:var(--muted);font-weight:400;font-size:10px">−2 дня</span>
+            <span style="margin-left:auto;font-size:11px;transition:transform .2s" id="acc-arrow-hire">▸</span>
           </button>
+          <div id="acc-hire" style="display:none;margin-top:6px">
+            <div id="g-hire-list"></div>
+          </div>
         </div>
       </div>
 
+      <!-- Апгрейды — accordion по категориям -->
       <div class="panel">
-        <div class="panel-title">Прокачка Q <span style="color:var(--muted);font-size:10px;font-weight:400">качество</span></div>
+        <div class="panel-title">Прокачка</div>
         <div id="g-upgrades-list"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">Команда</div>
-        <div id="g-team-list"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">Нанять <span style="color:var(--muted);font-size:10px;font-weight:400">−2 дня</span></div>
-        <div id="g-hire-list"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">Метрики</div>
-        <div id="g-metrics"></div>
       </div>
 
     </div>
