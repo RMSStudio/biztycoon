@@ -90,6 +90,19 @@ function startGame() {
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
   G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
+  // ИИ-нейросеть
+  G.ai = {
+    purchased:         false,   // куплен доступ
+    level:             0,       // текущий уровень (0 = базовый, только после покупки)
+    upgrading:         false,   // идёт обучение
+    upgradeMonthsLeft: 0,       // месяцев до завершения обучения
+    chat:              [],       // [{role:'user'|'ai', text, month, pending?}]
+    pendingResponse:   null,     // {text, readyMonth} — ответ в очереди
+    queriesThisMonth:  0,        // счётчик запросов в текущем месяце
+    aiQBonus:          0,        // текущий пассивный Q от ИИ
+    aiRepBonus:        0,        // текущий пассивный реп от ИИ
+    aiVBonus:          0,        // текущий пассивный V от ИИ (добавляется к caseQBonus-механике)
+  };
   DECISIONS=[];
   G.history.push({month:0, money:SCENARIO.settings.startMoney, label:'Старт'});
   addLog('Агентство открыто. Найди первый проект через Скаутинг!','amber');
@@ -104,8 +117,8 @@ function fmt(n)  { return Math.round(n).toLocaleString('ru-RU')+'₽'; }
 function fmtK(n) { return Math.abs(n)>=1000000?(n/1000000).toFixed(1)+'M₽':Math.abs(n)>=1000?Math.round(n/1000)+'K₽':Math.round(n)+'₽'; }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 
-function getQuality(g=G){ return g.staff.reduce((s,x)=>s+(x.quality||0),0)+(g.qualityBonus||0)+(g.tempQBonus||0)+(g.caseQBonus||0); }
-function getVolume(g=G) { return g.staff.reduce((s,x)=>s+(x.volume||0),0); }
+function getQuality(g=G){ return g.staff.reduce((s,x)=>s+(x.quality||0),0)+(g.qualityBonus||0)+(g.tempQBonus||0)+(g.caseQBonus||0)+(g.ai?.aiQBonus||0); }
+function getVolume(g=G) { return g.staff.reduce((s,x)=>s+(x.volume||0),0)+(g.ai?.aiVBonus||0); }
 function getCapacity(g=G){ return 2+g.staff.reduce((s,x)=>s+(x.capacity||0),0); }
 // hasRole/countRole проверяют по полю role (новые грейды) или id (обратная совместимость)
 function hasRole(id,g=G){ return !!g.staff.find(s=>(s.role||s.id)===id); }
@@ -693,6 +706,7 @@ function fireStaff(iid) {
       addLog(`👋 ${s.name} уволен. Выходное пособие −${fmt(severance)}`, 'amber');
       notify(`${s.icon} ${s.name} уволен`, 'warning');
       rd(`Уволен ${s.name} (−${fmt(severance)})`, 'hire');
+      checkCapacityExceeded(s.name);
       _emitRender();
     }
   );
@@ -734,6 +748,55 @@ function terminateContract(cid) {
       _emitRender();
     }
   );
+}
+
+// Принудительное расторжение без confirm-диалога (для capacity-exceeded модала)
+function _forceTerminate(cid) {
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c) return;
+  G.completedProjects = G.completedProjects || [];
+  G.completedProjects.push({
+    id:cid, name:c.name, icon:c.icon, revenue:c.revenue, tier:c.tier||1,
+    finalNPS:Math.round(G.clientNPS[cid]||50), monthCompleted:G.month,
+    terminated:true, failed:false, _cased:false,
+  });
+  G.activeClients = G.activeClients.filter(a => a.id !== cid);
+  delete G.clientNPS[cid];
+  G.reputation = clamp(G.reputation - 10, 0, 100);
+  addLog(`🚫 Расторгнут «${c.name}» из-за потери менеджера (−10 реп.)`, 'red');
+  const prepaid = c._prepaidAmount || 0;
+  if (prepaid > 0) {
+    const ret = hasRole('lawyer') ? Math.round(prepaid*0.5) : prepaid;
+    G.money = clamp(G.money - ret, -Infinity, Infinity);
+    addLog(`💸 Возврат аванса «${c.name}»: −${fmtK(ret)}`, 'red');
+  }
+  notify(`${c.icon} Контракт с ${c.name} расторгнут`, 'error');
+  rd(`Расторгнут (capacity): ${c.name}`, 'churn');
+}
+
+// Проверка переполнения capacity после ухода сотрудника.
+// Вызывается после fireStaff, fatigue-quit, event-quit.
+function checkCapacityExceeded(leaverName) {
+  const cap    = getCapacity();
+  const active = G.activeClients.filter(c => !c.oneTime);
+  const excess = active.length - cap;
+  if (excess <= 0) return;
+
+  // Строим синтетическое событие через существующий showEvent механизм.
+  // Каждый «лишний» проект — отдельная кнопка выбора.
+  const choices = active.map(c => ({
+    text:  `Расторгнуть «${c.name}» (T${c.tier}, прогресс ${Math.round(c._progress||0)}%) — −10 реп.`,
+    desc:  `${fmtK(c._totalBudget||0)} потеряно. ${c._prepaidAmount?`Аванс ${fmtK(c._prepaidAmount)} возвращается.`:''}`,
+    fn:    () => { _forceTerminate(c.id); _emitRender(); },
+  }));
+
+  _emitShowEvent({
+    icon:    '⚠️',
+    title:   'Превышен лимит проектов',
+    body:    `После ухода ${leaverName} свободных слотов: ${cap}, активных проектов: ${active.length}. ` +
+             `Нужно расторгнуть ${excess} контракт${excess===1?'':'а'} — выбери ${excess===1?'его':'один за другим'}.`,
+    choices,
+  });
 }
 
 // ══════════════════════════════════════════════════════
@@ -1090,6 +1153,7 @@ function advanceMonth() {
         G.staff = G.staff.filter(s => s._iid !== leaver._iid);
         addLog(`🚪 ${leaver.name} уволился из-за усталости команды!`, 'red');
         notify(`${leaver.name} уволился — команда выгорает!`, 'error');
+        checkCapacityExceeded(leaver.name);
       }
     }
     if (G.teamFatigue >= 85) {
@@ -1190,6 +1254,51 @@ function advanceMonth() {
   G.scoutPool = null;
   G.tempQBonus = 0;
 
+  // ⑪-б ИИ-нейросеть: обучение, пассивные бонусы, доставка ответов
+  if (G.ai && G.ai.purchased) {
+    // Сброс лимита запросов
+    G.ai.queriesThisMonth = 0;
+
+    // Декремент таймера обучения
+    if (G.ai.upgrading && G.ai.upgradeMonthsLeft > 0) {
+      G.ai.upgradeMonthsLeft--;
+      if (G.ai.upgradeMonthsLeft === 0) {
+        G.ai.upgrading = false;
+        const lvlDef = (SCENARIO.ai?.levels || [])[G.ai.level];
+        addLog(`🤖 Нейросеть завершила обучение — уровень ${G.ai.level}: «${lvlDef?.name || ''}»`, 'purple');
+        EventBus.emit('ai_training_complete', { level: G.ai.level });
+        notify(`🤖 Нейросеть готова: ${lvlDef?.name || 'Уровень ' + G.ai.level}`, 'success');
+      } else {
+        addLog(`🤖 Обучение нейросети: осталось ${G.ai.upgradeMonthsLeft} мес.`, 'muted');
+      }
+    }
+
+    // Пассивные бонусы от ИИ (только когда не идёт обучение)
+    if (!G.ai.upgrading) {
+      const lvlDef = (SCENARIO.ai?.levels || [])[G.ai.level];
+      if (lvlDef) {
+        G.ai.aiQBonus   = lvlDef.passiveQ   || 0;
+        G.ai.aiRepBonus = lvlDef.passiveRep  || 0;
+        G.ai.aiVBonus   = lvlDef.passiveV    || 0;
+        if (lvlDef.passiveRep > 0) {
+          G.reputation = clamp(G.reputation + lvlDef.passiveRep, 0, 100);
+        }
+      }
+    } else {
+      G.ai.aiQBonus = 0; G.ai.aiRepBonus = 0; G.ai.aiVBonus = 0;
+    }
+
+    // Доставка отложенного ответа
+    if (G.ai.pendingResponse && G.month >= G.ai.pendingResponse.readyMonth) {
+      const resp = G.ai.pendingResponse;
+      G.ai.pendingResponse = null;
+      G.ai.chat.push({ role: 'ai', text: resp.text, month: G.month, pending: false });
+      EventBus.emit('ai_response_ready', { text: resp.text });
+      notify('🤖 Нейросеть прислала ответ — загляни во вкладку', 'info');
+      addLog('🤖 Получен ответ от нейросети', 'purple');
+    }
+  }
+
   // ⑫ Снимок истории
   G.history.push({month:G.month, money:G.money, label:monthLabel(-1)});
 
@@ -1200,11 +1309,13 @@ function advanceMonth() {
   if (G.money>=SCENARIO.settings.winCondition){ _emitRender(); _emitEndGame(true); return; }
   if (G.money<=0)       { _emitRender(); _emitEndGame(false); return; }
 
-  // Случайное событие (40%, пропуск 1-го месяца)
+  // Случайное событие (40%, пропуск 1-го месяца; не когда идёт событие ИИ)
   if (G.monthsPlayed>1 && Math.random()<0.40){
+    const hasActiveProjects = G.activeClients.filter(c=>!c.oneTime).length > 0;
     const evs=EVENTS.filter(e=>{
-      if (e.id==='quit'     && G.staff.length===0) return false;
-      if (e.id==='conflict' && G.staff.length<2)  return false;
+      if (e.id==='quit'        && G.staff.length===0)    return false;
+      if (e.id==='conflict'    && G.staff.length<2)      return false;
+      if (e.requiresClients    && !hasActiveProjects)    return false;
       return true;
     });
     _emitShowEvent(evs[Math.floor(Math.random()*evs.length)]);
@@ -1213,3 +1324,55 @@ function advanceMonth() {
   }
 }
 
+// ══════════════════════════════════════════════════════
+//  НЕЙРОСЕТЬ — игровые действия
+// ══════════════════════════════════════════════════════
+
+function purchaseAI() {
+  const cfg = SCENARIO.ai;
+  if (!cfg) { notify('ИИ-модуль недоступен в этом сценарии', 'error'); return; }
+  if (G.ai.purchased) { notify('Нейросеть уже куплена', 'error'); return; }
+  if (G.reputation < cfg.purchaseMinRep) {
+    notify(`Нужна репутация ≥${cfg.purchaseMinRep} (сейчас ${Math.round(G.reputation)})`, 'error'); return;
+  }
+  if (G.money < cfg.purchaseCost) { notify('Недостаточно средств', 'error'); return; }
+  G.money -= cfg.purchaseCost;
+  G.ai.purchased = true;
+  G.ai.level = 0;
+  addLog(`🤖 Нейросеть подключена (базовая модель). Ответы занимают ~${cfg.levels[0].responseMonths} мес.`, 'purple');
+  notify('🤖 Нейросеть активирована!', 'success');
+  rd('Куплена нейросеть', 'event');
+  EventBus.emit('ai_purchased');
+  _emitRender();
+}
+
+function upgradeAI() {
+  if (!G.ai.purchased) { notify('Сначала купи нейросеть', 'error'); return; }
+  if (G.ai.upgrading)  { notify(`Обучение уже идёт — осталось ${G.ai.upgradeMonthsLeft} мес.`, 'error'); return; }
+  const nextLevel = G.ai.level + 1;
+  const cfg = SCENARIO.ai;
+  if (!cfg || nextLevel >= cfg.levels.length) { notify('Нейросеть уже на максимальном уровне', 'error'); return; }
+  const lvl = cfg.levels[nextLevel];
+  if (G.money < lvl.cost) { notify(`Нужно ${fmtK(lvl.cost)} для обучения`, 'error'); return; }
+  G.money -= lvl.cost;
+  G.ai.level = nextLevel;
+  G.ai.upgrading = true;
+  G.ai.upgradeMonthsLeft = lvl.trainingMonths;
+  addLog(`🤖 Начато обучение нейросети — уровень ${nextLevel}: «${lvl.name}». Завершение через ${lvl.trainingMonths} мес.`, 'purple');
+  notify(`🤖 Обучение начато — ${lvl.trainingMonths} мес.`, 'info');
+  rd(`Апгрейд нейросети → Ур.${nextLevel}`, 'event');
+  EventBus.emit('ai_upgrading', { level: nextLevel, months: lvl.trainingMonths });
+  _emitRender();
+}
+
+// Получить текущий лимит запросов в месяц
+function getAIQueriesLimit() {
+  if (!G.ai?.purchased || G.ai.upgrading) return 0;
+  return (SCENARIO.ai?.levels?.[G.ai.level]?.queriesPerMonth) || 0;
+}
+
+// Получить задержку ответа в месяцах (для текущего уровня)
+function getAIResponseDelay() {
+  if (!G.ai?.purchased) return 99;
+  return (SCENARIO.ai?.levels?.[G.ai.level]?.responseMonths) || 0;
+}

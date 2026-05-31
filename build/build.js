@@ -37,6 +37,7 @@ const scenario  = fs.readFileSync(scenarioPath,                           'utf8'
 const eng       = fs.readFileSync(path.join(ROOT, 'src', 'engine.js'),   'utf8');
 const ui        = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'),       'utf8');
 const saves     = fs.readFileSync(path.join(ROOT, 'src', 'saves.js'),    'utf8');
+const ai        = fs.readFileSync(path.join(ROOT, 'src', 'ai.js'),       'utf8');
 
 // ── CSS: <link> → <style> ─────────────────────────────
 let out = html.replace(
@@ -52,6 +53,7 @@ const scriptBlock = [
   '<script src="src/engine.js"></script>',
   '<script src="src/ui.js"></script>',
   '<script src="src/saves.js"></script>',
+  '<script src="src/ai.js"></script>',
   '<script>initState(); initEventBus();</script>',
 ].join('\n');
 
@@ -63,6 +65,7 @@ const inlined = [
   eng,
   ui,
   saves,
+  ai,
   `</script>`,
   `<script>initState(); initEventBus();</script>`,
 ].join('\n\n');

@@ -52,3 +52,8 @@ const EventBus = {
 //  'focus_changed'  {cid,pct,totalPct,isOver,           emit_signal("focus_changed", ...)
 //                    preview:{perMonth,mthsLeft},
 //                    focusableIds}
+//  'ai_purchased'        {}                             emit_signal("ai_purchased")
+//  'ai_upgrading'        {level, months}               emit_signal("ai_upgrading", ...)
+//  'ai_training_complete' {level}                      emit_signal("ai_training_complete", ...)
+//  'ai_thinking'         {delay}                       emit_signal("ai_thinking", ...)
+//  'ai_response_ready'   {text}                        emit_signal("ai_response_ready", ...)

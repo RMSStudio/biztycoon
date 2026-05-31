@@ -90,6 +90,10 @@
       📁 Портфолио
       <span class="tab-badge" id="tab-portfolio-badge" style="display:none">0</span>
     </button>
+    <button class="gtab" id="tab-btn-ai" onclick="switchTab('ai')" style="position:relative">
+      🤖 Нейросеть
+      <span class="tab-badge" id="tab-ai-badge" style="display:none;background:var(--purple)">!</span>
+    </button>
   </div>
 
   <!-- Main tab -->
@@ -181,6 +185,11 @@
     <div id="g-portfolio-content"></div>
   </div>
 
+  <!-- AI tab -->
+  <div id="tab-panel-ai" class="tab-panel">
+    <div id="g-ai-content"></div>
+  </div>
+
 </div>
 
 <!-- ══ RESULTS ══ -->
@@ -266,6 +275,7 @@
 <script src="src/engine.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/saves.js"></script>
+<script src="src/ai.js"></script>
 <script>initState(); initEventBus();</script>
 </body>
 </html>

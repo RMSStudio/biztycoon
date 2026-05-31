@@ -146,6 +146,20 @@ function initEventBus() {
   EventBus.on('show_confirm', ({ icon, title, body, confirmText, confirmClass, onConfirm }) =>
     _uiShowConfirm(icon, title, body, confirmText, confirmClass, onConfirm));
   EventBus.on('focus_changed', data => _uiFocusChanged(data));
+  // AI-сигналы — перерисовываем вкладку если она открыта
+  const _refreshAI = () => {
+    if (document.getElementById('tab-panel-ai')?.classList.contains('active')) renderAITab();
+    // Бейдж на вкладке при новом ответе
+  };
+  EventBus.on('ai_purchased',        _refreshAI);
+  EventBus.on('ai_upgrading',        _refreshAI);
+  EventBus.on('ai_training_complete',_refreshAI);
+  EventBus.on('ai_thinking',         _refreshAI);
+  EventBus.on('ai_response_ready',   () => {
+    _refreshAI();
+    const badge = document.getElementById('tab-ai-badge');
+    if (badge) { badge.style.display = 'inline-flex'; }
+  });
 }
 // ══════════════════════════════════════════════════════
 //  CAPABILITY BAR HELPER  (Q / V visual meter)
@@ -982,6 +996,11 @@ function switchTab(tab) {
   document.getElementById('tab-panel-'+tab).classList.add('active');
   document.getElementById('tab-btn-'+tab).classList.add('active');
   if (tab==='portfolio') renderPortfolioTab();
+  if (tab==='ai') {
+    renderAITab();
+    const badge = document.getElementById('tab-ai-badge');
+    if (badge) badge.style.display = 'none';
+  }
 }
 
 function renderPortfolioTab() {
@@ -1108,6 +1127,235 @@ function renderPortfolioTab() {
         ${buildHtml}
       </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  НЕЙРОСЕТЬ — рендер вкладки
+// ══════════════════════════════════════════════════════
+
+function renderAITab() {
+  const el = document.getElementById('g-ai-content');
+  if (!el) return;
+
+  const cfg      = SCENARIO.ai || {};
+  const ai       = G.ai || {};
+  const levels   = cfg.levels || [];
+  const purchased = ai.purchased;
+
+  // ── Экран покупки ──────────────────────────────────
+  if (!purchased) {
+    const canBuy = G.money >= cfg.purchaseCost && G.reputation >= cfg.purchaseMinRep;
+    el.innerHTML = `
+      <div class="ai-screen">
+        <div class="ai-glow-bg" style="text-align:center;padding:40px 24px">
+          <div style="font-size:52px;margin-bottom:16px;filter:drop-shadow(0 0 18px rgba(168,85,247,.6))">🤖</div>
+          <div style="font-size:22px;font-weight:700;color:var(--fg);margin-bottom:8px">Нейросеть</div>
+          <div style="font-size:13px;color:var(--sub);max-width:480px;margin:0 auto 24px;line-height:1.6">
+            Подключи ИИ-советника для анализа стейта агентства, стратегических рекомендаций
+            и пассивных бонусов к Q, V и репутации. Прокачивай модель — она становится быстрее
+            и эффективнее.
+          </div>
+          <div style="display:flex;gap:16px;justify-content:center;margin-bottom:24px;flex-wrap:wrap">
+            <div style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:8px;padding:12px 20px;text-align:center">
+              <div style="font-size:18px;font-weight:700;color:var(--purple)">${fmtK(cfg.purchaseCost)}</div>
+              <div style="font-size:11px;color:var(--muted)">Стоимость доступа</div>
+            </div>
+            <div style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:8px;padding:12px 20px;text-align:center">
+              <div style="font-size:18px;font-weight:700;color:var(--purple)">≥${cfg.purchaseMinRep}</div>
+              <div style="font-size:11px;color:var(--muted)">Репутация</div>
+            </div>
+          </div>
+          ${!canBuy && G.reputation < cfg.purchaseMinRep
+            ? `<div style="font-size:12px;color:var(--amber);margin-bottom:12px">⚠️ Нужна репутация ≥${cfg.purchaseMinRep} (сейчас ${Math.round(G.reputation)})</div>` : ''}
+          ${!canBuy && G.money < cfg.purchaseCost
+            ? `<div style="font-size:12px;color:var(--red);margin-bottom:12px">⚠️ Недостаточно средств (нужно ${fmtK(cfg.purchaseCost)})</div>` : ''}
+          <button class="btn btn-primary" onclick="purchaseAI()" ${!canBuy?'disabled':''}
+            style="font-size:15px;padding:12px 32px;background:linear-gradient(135deg,#7c3aed,#4f46e5)">
+            🤖 Подключить нейросеть
+          </button>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">
+            После покупки станет доступен чат и дерево прокачки
+          </div>
+        </div>
+
+        <!-- Превью уровней -->
+        <div style="margin-top:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Дерево прокачки</div>
+          <div class="ai-tree">
+            ${levels.map((lvl, i) => `
+              <div class="ai-node locked">
+                <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Ур. ${lvl.level}</div>
+                <div style="font-size:12px;font-weight:600;color:var(--sub)">${lvl.name}</div>
+                ${lvl.cost > 0 ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${fmtK(lvl.cost)} · ${lvl.trainingMonths} мес.</div>` : ''}
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ── Активный экран (после покупки) ────────────────
+  const currentLevel = levels[ai.level] || levels[0];
+  const nextLevel    = levels[ai.level + 1];
+  const limit        = typeof getAIQueriesLimit === 'function' ? getAIQueriesLimit() : 0;
+  const delay        = typeof getAIResponseDelay === 'function' ? getAIResponseDelay() : 0;
+  const queriesLeft  = Math.max(0, limit - (ai.queriesThisMonth || 0));
+  const apiKey       = typeof getAIKey === 'function' ? getAIKey() : '';
+
+  // Пассивные бонусы текущего уровня
+  const passives = [];
+  if (currentLevel.passiveQ)   passives.push(`+${currentLevel.passiveQ} Q/мес`);
+  if (currentLevel.passiveRep) passives.push(`+${currentLevel.passiveRep} реп/мес`);
+  if (currentLevel.passiveV)   passives.push(`+${currentLevel.passiveV} V/мес`);
+  if (currentLevel.autoScout)  passives.push('Авто-скаутинг 🔍');
+
+  // Рендер чата
+  const chatHtml = (ai.chat || []).length === 0
+    ? `<div style="text-align:center;padding:24px 0;color:var(--muted);font-size:13px">
+        Задай первый вопрос — нейросеть проанализирует состояние агентства
+       </div>`
+    : (ai.chat || []).map(msg => {
+        const label = msg.month != null ? (monthLabel ? `Месяц ${msg.month}` : `М${msg.month}`) : '';
+        return `<div class="ai-bubble ${msg.role}${msg.pending ? ' pending' : ''}">
+          ${msg.pending && msg.role === 'ai' && msg.text.includes('⏳')
+            ? `<span class="ai-thinking-dots"><span>·</span><span>·</span><span>·</span></span> ${msg.text}`
+            : msg.text}
+          <div class="ai-month">${label}</div>
+        </div>`;
+      }).join('');
+
+  // Дерево прокачки
+  const treeHtml = levels.map((lvl) => {
+    const isDone     = lvl.level < ai.level;
+    const isCurrent  = lvl.level === ai.level;
+    const isTraining = isCurrent && ai.upgrading;
+    const isNext     = lvl.level === ai.level + 1 && !ai.upgrading;
+    const isLocked   = lvl.level > ai.level + 1 || (lvl.level === ai.level + 1 && ai.upgrading);
+
+    let cls = 'ai-node';
+    if (isDone)     cls += ' completed';
+    if (isCurrent && !ai.upgrading) cls += ' active';
+    if (isTraining) cls += ' training';
+    if (isLocked)   cls += ' locked';
+
+    const bonuses = [];
+    if (lvl.passiveQ)   bonuses.push(`Q +${lvl.passiveQ}`);
+    if (lvl.passiveRep) bonuses.push(`Реп +${lvl.passiveRep}`);
+    if (lvl.passiveV)   bonuses.push(`V +${lvl.passiveV}`);
+    if (lvl.autoScout)  bonuses.push('Авто-скаут');
+
+    return `<div class="${cls}">
+      <div style="font-size:9px;font-weight:700;color:${isDone?'var(--green)':isCurrent?'var(--purple)':'var(--muted)'};text-transform:uppercase;margin-bottom:3px">
+        ${isDone ? '✓ ' : ''}Ур. ${lvl.level}
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--fg);margin-bottom:4px">${lvl.name}</div>
+      ${bonuses.length ? `<div style="font-size:9px;color:var(--green);margin-bottom:4px">${bonuses.join(' · ')}</div>` : ''}
+      ${isTraining ? `<div style="font-size:10px;color:var(--amber)">🔄 ${ai.upgradeMonthsLeft} мес. до завершения</div>`
+        : isCurrent && !ai.upgrading ? `<div style="font-size:9px;color:var(--purple)">◀ Текущий · ответ ${lvl.responseMonths===0?'сразу':`~${lvl.responseMonths} мес.`} · ${lvl.queriesPerMonth===999?'∞':lvl.queriesPerMonth}/мес</div>`
+        : isNext ? `<button class="btn btn-sm btn-primary" onclick="upgradeAI()"
+            style="font-size:10px;padding:4px 8px;margin-top:2px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none"
+            ${G.money < lvl.cost ? 'disabled' : ''}>
+            Обучить ${fmtK(lvl.cost)} · ${lvl.trainingMonths} мес.
+          </button>`
+        : lvl.cost > 0 ? `<div style="font-size:9px;color:var(--muted)">${fmtK(lvl.cost)} · ${lvl.trainingMonths} мес.</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Быстрые вопросы
+  const quickQHtml = (cfg.quickQuestions || []).map(q =>
+    `<button onclick="document.getElementById('ai-input').value='${q.replace(/'/g,"\\'")}'"
+      style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.15);border-radius:6px;
+             color:var(--sub);font-size:11px;padding:4px 10px;cursor:pointer;text-align:left;
+             transition:background .15s" onmouseover="this.style.background='rgba(168,85,247,.18)'"
+             onmouseout="this.style.background='rgba(168,85,247,.08)'">${q}</button>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="ai-screen">
+
+      <!-- Статус и уровень -->
+      <div class="ai-glow-bg" style="padding:16px 20px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${passives.length?'8':'0'}px">
+          <div style="font-size:28px;filter:drop-shadow(0 0 10px rgba(168,85,247,.7))">🤖</div>
+          <div>
+            <div style="font-weight:700;font-size:15px;color:var(--fg)">${currentLevel.name}</div>
+            <div style="font-size:11px;color:var(--muted)">
+              ${ai.upgrading ? `🔄 Обучение: осталось ${ai.upgradeMonthsLeft} мес.`
+                : `Ур. ${ai.level} · ответ ${delay===0?'в этот месяц':`~${delay} мес.`} · ${queriesLeft===999?'∞':queriesLeft}/${limit} запросов осталось`}
+            </div>
+          </div>
+          ${!apiKey ? `<div style="margin-left:auto;font-size:10px;color:var(--amber);cursor:pointer"
+            onclick="document.getElementById('ai-key-row').style.display='flex'" title="Задать API ключ">🔑 API ключ</div>` : ''}
+        </div>
+        ${passives.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${passives.map(p=>`<span style="background:rgba(63,185,80,.12);color:var(--green);border-radius:4px;padding:2px 8px;font-size:10px;font-weight:600">${p}</span>`).join('')}
+        </div>` : ''}
+      </div>
+
+      <!-- Поле API-ключа (скрыто по умолчанию если ключ уже есть) -->
+      <div id="ai-key-row" style="display:${apiKey?'none':'flex'};gap:8px;align-items:center;margin-bottom:12px">
+        <input id="ai-key-input" type="password" placeholder="Anthropic API key (sk-ant-...)"
+          value="${apiKey}"
+          style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+                 color:var(--fg);font-size:12px;padding:7px 12px;outline:none;font-family:monospace">
+        <button class="btn btn-sm btn-teal" onclick="
+          const k=document.getElementById('ai-key-input').value;
+          if(typeof setAIKey==='function') setAIKey(k);
+          document.getElementById('ai-key-row').style.display='none';
+          notify(k?'🔑 API ключ сохранён':'Ключ очищен','success');">
+          Сохранить
+        </button>
+      </div>
+
+      <!-- Чат -->
+      <div class="panel" style="padding:0;overflow:hidden;margin-bottom:12px">
+        <div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">
+          💬 Диалог
+        </div>
+        <div class="ai-chat" id="ai-chat-log" style="padding:12px 14px">
+          ${chatHtml}
+        </div>
+
+        <!-- Быстрые вопросы -->
+        <div style="padding:8px 14px;border-top:1px solid rgba(255,255,255,.04);display:flex;gap:6px;flex-wrap:wrap">
+          ${quickQHtml}
+        </div>
+
+        <!-- Поле ввода -->
+        <div class="ai-input-row" style="padding:10px 14px;border-top:1px solid rgba(255,255,255,.06)">
+          <textarea id="ai-input" class="ai-textarea" rows="2"
+            placeholder="${ai.upgrading ? 'Нейросеть на обучении...' : queriesLeft===0 ? 'Лимит запросов на этот месяц исчерпан' : 'Задай вопрос нейросети...'}"
+            ${ai.upgrading || queriesLeft===0 ? 'disabled' : ''}
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_aiSend();}"></textarea>
+          <button class="btn btn-primary" onclick="_aiSend()"
+            style="padding:8px 16px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;flex-shrink:0"
+            ${ai.upgrading || queriesLeft===0 ? 'disabled' : ''}>
+            Отправить
+          </button>
+        </div>
+      </div>
+
+      <!-- Дерево прокачки -->
+      <div class="panel">
+        <div class="panel-title">🧬 Дерево прокачки</div>
+        <div class="ai-tree">${treeHtml}</div>
+      </div>
+
+    </div>`;
+
+  // Скролл чата вниз
+  const chatLog = document.getElementById('ai-chat-log');
+  if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+// Отправить сообщение из UI
+function _aiSend() {
+  const inp = document.getElementById('ai-input');
+  if (!inp) return;
+  const q = inp.value.trim();
+  if (!q) return;
+  inp.value = '';
+  if (typeof askAI === 'function') askAI(q);
 }
 
 // ══════════════════════════════════════════════════════
