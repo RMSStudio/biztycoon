@@ -1,12 +1,13 @@
 'use strict';
 // ══════════════════════════════════════════════════════
-//  BizTycoon v0.31 — Balance Simulator
+//  BizTycoon v0.32 — Balance Simulator
 //  Synced: 2026-06-01
 //  Runs N games with different AI strategies, reports key metrics
 // ══════════════════════════════════════════════════════
 
 const TOTAL_RUNS   = 10;
 const MAX_MONTHS   = 36;
+const WIN_GOAL     = 7_500_000;  // winCondition из agency.js
 const OVERHEAD     = 20000;
 const START_MONEY  = 1000000;
 
@@ -203,22 +204,23 @@ function advanceMonth(g) {
 
   const fatMul = getFatMul(g);
   const spdMul = getSpd(g);
-  // v0.31: overloadPenalty от ПОЛНОЙ нагрузки (не от фокус-взвешенной)
-  const overloadPenalty = load > 0 ? Math.min(1, thr / load) : 1;
 
-  // Прогресс проектов — равный фокус (1/N) × overloadPenalty × fatigue × speed
-  // payment_delay_fixed исключены пока идёт период ожидания (engine.js v0.31)
+  // Прогресс проектов — синхронно с engine.js v0.32:
+  // каждый проект получает thr/N единиц, efficiency = allocThr/pLoad без кэпа min(1).
+  // payment_delay_fixed исключены пока идёт период ожидания.
   const focusActive = g.active.filter(c =>
     !c.oneTime &&
     !(c.modifier === 'payment_delay_fixed' && c.monthsSigned <= (c.modVal || 0))
   );
-  const N          = focusActive.length;
-  const equalFocus = N > 0 ? 1 / N : 1;
+  const N = focusActive.length;
 
   focusActive.forEach(c => {
-    const dur  = c.duration || TIER_DUR[c.tier] || 3;
-    const prog = (100 / dur) * overloadPenalty * equalFocus * fatMul * spdMul;
-    c.progress = Math.min(100, Math.round((c.progress + prog) * 100) / 100);
+    const pLoad    = TIER_LOAD[c.tier] || 7;
+    const allocThr = N > 0 ? thr / N : thr;          // равный фокус: thr / кол-во проектов
+    const efficiency = pLoad > 0 ? (allocThr / pLoad) : 1;  // без кэпа — избыток ускоряет
+    const dur      = c.duration || TIER_DUR[c.tier] || 3;
+    const prog     = (100 / dur) * efficiency * fatMul * spdMul;
+    c.progress     = Math.min(100, Math.round((c.progress + prog) * 100) / 100);
   });
 
   // revenue_growth: бюджет растёт каждый месяц (упрощённый аналог compound-выплаты в engine.js)
@@ -543,6 +545,7 @@ function runGame(strategyName) {
   return {
     strategy:    strategyName,
     survived:    !g.bankrupt,
+    won:         !g.bankrupt && g.money >= WIN_GOAL,
     months:      g.month,
     bankMonth:   g.bankMonth,
     finalMoney:  Math.round(g.money),
@@ -576,15 +579,17 @@ const fmtK = n => {
 };
 
 console.log('\n════════════════════════════════════════════════════════════════════════════════');
-console.log('  BizTycoon v0.31 — Balance Simulation (10 runs, MAX 36 months, synced 2026-06-01)');
+console.log('  BizTycoon v0.32 — Balance Simulation (10 runs, MAX 36 months, WIN_GOAL 7.5M)');
 console.log('════════════════════════════════════════════════════════════════════════════════');
-console.log(`${'#'.padEnd(3)} ${'Strategy'.padEnd(11)} ${'Result'.padEnd(16)} ${'Final'.padStart(7)} ${'Peak'.padStart(7)} ${'Min'.padStart(7)} ${'Done'.padStart(5)} ${'Stf'.padStart(4)} ${'Rep'.padStart(4)} ${'Port'.padStart(5)} ${'AvgFt'.padStart(6)} ${'MaxFt'.padStart(6)}`);
-console.log('─'.repeat(98));
+console.log(`${'#'.padEnd(3)} ${'Strategy'.padEnd(11)} ${'Result'.padEnd(18)} ${'Final'.padStart(7)} ${'Peak'.padStart(7)} ${'Min'.padStart(7)} ${'Done'.padStart(5)} ${'Stf'.padStart(4)} ${'Rep'.padStart(4)} ${'Port'.padStart(5)} ${'AvgFt'.padStart(6)} ${'MaxFt'.padStart(6)}`);
+console.log('─'.repeat(100));
 
 results.forEach(r => {
-  const result = r.survived ? `✅ Выжил M${r.months}` : `💀 Банкрот M${r.bankMonth}`;
+  const result = r.won      ? `🏆 Победа  M${r.months}`
+               : r.survived ? `✅ Выжил   M${r.months}`
+               :               `💀 Банкрот M${r.bankMonth}`;
   console.log(
-    `${String(r.run).padEnd(3)} ${r.strategy.padEnd(11)} ${result.padEnd(16)} ` +
+    `${String(r.run).padEnd(3)} ${r.strategy.padEnd(11)} ${result.padEnd(18)} ` +
     `${fmtK(r.finalMoney).padStart(7)} ${fmtK(r.peakMoney).padStart(7)} ${fmtK(r.minMoney).padStart(7)} ` +
     `${String(r.completed).padStart(5)} ${String(r.staffCount).padStart(4)} ` +
     `${String(r.reputation).padStart(4)} ${String(r.portfolio).padStart(5)} ` +
@@ -596,19 +601,20 @@ results.forEach(r => {
   }
 });
 
-console.log('─'.repeat(98));
+console.log('─'.repeat(100));
 
 // Сводка по стратегиям
 ['lean', 'balanced', 'growth', 'aggressive'].forEach(strat => {
   const runs     = results.filter(r => r.strategy === strat);
   if (!runs.length) return;
   const survived = runs.filter(r => r.survived);
+  const won      = runs.filter(r => r.won);
   const avgFinal = Math.round(runs.reduce((s, r) => s + r.finalMoney, 0) / runs.length);
   const avgFt    = Math.round(runs.reduce((s, r) => s + r.avgFatigue, 0) / runs.length);
   const avgDone  = (runs.reduce((s, r) => s + r.completed, 0) / runs.length).toFixed(1);
   const avgPort  = Math.round(runs.reduce((s, r) => s + r.portfolio, 0) / runs.length);
   console.log(
-    `  ${strat.padEnd(11)} Выжив: ${survived.length}/${runs.length} · ` +
+    `  ${strat.padEnd(11)} Победа: ${won.length}/${runs.length} · Выжив: ${survived.length}/${runs.length} · ` +
     `Ср.баланс: ${fmtK(avgFinal)} · Усталость: ${avgFt} · ` +
     `Проектов: ${avgDone} · Портфолио: ${avgPort}`
   );
@@ -617,14 +623,16 @@ console.log('─'.repeat(98));
 console.log('════════════════════════════════════════════════════════════════════════════════\n');
 
 // Аналитика
+const allWon      = results.filter(r => r.won).length;
 const allSurvived = results.filter(r => r.survived).length;
-console.log(`📋 Аналитика:`);
-console.log(`  Выживаемость: ${allSurvived}/${strategies.length} (${Math.round(allSurvived / strategies.length * 100)}%)`);
+console.log(`📋 Аналитика (WIN_GOAL: 7.5M):`);
+console.log(`  Победы:        ${allWon}/${strategies.length} (${Math.round(allWon / strategies.length * 100)}%)`);
+console.log(`  Выживаемость:  ${allSurvived}/${strategies.length} (${Math.round(allSurvived / strategies.length * 100)}%)`);
 
 const bankrupt = results.filter(r => !r.survived);
 if (bankrupt.length > 0) {
   const avgBankMonth = Math.round(bankrupt.reduce((s, r) => s + r.bankMonth, 0) / bankrupt.length);
-  console.log(`  Среднее банкротство: M${avgBankMonth}`);
+  console.log(`  Ср. банкротство: M${avgBankMonth}`);
 }
 
 const crisisGames = results.filter(r => r.maxFatigue >= 85);

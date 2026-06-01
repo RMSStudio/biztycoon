@@ -27,11 +27,39 @@ let G = {};
 let DECISIONS = [];
 
 // ── КРЕДИТНЫЕ ЛИНИИ ─────────────────────────────────
-// Условия: rep ≥ minRep; нельзя взять второй кредит пока не погашен первый
+// debuff.type: 'rep_penalty' — разовый штраф реп при взятии
+//              'speed_debuff' — постоянный дебафф Speed пока кредит активен
 const LOAN_TIERS = [
-  { id:'basic',    minRep:30, label:'Базовый',  principal:50000,  monthlyPayment:10000, months:6 },
-  { id:'standard', minRep:50, label:'Стандарт', principal:150000, monthlyPayment:25000, months:7 },
-  { id:'premium',  minRep:70, label:'Премиум',  principal:300000, monthlyPayment:42000, months:8 },
+  {
+    id:'micro',     icon:'💳', label:'Микрозайм',  minRep:0,
+    principal:50000,  monthlyPayment:10000, months:5,
+    debuff: null,
+    desc: 'Без условий — быстрые деньги',
+  },
+  {
+    id:'basic',     icon:'🏦', label:'Базовый',    minRep:30,
+    principal:100000, monthlyPayment:18000, months:7,
+    debuff: null,
+    desc: 'Стандартные условия',
+  },
+  {
+    id:'standard',  icon:'🏦', label:'Стандарт',   minRep:40,
+    principal:250000, monthlyPayment:38000, months:8,
+    debuff: { type:'rep_penalty', val:-5,    label:'−5 репутации при выдаче' },
+    desc: 'Крупная сумма, репутационные издержки',
+  },
+  {
+    id:'premium',   icon:'💎', label:'Премиум',    minRep:70,
+    principal:500000, monthlyPayment:68000, months:9,
+    debuff: { type:'rep_penalty', val:-10,   label:'−10 репутации при выдаче' },
+    desc: 'Серьёзные деньги для зрелых агентств',
+  },
+  {
+    id:'emergency', icon:'🚨', label:'Экстренный', minRep:0,
+    principal:150000, monthlyPayment:32000, months:6,
+    debuff: { type:'speed_debuff', val:-0.15, label:'−15% скорость команды на весь срок' },
+    desc: 'Форс-мажор. Дорогой кредит с дебаффом скорости.',
+  },
 ];
 
 function initState() {
@@ -124,10 +152,12 @@ function getCapacity(g=G){ return 2+g.staff.reduce((s,x)=>s+(x.capacity||0),0); 
 function hasRole(id,g=G){ return !!g.staff.find(s=>(s.role||s.id)===id); }
 function countRole(id,g=G){ return g.staff.filter(s=>(s.role||s.id)===id).length; }
 
-// Скорость выполнения проектов: 1.0 база + бонус от специалистов + перки
+// Скорость выполнения проектов: 1.0 база + бонус от специалистов + перки − дебафф кредита + пассив спека
 function getSpeed(g=G) {
-  const staffBonus = g.staff.reduce((s,x) => s + (x.speedBonus||0), 0);
-  return 1.0 + staffBonus + (g.speedUpgrades||0);
+  const staffBonus  = g.staff.reduce((s,x) => s + (x.speedBonus||0), 0);
+  const loanDebuff  = g.loan?.debuff?.type === 'speed_debuff' ? (g.loan.debuff.val || 0) : 0;
+  const specBonus   = SPECS[g.spec]?.passive === 'speed' ? (SPECS[g.spec].passiveVal || 0) : 0;
+  return 1.0 + staffBonus + (g.speedUpgrades||0) + loanDebuff + specBonus;
 }
 // +0.4% выручки за каждый балл портфолио, cap +20% при 50 баллах
 function getPortfolioMultiplier(g=G){ return 1+Math.min((g.portfolio||0)*0.004, 0.20); }
@@ -287,8 +317,10 @@ function _generateOffers() {
   else if (adjustedRoll<=75) offerCount=2;
   else                       offerCount=3;
 
-  if (hasRole('smm')) offerCount=Math.min(3, offerCount+1);
-  if (G.caseScoutBonus>0) offerCount=Math.min(3, offerCount+(G.caseScoutBonus||0));
+  if (hasRole('smm')) offerCount=Math.min(4, offerCount+1);
+  if (G.caseScoutBonus>0) offerCount=Math.min(4, offerCount+(G.caseScoutBonus||0));
+  // SMM-специализация: пассивно +1 оффер всегда (стек с HR-SMM)
+  if (SPECS[G.spec]?.passive === 'scout_offers') offerCount=Math.min(5, offerCount+(SPECS[G.spec].passiveVal||0));
 
   const maxTier = G.reputation>=80?4 : G.reputation>=70?3 : G.reputation>=40?2 : 1;
 
@@ -446,6 +478,17 @@ function _legacyShowScout(offers) {
       ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:${rMeta.bg};color:${rMeta.col};border:1px solid ${rMeta.border};letter-spacing:.3px;text-transform:uppercase">${rMeta.label}</span>`
       : '';
 
+    // Бейдж специализации — показывает бонус если проект подходит под текущий спек
+    const _specDef  = SPECS[G.spec];
+    const _specMatch = _specDef && (
+      (p.type==='small' && _specDef.bonus==='small_income') ||
+      (p.type==='corp'  && _specDef.bonus==='corp_income')  ||
+      (p.type==='store' && _specDef.bonus==='store_income')
+    );
+    const specBadge = _specMatch
+      ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)">★ +${Math.round(_specDef.bonusVal*100)}%</span>`
+      : '';
+
     const card=document.createElement('div');
     card.className='project-card'+(canTake?'':' unavailable');
     if (p.rarity==='epic') card.style.cssText='border-color:rgba(245,158,11,.35);box-shadow:0 0 0 1px rgba(245,158,11,.15)';
@@ -454,7 +497,7 @@ function _legacyShowScout(offers) {
       <div class="project-top">
         <div class="project-icon">${p.icon}</div>
         <div class="project-meta">
-          <div class="project-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${p.name}${rarityBadge}</div>
+          <div class="project-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${p.name}${rarityBadge}${specBadge}</div>
           <div class="project-desc">${p.desc}</div>
         </div>
       </div>
@@ -544,6 +587,17 @@ function signProject(pid) {
   // nps_start: override starting NPS
   if (client.modifier.type==='nps_start') {
     client.npsStart=Math.min(100, (def.npsStart||70)+def.modifier.val);
+  }
+
+  // Пассивные бонусы специализации при подписании
+  const _spec = SPECS[G.spec];
+  if (_spec?.passive === 'nps_start' && !client.oneTime) {
+    // SEO: +passiveVal NPS всем клиентам
+    client.npsStart = Math.min(100, (client.npsStart||70) + (_spec.passiveVal||0));
+  }
+  if (_spec?.passive === 'nps_start_store' && client.type === 'store') {
+    // Brand: +passiveVal NPS только store-клиентам
+    client.npsStart = Math.min(100, (client.npsStart||70) + (_spec.passiveVal||0));
   }
 
   G.activeClients.push(client);
@@ -933,9 +987,11 @@ function completeProject(cid) {
 
   // Бонус специализации
   const spec = SPECS[G.spec];
-  if (c.type==='small' && spec.bonus==='small_income') payout = Math.round(payout * (1+spec.bonusVal));
-  if (c.type==='corp'  && spec.bonus==='corp_income')  payout = Math.round(payout * (1+spec.bonusVal));
-  if (c.type==='store' && spec.bonus==='store_income') payout = Math.round(payout * (1+spec.bonusVal));
+  const _specApplied = (c.type==='small' && spec.bonus==='small_income') ||
+                       (c.type==='corp'  && spec.bonus==='corp_income')  ||
+                       (c.type==='store' && spec.bonus==='store_income');
+  if (_specApplied) payout = Math.round(payout * (1+spec.bonusVal));
+  const _specTag = _specApplied ? ` | ★ ${spec.name} +${Math.round(spec.bonusVal*100)}%` : '';
 
   // Портфолио-мультипликатор
   payout = Math.round(payout * getPortfolioMultiplier());
@@ -971,7 +1027,7 @@ function completeProject(cid) {
 
   const timeTag  = onTime ? '✅ в срок' : '⚠️ с опозданием';
   const penTag   = penaltyPct > 0 ? ` (−${Math.round(penaltyPct*100)}% штраф)` : '';
-  addLog(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}${penTag} | NPS ${finalNPS} | Порт. +${pfBonus}${repGain>0?' | Реп +'+repGain:''}`, onTime ? 'green' : 'amber');
+  addLog(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}${penTag}${_specTag} | NPS ${finalNPS} | Порт. +${pfBonus}${repGain>0?' | Реп +'+repGain:''}`, onTime ? 'green' : 'amber');
   notify(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}`, onTime ? 'success' : 'info');
   rd(`Завершён: ${c.name} → +${fmtK(immediatePayment)} ${timeTag}`, 'event');
 
@@ -983,25 +1039,55 @@ function completeProject(cid) {
 //  CREDIT LINES
 // ══════════════════════════════════════════════════════
 
-// Возвращает лучший доступный тир по текущей репутации
+// Все тиры с флагом доступности по текущей репутации
+function getLoansInfo(rep) {
+  return LOAN_TIERS.map(t => ({ ...t, available: rep >= t.minRep }));
+}
+
+// Обратная совместимость (используется в симуляторе)
 function getLoanTier(rep) {
   return [...LOAN_TIERS].reverse().find(t => rep >= t.minRep) || null;
 }
 
-function takeLoan() {
+function takeLoanById(tierId) {
   if (G.loan) { notify('Активный кредит ещё не погашен', 'error'); return; }
-  const tier = getLoanTier(G.reputation);
-  if (!tier) { notify('Репутация слишком низкая — нужно ≥ 30', 'error'); return; }
-  G.money += tier.principal;
-  G.loan = {
-    principal: tier.principal,
-    monthlyPayment: tier.monthlyPayment,
-    monthsRemaining: tier.months,
-    label: tier.label,
+  const tier = LOAN_TIERS.find(t => t.id === tierId);
+  if (!tier) return;
+  if (G.reputation < tier.minRep) { notify(`Нужна репутация ≥${tier.minRep}`, 'error'); return; }
+
+  const _doTakeLoan = () => {
+    G.money += tier.principal;
+    G.loan = {
+      principal:        tier.principal,
+      monthlyPayment:   tier.monthlyPayment,
+      monthsRemaining:  tier.months,
+      label:            tier.label,
+      icon:             tier.icon,
+      debuff:           tier.debuff || null,
+    };
+    // Разовый дебафф репутации — применяется немедленно
+    if (tier.debuff?.type === 'rep_penalty') {
+      G.reputation = clamp(G.reputation + tier.debuff.val, 0, 100);
+      addLog(`📉 Кредит «${tier.label}»: ${tier.debuff.label}`, 'red');
+    }
+    const debuffNote = tier.debuff ? ` ⚠️ ${tier.debuff.label}` : '';
+    addLog(`${tier.icon} Кредит «${tier.label}»: +${fmtK(tier.principal)}, платёж ${fmtK(tier.monthlyPayment)}/мес × ${tier.months} мес.${debuffNote}`, 'teal');
+    notify(`${tier.icon} Кредит ${fmtK(tier.principal)} одобрен`, 'success');
+    rd(`Кредит «${tier.label}» +${fmtK(tier.principal)}`, 'event');
+    _emitRender();
   };
-  addLog(`🏦 Кредит «${tier.label}»: +${fmtK(tier.principal)}, платёж ${fmtK(tier.monthlyPayment)}/мес × ${tier.months} мес.`, 'teal');
-  notify(`🏦 Кредит ${fmtK(tier.principal)} одобрен`, 'success');
-  rd(`Кредит «${tier.label}» +${fmtK(tier.principal)}`, 'event');
+
+  // Для кредитов с дебаффами — подтверждение
+  if (tier.debuff) {
+    showConfirm(
+      tier.icon, `Взять кредит «${tier.label}»?`,
+      `${fmtK(tier.principal)} сразу. Платёж: ${fmtK(tier.monthlyPayment)}/мес × ${tier.months} мес.\n⚠️ Дебафф: ${tier.debuff.label}`,
+      `Взять — ${fmtK(tier.principal)}`, 'amber',
+      _doTakeLoan
+    );
+  } else {
+    _doTakeLoan();
+  }
   _emitRender();
 }
 

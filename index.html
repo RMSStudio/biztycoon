@@ -22,7 +22,7 @@
   <div class="stat-row">
     <div class="stat-box"><div class="val">500 000 ₽</div><div class="lbl">Стартовый капитал</div></div>
     <div class="stat-box"><div class="val">10 дней/мес</div><div class="lbl">Рабочий ресурс</div></div>
-    <div class="stat-box"><div class="val">3 000 000 ₽</div><div class="lbl">Цель</div></div>
+    <div class="stat-box"><div class="val">7 500 000 ₽</div><div class="lbl">Цель</div></div>
   </div>
   <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:16px;padding:15px;" onclick="goTo('screen-spec')">
     Начать игру →
@@ -32,27 +32,39 @@
 <!-- ══ SPEC ══ -->
 <div id="screen-spec" class="screen">
   <h2>Выбери специализацию</h2>
-  <p>Влияет на бонус к выручке и стартовую репутацию</p>
+  <p>Каждая специализация даёт уникальный бонус к выплатам и пассивный эффект на весь ран</p>
   <div class="spec-grid">
     <div class="spec-card" onclick="selectSpec('smm')" id="spec-smm">
       <div class="spec-icon">📱</div><div class="spec-name">SMM-агентство</div>
       <div class="spec-desc">Соцсети, контент, таргет. Много небольших клиентов, быстрый оборот.</div>
-      <div class="spec-bonus" style="margin-top:8px"><span class="tag green">+15% к выручке малых клиентов</span></div>
+      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+        <span class="tag green">+20% к выплате малых клиентов</span>
+        <span class="tag teal" style="font-size:10px">+1 оффер при каждом скаутинге</span>
+      </div>
     </div>
     <div class="spec-card" onclick="selectSpec('seo')" id="spec-seo">
       <div class="spec-icon">🔍</div><div class="spec-name">SEO-агентство</div>
-      <div class="spec-desc">Продвижение в поиске. Стабильный, но медленный рост.</div>
-      <div class="spec-bonus" style="margin-top:8px"><span class="tag amber">−10% расходов на команду</span></div>
+      <div class="spec-desc">Продвижение в поиске. Долгосрочный подход и стабильные клиенты.</div>
+      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+        <span class="tag amber">−10% расходов на команду</span>
+        <span class="tag teal" style="font-size:10px">+5 NPS каждому клиенту при подписании</span>
+      </div>
     </div>
     <div class="spec-card" onclick="selectSpec('web')" id="spec-web">
       <div class="spec-icon">💻</div><div class="spec-name">Web-разработка</div>
-      <div class="spec-desc">Сайты и приложения. Крупные проекты, длинные циклы.</div>
-      <div class="spec-bonus" style="margin-top:8px"><span class="tag purple">+25% к выручке корпоратов</span></div>
+      <div class="spec-desc">Сайты и приложения. Технически эффективная команда.</div>
+      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+        <span class="tag purple">+25% к выплате корп. клиентов</span>
+        <span class="tag teal" style="font-size:10px">+10% скорость команды</span>
+      </div>
     </div>
     <div class="spec-card" onclick="selectSpec('brand')" id="spec-brand">
       <div class="spec-icon">✨</div><div class="spec-name">Брендинг</div>
-      <div class="spec-desc">Айдентика и стратегия. Высокий чек, долгий поиск.</div>
-      <div class="spec-bonus" style="margin-top:8px"><span class="tag">+40% к выручке интернет-магазинов</span></div>
+      <div class="spec-desc">Айдентика, упаковка, стратегия. От малых бутиков до крупных ритейлеров.</div>
+      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+        <span class="tag">+40% к выплате брендинг-клиентов</span>
+        <span class="tag teal" style="font-size:10px">+10 NPS брендинг-клиентам при подписании</span>
+      </div>
     </div>
   </div>
   <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -117,7 +129,7 @@
         <div class="panel-title">P&L этого месяца</div>
         <div id="g-pnl"></div>
         <div class="progress-wrap">
-          <div class="progress-label"><span>Цель: 3 000 000 ₽</span><span id="g-progress-pct">0%</span></div>
+          <div class="progress-label"><span>Цель: 7 500 000 ₽</span><span id="g-progress-pct">0%</span></div>
           <div class="progress-bar"><div class="progress-fill" id="g-progress-bar" style="width:0%"></div></div>
         </div>
       </div>

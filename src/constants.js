@@ -32,7 +32,7 @@ const CASE_GRADES = {
   excellent: {
     id:'excellent', label:'Топ-кейс', icon:'💎',
     color:'var(--purple)',
-    qBonus:4, repBonus:3, scoutBonus:1,
-    desc:'+4 Q постоянно, реп. +3/мес, +1 лид при каждом скаутинге.',
+    qBonus:3, repBonus:3, scoutBonus:1,
+    desc:'+3 Q постоянно, реп. +3/мес, +1 лид при каждом скаутинге.',
   },
 };

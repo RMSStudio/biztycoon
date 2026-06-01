@@ -26,10 +26,38 @@ const SCENARIO = {
   //  СПЕЦИАЛИЗАЦИИ
   // ══════════════════════════════════════════════════
   specs: {
-    smm:   { name:'SMM-агентство',  icon:'📱', bonus:'small_income', bonusVal:0.15 },
-    seo:   { name:'SEO-агентство',  icon:'🔍', bonus:'staff_cost',   bonusVal:-0.10 },
-    web:   { name:'Web-разработка', icon:'💻', bonus:'corp_income',  bonusVal:0.25 },
-    brand: { name:'Брендинг',       icon:'✨', bonus:'store_income', bonusVal:0.40 },
+    smm: {
+      name:'SMM-агентство', icon:'📱',
+      bonus:'small_income', bonusVal:0.20,
+      bonusLabel:'+20% к выплате small-клиентов',
+      passive:'scout_offers', passiveVal:1,
+      passiveLabel:'+1 оффер при каждом скаутинге',
+      desc:'Соцсети, контент, таргет. Много небольших клиентов, быстрый оборот.',
+    },
+    seo: {
+      name:'SEO-агентство', icon:'🔍',
+      bonus:'staff_cost', bonusVal:-0.10,
+      bonusLabel:'−10% расходов на команду',
+      passive:'nps_start', passiveVal:5,
+      passiveLabel:'+5 NPS каждому клиенту при подписании',
+      desc:'Продвижение в поиске. Долгосрочный подход и стабильные клиенты.',
+    },
+    web: {
+      name:'Web-разработка', icon:'💻',
+      bonus:'corp_income', bonusVal:0.25,
+      bonusLabel:'+25% к выплате корп. клиентов',
+      passive:'speed', passiveVal:0.10,
+      passiveLabel:'+10% скорость команды',
+      desc:'Сайты и приложения. Технически эффективная команда.',
+    },
+    brand: {
+      name:'Брендинг', icon:'✨',
+      bonus:'store_income', bonusVal:0.40,
+      bonusLabel:'+40% к выплате брендинг-клиентов',
+      passive:'nps_start_store', passiveVal:10,
+      passiveLabel:'+10 NPS брендинг-клиентам при подписании',
+      desc:'Айдентика, упаковка, стратегия. Брендовые клиенты — от малого бизнеса до крупных ритейлеров.',
+    },
   },
 
   // ══════════════════════════════════════════════════
@@ -57,19 +85,19 @@ const SCENARIO = {
     {
       id:'designer_jr', role:'designer', grade:'jr', gradeLabel:'Junior',
       name:'Дизайнер Jr', icon:'🎨', desc:'Визуал + качество',
-      cost:30000, quality:10, volume:0, capacity:0, throughput:4, speedBonus:0,
+      cost:30000, quality:5, volume:0, capacity:0, throughput:4, speedBonus:0,
       unlockCond: null,
     },
     {
       id:'designer',    role:'designer', grade:'md', gradeLabel:'Middle',
       name:'Дизайнер',  icon:'🎨', desc:'Визуал + качество',
-      cost:48000, quality:20, volume:0, capacity:0, throughput:7, speedBonus:0,
+      cost:48000, quality:12, volume:0, capacity:0, throughput:7, speedBonus:0,
       unlockCond: null,
     },
     {
       id:'designer_sr', role:'designer', grade:'sr', gradeLabel:'Senior',
       name:'Дизайнер Sr', icon:'🎨', desc:'Визуал + качество',
-      cost:72000, quality:35, volume:0, capacity:0, throughput:10, speedBonus:0,
+      cost:72000, quality:22, volume:0, capacity:0, throughput:10, speedBonus:0,
       unlockCond: { minRep:70 },
     },
 
@@ -117,19 +145,19 @@ const SCENARIO = {
     {
       id:'developer_jr', role:'developer', grade:'jr', gradeLabel:'Junior',
       name:'Разработчик Jr', icon:'💻', desc:'Кач +8 · тех-проекты',
-      cost:38000, quality:8, volume:0, capacity:0, throughput:4, speedBonus:0.03,
+      cost:38000, quality:4, volume:0, capacity:0, throughput:4, speedBonus:0.03,
       unlockCond: null,
     },
     {
       id:'developer',    role:'developer', grade:'md', gradeLabel:'Middle',
       name:'Разработчик',  icon:'💻', desc:'Кач +15 · тех-проекты',
-      cost:60000, quality:15, volume:0, capacity:0, throughput:7, speedBonus:0.05,
+      cost:60000, quality:8, volume:0, capacity:0, throughput:7, speedBonus:0.05,
       unlockCond: null,
     },
     {
       id:'developer_sr', role:'developer', grade:'sr', gradeLabel:'Senior',
       name:'Разработчик Sr', icon:'💻', desc:'Кач +25 · тех-проекты',
-      cost:90000, quality:25, volume:0, capacity:0, throughput:10, speedBonus:0.08,
+      cost:90000, quality:16, volume:0, capacity:0, throughput:10, speedBonus:0.08,
       unlockCond: { minRep:80 },
     },
 
@@ -288,7 +316,7 @@ const SCENARIO = {
     {
       id:'dental', tier:1, icon:'🦷', name:'Стоматологическая клиника',
       desc:'Клиника хочет выделиться среди конкурентов. Требует качество визуала.',
-      revenue:26000, minQ:10, minV:0, type:'small', npsStart:76, oneTime:false, rarity:'uncommon',
+      revenue:26000, minQ:5, minV:0, type:'small', npsStart:76, oneTime:false, rarity:'uncommon',
       modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
       modBadge:'mb-green', prob:0.50,
     },
@@ -301,12 +329,37 @@ const SCENARIO = {
     },
 
     // ─────────────────────────────────────────────
+    //  TIER 1 — Брендинговые (store-type)
+    // ─────────────────────────────────────────────
+    {
+      id:'local_boutique', tier:1, icon:'👗', name:'Локальный бутик',
+      desc:'Небольшой модный магазин хочет айдентику и соцсети. Простой брендинговый проект без лишних требований.',
+      revenue:18000, minQ:0, minV:3, type:'store', npsStart:81, oneTime:false, rarity:'common',
+      modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
+      modBadge:'mb-green', prob:0.65,
+    },
+    {
+      id:'craft_brand', tier:1, icon:'🍺', name:'Крафт-бренд',
+      desc:'Небольшое производство — пиво, кофе, мёд — ищет визуальный стиль и упаковку.',
+      revenue:22000, minQ:3, minV:4, type:'store', npsStart:78, oneTime:false, rarity:'uncommon',
+      modifier:{ type:'nps_passive', val:+2, label:'+2 NPS/мес' },
+      modBadge:'mb-green', prob:0.55,
+    },
+
+    // ─────────────────────────────────────────────
     //  TIER 2
     // ─────────────────────────────────────────────
     {
+      id:'fashion_startup', tier:2, icon:'👠', name:'Фэшн-стартап',
+      desc:'Новый модный бренд: лого, фирстиль, соцсети. Умеренный бюджет, высокие амбиции.',
+      revenue:46000, minQ:7, minV:8, type:'store', npsStart:74, oneTime:false, rarity:'uncommon',
+      modifier:{ type:'nps_drain', val:-4, label:'NPS −4 доп./мес' },
+      modBadge:'mb-amber', prob:0.50,
+    },
+    {
       id:'perfectionist', tier:2, icon:'🔬', name:'Перфекционист',
       desc:'Платит хорошо, но никогда не удовлетворён. NPS тает быстрее без высокого качества.',
-      revenue:40000, minQ:15, minV:0, type:'small', npsStart:68, oneTime:false, rarity:'common',
+      revenue:40000, minQ:10, minV:0, type:'small', npsStart:68, oneTime:false, rarity:'common',
       modifier:{ type:'nps_drain', val:-8, label:'NPS −8 доп./мес' },
       modBadge:'mb-amber', prob:0.50,
     },
@@ -320,28 +373,28 @@ const SCENARIO = {
     {
       id:'urgent', tier:2, icon:'⚡', name:'Срочный разовый заказ',
       desc:'Нужно «ещё вчера». Хорошо платит единоразово и исчезает.',
-      revenue:60000, minQ:10, minV:5, type:'small', npsStart:78, oneTime:true, rarity:'uncommon',
+      revenue:60000, minQ:7, minV:5, type:'small', npsStart:78, oneTime:true, rarity:'uncommon',
       modifier:{ type:'one_time', val:0, label:'Разовый платёж' },
       modBadge:'mb-purple', prob:0.60,
     },
     {
       id:'demanding_corp', tier:2, icon:'🏢', name:'Корпоративный KPI',
       desc:'Солидный чек, но штраф если NPS опустится ниже порога.',
-      revenue:90000, minQ:30, minV:10, type:'corp', npsStart:66, oneTime:false, rarity:'uncommon',
+      revenue:90000, minQ:18, minV:10, type:'corp', npsStart:66, oneTime:false, rarity:'uncommon',
       modifier:{ type:'nps_penalty', val:-22000, threshold:65, label:'NPS<65 → штраф 22К/мес' },
       modBadge:'mb-red', prob:0.35,
     },
     {
       id:'ecommerce', tier:2, icon:'🛒', name:'E-commerce магазин',
       desc:'Интернет-магазин 200+ SKU. Нужны каталог, контент и реклама.',
-      revenue:48000, minQ:10, minV:10, type:'small', npsStart:73, oneTime:false, rarity:'common',
+      revenue:48000, minQ:7, minV:10, type:'small', npsStart:73, oneTime:false, rarity:'common',
       modifier:{ type:'nps_passive', val:+2, label:'+2 NPS/мес' },
       modBadge:'mb-green', prob:0.55,
     },
     {
       id:'edtech', tier:2, icon:'🎓', name:'Образовательная платформа',
       desc:'EdTech-стартап масштабируется. Нужен сильный контент и визуал.',
-      revenue:52000, minQ:15, minV:12, type:'small', npsStart:75, oneTime:false, rarity:'uncommon',
+      revenue:52000, minQ:10, minV:12, type:'small', npsStart:75, oneTime:false, rarity:'uncommon',
       modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
       modBadge:'mb-green', prob:0.45,
     },
@@ -355,7 +408,7 @@ const SCENARIO = {
     {
       id:'lawfirm', tier:2, icon:'📜', name:'Юридическая фирма',
       desc:'Консервативный клиент с высокими требованиями к качеству. NPS строгий.',
-      revenue:58000, minQ:20, minV:0, type:'corp', npsStart:64, oneTime:false, rarity:'uncommon',
+      revenue:58000, minQ:12, minV:0, type:'corp', npsStart:64, oneTime:false, rarity:'uncommon',
       modifier:{ type:'nps_drain', val:-5, label:'NPS −5 доп./мес' },
       modBadge:'mb-amber', prob:0.40,
     },
@@ -369,14 +422,14 @@ const SCENARIO = {
     {
       id:'agro', tier:2, icon:'🌾', name:'Агрохолдинг',
       desc:'Неожиданный клиент из сектора АПК. Бюджет есть, требования скромные.',
-      revenue:35000, minQ:10, minV:5, type:'small', npsStart:80, oneTime:false, rarity:'common',
+      revenue:35000, minQ:6, minV:5, type:'small', npsStart:80, oneTime:false, rarity:'common',
       modifier:{ type:'nps_start', val:+10, label:'NPS старт +10' },
       modBadge:'mb-green', prob:0.50,
     },
     {
       id:'medical_center', tier:2, icon:'🏥', name:'Медицинский центр',
       desc:'Клиника с серьёзными ожиданиями по визуалу и имиджу. Хорошо платит, строго оценивает.',
-      revenue:65000, minQ:25, minV:0, type:'corp', npsStart:65, oneTime:false, rarity:'rare',
+      revenue:65000, minQ:15, minV:0, type:'corp', npsStart:65, oneTime:false, rarity:'rare',
       modifier:{ type:'nps_passive', val:+2, label:'+2 NPS/мес' },
       modBadge:'mb-green', prob:0.30,
     },
@@ -394,7 +447,7 @@ const SCENARIO = {
     {
       id:'state', tier:3, icon:'🏛️', name:'Государственный контракт',
       desc:'Огромный чек, но бюрократия: первые 2 месяца оплаты нет — готовь кэш.',
-      revenue:130000, minQ:30, minV:15, type:'corp', npsStart:62, oneTime:false, rarity:'rare',
+      revenue:130000, minQ:22, minV:15, type:'corp', npsStart:62, oneTime:false, rarity:'rare',
       duration:8,
       modifier:{ type:'payment_delay_fixed', val:2, label:'Первые 2 мес — нет оплаты' },
       modBadge:'mb-purple', prob:0.25,
@@ -402,42 +455,42 @@ const SCENARIO = {
     {
       id:'retainer_plus', tier:3, icon:'💎', name:'Долгосрочный ретейнер',
       desc:'Стабильный крупный клиент с растущей ставкой за лояльность.',
-      revenue:55000, minQ:20, minV:15, type:'store', npsStart:76, oneTime:false, rarity:'uncommon',
+      revenue:55000, minQ:14, minV:15, type:'store', npsStart:76, oneTime:false, rarity:'uncommon',
       modifier:{ type:'revenue_growth', val:0.05, label:'+5% выручки каждый мес' },
       modBadge:'mb-teal', prob:0.30,
     },
     {
       id:'federal_retail', tier:3, icon:'🏬', name:'Федеральный ритейлер',
       desc:'Сеть 500+ магазинов хочет единую коммуникацию. Большие требования, большой бюджет.',
-      revenue:110000, minQ:25, minV:15, type:'corp', npsStart:65, oneTime:false, rarity:'rare',
+      revenue:110000, minQ:18, minV:15, type:'corp', npsStart:65, oneTime:false, rarity:'rare',
       modifier:{ type:'nps_penalty', val:-30000, threshold:70, label:'NPS<70 → штраф 30К/мес' },
       modBadge:'mb-red', prob:0.28,
     },
     {
       id:'insurance', tier:3, icon:'🛡️', name:'Страховая компания',
       desc:'Консервативный корпоративный клиент. Стабильный доход, но NPS держать сложно.',
-      revenue:85000, minQ:20, minV:10, type:'corp', npsStart:64, oneTime:false, rarity:'uncommon',
+      revenue:85000, minQ:14, minV:10, type:'corp', npsStart:64, oneTime:false, rarity:'uncommon',
       modifier:{ type:'nps_drain', val:-6, label:'NPS −6 доп./мес' },
       modBadge:'mb-amber', prob:0.35,
     },
     {
       id:'media_holding', tier:3, icon:'📺', name:'Медиахолдинг',
       desc:'Крупный медиа-игрок. Нужен весь спектр: контент, визуал, стратегия.',
-      revenue:95000, minQ:25, minV:20, type:'store', npsStart:68, oneTime:false, rarity:'rare',
+      revenue:95000, minQ:18, minV:20, type:'store', npsStart:68, oneTime:false, rarity:'rare',
       modifier:{ type:'revenue_growth', val:0.06, label:'+6% выручки каждый мес' },
       modBadge:'mb-teal', prob:0.25,
     },
     {
       id:'auto_dealer', tier:3, icon:'🚗', name:'Дилерская сеть',
       desc:'Крупный автодилер, хочет digital-присутствие. Платит аккуратно, NPS нестабилен.',
-      revenue:80000, minQ:20, minV:10, type:'corp', npsStart:67, oneTime:false, rarity:'uncommon',
+      revenue:80000, minQ:14, minV:10, type:'corp', npsStart:67, oneTime:false, rarity:'uncommon',
       modifier:{ type:'payment_delay', val:0.20, label:'20% шанс задержки/мес' },
       modBadge:'mb-amber', prob:0.30,
     },
     {
       id:'ministry', tier:3, icon:'🗂️', name:'Министерство (нацпроект)',
       desc:'Государственный нацпроект. Огромный бюджет, но бюрократия затягивает старт.',
-      revenue:160000, minQ:35, minV:20, type:'corp', npsStart:58, oneTime:false, rarity:'epic',
+      revenue:160000, minQ:26, minV:20, type:'corp', npsStart:58, oneTime:false, rarity:'epic',
       duration:10,
       modifier:{ type:'payment_delay_fixed', val:3, label:'Первые 3 мес — нет оплаты' },
       modBadge:'mb-purple', prob:0.15,
@@ -449,7 +502,7 @@ const SCENARIO = {
     {
       id:'media_agency', tier:2, icon:'📊', name:'Медиа-агентство',
       desc:'Работают только с агентствами с историей. Требует портфолио.',
-      revenue:54000, minQ:15, minV:10, type:'small', npsStart:77, oneTime:false, rarity:'uncommon',
+      revenue:54000, minQ:10, minV:10, type:'small', npsStart:77, oneTime:false, rarity:'uncommon',
       minPortfolio:12, portfolioWeight:2,
       modifier:{ type:'nps_passive', val:+4, label:'+4 NPS/мес' },
       modBadge:'mb-green', prob:0.55,
@@ -457,7 +510,7 @@ const SCENARIO = {
     {
       id:'international', tier:3, icon:'🌍', name:'Международный клиент',
       desc:'Зарубежная компания с серьёзными требованиями к опыту агентства.',
-      revenue:100000, minQ:25, minV:10, type:'corp', npsStart:70, oneTime:false, rarity:'rare',
+      revenue:100000, minQ:18, minV:10, type:'corp', npsStart:70, oneTime:false, rarity:'rare',
       minPortfolio:28, portfolioWeight:3,
       modifier:{ type:'payment_delay', val:0.20, label:'20% шанс задержки/мес' },
       modBadge:'mb-amber', prob:0.38,
@@ -465,7 +518,7 @@ const SCENARIO = {
     {
       id:'strategic_partner', tier:3, icon:'🤝', name:'Стратегический партнёр',
       desc:'Якорный долгосрочный контракт. Только для агентств с сильным портфолио.',
-      revenue:80000, minQ:20, minV:15, type:'store', npsStart:82, oneTime:false, rarity:'rare',
+      revenue:80000, minQ:14, minV:15, type:'store', npsStart:82, oneTime:false, rarity:'rare',
       minPortfolio:50, portfolioWeight:3,
       modifier:{ type:'revenue_growth', val:0.08, label:'+8% выручки каждый мес' },
       modBadge:'mb-teal', prob:0.32,
@@ -473,7 +526,7 @@ const SCENARIO = {
     {
       id:'developer_estate', tier:3, icon:'🏗️', name:'Девелопер недвижимости',
       desc:'Крупный застройщик с амбициозным брендингом. Портфолио обязательно.',
-      revenue:90000, minQ:25, minV:15, type:'store', npsStart:70, oneTime:false, rarity:'rare',
+      revenue:90000, minQ:18, minV:15, type:'store', npsStart:70, oneTime:false, rarity:'rare',
       minPortfolio:20, portfolioWeight:2,
       modifier:{ type:'revenue_growth', val:0.05, label:'+5% выручки каждый мес' },
       modBadge:'mb-teal', prob:0.30,
@@ -485,7 +538,7 @@ const SCENARIO = {
     {
       id:'saas', tier:2, icon:'⚙️', name:'SaaS-интеграция',
       desc:'Технический клиент — настройка и поддержка платформы. Нужен Разработчик.',
-      revenue:72000, minQ:20, minV:0, type:'corp', npsStart:74, oneTime:false, rarity:'uncommon',
+      revenue:72000, minQ:12, minV:0, type:'corp', npsStart:74, oneTime:false, rarity:'uncommon',
       requiresDev:true,
       modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
       modBadge:'mb-teal', prob:0.50,
@@ -493,7 +546,7 @@ const SCENARIO = {
     {
       id:'fintech', tier:3, icon:'🏦', name:'FinTech-платформа',
       desc:'Крупный технический контракт. Высокий порог качества и обязательно Разработчик.',
-      revenue:115000, minQ:30, minV:10, type:'corp', npsStart:65, oneTime:false, rarity:'rare',
+      revenue:115000, minQ:22, minV:10, type:'corp', npsStart:65, oneTime:false, rarity:'rare',
       requiresDev:true,
       modifier:{ type:'payment_delay_fixed', val:1, label:'1 мес — нет оплаты' },
       modBadge:'mb-purple', prob:0.30,
@@ -501,7 +554,7 @@ const SCENARIO = {
     {
       id:'telecom', tier:3, icon:'📡', name:'Телеком-оператор',
       desc:'B2B-контракт с оператором. Нужен разработчик для интеграции с системами.',
-      revenue:105000, minQ:25, minV:10, type:'corp', npsStart:63, oneTime:false, rarity:'rare',
+      revenue:105000, minQ:18, minV:10, type:'corp', npsStart:63, oneTime:false, rarity:'rare',
       requiresDev:true,
       modifier:{ type:'nps_drain', val:-5, label:'NPS −5 доп./мес' },
       modBadge:'mb-amber', prob:0.28,
@@ -509,7 +562,7 @@ const SCENARIO = {
     {
       id:'payment_sys', tier:3, icon:'💳', name:'Платёжная система',
       desc:'Fintech-гигант. Компания платит огромные деньги, но требует всего и сразу.',
-      revenue:140000, minQ:35, minV:15, type:'corp', npsStart:60, oneTime:false, rarity:'epic',
+      revenue:140000, minQ:26, minV:15, type:'corp', npsStart:60, oneTime:false, rarity:'epic',
       requiresDev:true,
       modifier:{ type:'nps_penalty', val:-40000, threshold:70, label:'NPS<70 → штраф 40К/мес' },
       modBadge:'mb-red', prob:0.15,
@@ -521,7 +574,7 @@ const SCENARIO = {
     {
       id:'national_corp', tier:4, icon:'🏭', name:'Национальная корпорация',
       desc:'Системообразующее предприятие. Требует выдающейся команды и безупречного портфолио.',
-      revenue:200000, minQ:40, minV:25, type:'corp', npsStart:62, oneTime:false, rarity:'epic',
+      revenue:200000, minQ:30, minV:25, type:'corp', npsStart:62, oneTime:false, rarity:'epic',
       minPortfolio:20,
       modifier:{ type:'nps_penalty', val:-50000, threshold:70, label:'NPS<70 → штраф 50К/мес' },
       modBadge:'mb-red', prob:0.20,
@@ -529,7 +582,7 @@ const SCENARIO = {
     {
       id:'intl_holding', tier:4, icon:'🌐', name:'Международный холдинг',
       desc:'Мультинациональная структура. Платит в валюте, но ждёт агентство уровня топ-5 рынка.',
-      revenue:180000, minQ:35, minV:25, type:'store', npsStart:66, oneTime:false, rarity:'epic',
+      revenue:180000, minQ:26, minV:25, type:'store', npsStart:66, oneTime:false, rarity:'epic',
       minPortfolio:30,
       modifier:{ type:'revenue_growth', val:0.07, label:'+7% выручки каждый мес' },
       modBadge:'mb-teal', prob:0.18,
@@ -537,7 +590,7 @@ const SCENARIO = {
     {
       id:'unicorn_startup', tier:4, icon:'🦄', name:'Единорог-стартап',
       desc:'Компания на пороге IPO. Нужен брендинг мирового уровня — и быстро.',
-      revenue:220000, minQ:40, minV:20, type:'store', npsStart:70, oneTime:false, rarity:'epic',
+      revenue:220000, minQ:30, minV:20, type:'store', npsStart:70, oneTime:false, rarity:'epic',
       requiresDev:true,
       modifier:{ type:'payment_delay_fixed', val:1, label:'1 мес — нет оплаты' },
       modBadge:'mb-purple', prob:0.15,
@@ -545,7 +598,7 @@ const SCENARIO = {
     {
       id:'state_mega', tier:4, icon:'🏛️', name:'Госмегапроект',
       desc:'Федеральная программа. Бюджет огромный, сроки жёсткие, бюрократия запредельная.',
-      revenue:250000, minQ:35, minV:30, type:'corp', npsStart:55, oneTime:false, rarity:'epic',
+      revenue:250000, minQ:26, minV:30, type:'corp', npsStart:55, oneTime:false, rarity:'epic',
       duration:12,
       minPortfolio:25,
       modifier:{ type:'payment_delay_fixed', val:3, label:'Первые 3 мес — нет оплаты' },
@@ -554,7 +607,7 @@ const SCENARIO = {
     {
       id:'enterprise_anchor', tier:4, icon:'⚓', name:'Enterprise-якорь',
       desc:'Долгосрочный ретейнер от крупнейшего игрока рынка. Мечта любого агентства.',
-      revenue:160000, minQ:35, minV:20, type:'store', npsStart:72, oneTime:false, rarity:'epic',
+      revenue:160000, minQ:26, minV:20, type:'store', npsStart:72, oneTime:false, rarity:'epic',
       minPortfolio:40, portfolioWeight:4,
       modifier:{ type:'revenue_growth', val:0.10, label:'+10% выручки каждый мес' },
       modBadge:'mb-teal', prob:0.15,
@@ -562,7 +615,7 @@ const SCENARIO = {
     {
       id:'bank_digital', tier:4, icon:'🏦', name:'Цифровой банк',
       desc:'Банк трансформируется в digital. Контракт с жёсткими KPI и большим потенциалом.',
-      revenue:190000, minQ:40, minV:20, type:'corp', npsStart:60, oneTime:false, rarity:'epic',
+      revenue:190000, minQ:30, minV:20, type:'corp', npsStart:60, oneTime:false, rarity:'epic',
       requiresDev:true, minPortfolio:20,
       modifier:{ type:'nps_passive', val:+2, label:'+2 NPS/мес' },
       modBadge:'mb-green', prob:0.15,
@@ -580,23 +633,23 @@ const SCENARIO = {
     // — Q-перки —
     {
       id:'tools_q', icon:'🖥️', name:'Проф. инструментарий',
-      desc:'Figma Pro, Adobe CC — команда работает без ограничений',
-      cost:25000, days:1, qBonus:6, repBonus:0, oneTime:true, speedBonus:0,
+      desc:'Figma Pro, Adobe CC — команда работает без ограничений. Q +4',
+      cost:25000, days:1, qBonus:4, repBonus:0, oneTime:true, speedBonus:0,
     },
     {
       id:'training_q', icon:'📚', name:'Курсы по дизайну',
-      desc:'Онлайн-обучение + внутренний воркшоп для команды',
-      cost:45000, days:2, qBonus:10, repBonus:0, oneTime:true, speedBonus:0,
+      desc:'Онлайн-обучение + внутренний воркшоп для команды. Q +7',
+      cost:45000, days:2, qBonus:7, repBonus:0, oneTime:true, speedBonus:0,
     },
     {
       id:'consultant_q', icon:'🎯', name:'UX-консультант',
-      desc:'Разовый аудит от топ-специалиста: Q-рост и репутация',
-      cost:72000, days:1, qBonus:14, repBonus:5, oneTime:true, speedBonus:0,
+      desc:'Разовый аудит от топ-специалиста: Q-рост и репутация. Q +10',
+      cost:72000, days:1, qBonus:10, repBonus:3, oneTime:true, speedBonus:0,
     },
     {
       id:'freelance_q', icon:'✏️', name:'Фриланс-дизайнер',
-      desc:'Временная помощь — Q только в этом месяце',
-      cost:30000, days:1, qBonus:10, repBonus:0, oneTime:false, speedBonus:0,
+      desc:'Временная помощь — Q только в этом месяце. Q +7',
+      cost:30000, days:1, qBonus:7, repBonus:0, oneTime:false, speedBonus:0,
     },
     // — Speed-перки —
     {

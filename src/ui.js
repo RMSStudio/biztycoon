@@ -124,12 +124,16 @@ function _uiFocusChanged({ cid, pct, totalPct, isOver, previews, preview, focusa
     const _effective = totalPct + _schedPct;
     const _isOver    = _effective > 100;
     const _otNote    = _schedPct > 0 ? ` · разовые −${_schedPct}%` : '';
-    headerEl.style.background  = _isOver ? 'rgba(248,81,73,.1)'  : 'rgba(45,212,191,.07)';
-    headerEl.style.borderColor = _isOver ? 'rgba(248,81,73,.3)'  : 'rgba(45,212,191,.2)';
-    infoEl.style.color         = _isOver ? 'var(--red)'          : 'var(--teal)';
+    const _barColor  = _isOver ? '#F85149' : _effective >= 85 ? '#D29922' : '#3FB950';
+    headerEl.style.background  = _isOver ? 'rgba(248,81,73,.08)'  : 'rgba(45,212,191,.05)';
+    headerEl.style.borderColor = _isOver ? 'rgba(248,81,73,.25)'  : 'rgba(45,212,191,.18)';
+    infoEl.style.color         = _isOver ? 'var(--red)' : _effective >= 85 ? 'var(--amber)' : 'var(--teal)';
     infoEl.textContent = _isOver
-      ? `⚠️ Суммарный фокус: ${_effective}% — освободи ${_effective - 100}%`
-      : `✦ Резерв фокуса: ${100 - _effective}%${_otNote}`;
+      ? `⚠️ Перегруз: ${_effective}% — освободи ${_effective - 100}%`
+      : `Фокус: ${_effective}% занято · резерв ${Math.max(0, 100 - _effective)}%${_otNote}`;
+    // Обновляем визуальную шкалу
+    const barEl = headerEl.querySelector('.focus-bar-fill');
+    if (barEl) { barEl.style.width = Math.min(100, _effective) + '%'; barEl.style.background = _barColor; }
   }
 
   // Граница focus-row — только для регулярных проектов
@@ -288,23 +292,27 @@ function renderGame() {
   const focusReserve   = 100 - effectiveUsed;
   const focusIsOver    = effectiveUsed > 100;
   const hasScheduledOT = schedOTPct > 0;
-  // Хедер: при 2+ регулярных ИЛИ при любом кол-ве регулярных если запланирован разовый
-  const showFocusHeader = focusable.length >= 2 || (focusable.length >= 1 && hasScheduledOT);
-
-  // Хедер фокуса — единый пул для регулярных и разовых
-  if (showFocusHeader) {
-    const otNote = hasScheduledOT ? ` · разовые −${schedOTPct}%` : '';
-    const hBg  = focusIsOver ? 'rgba(248,81,73,.1)'  : 'rgba(45,212,191,.07)';
-    const hBrd = focusIsOver ? 'rgba(248,81,73,.3)'  : 'rgba(45,212,191,.2)';
-    const hClr = focusIsOver ? 'var(--red)'          : 'var(--teal)';
-    const hTxt = focusIsOver
-      ? `⚠️ Суммарный фокус: ${effectiveUsed}% — освободи ${effectiveUsed - 100}%`
-      : `✦ Резерв фокуса: ${focusReserve}%${otNote}`;
-    chtml += `<div id="focus-header" style="display:flex;align-items:center;justify-content:space-between;background:${hBg};border:1px solid ${hBrd};border-radius:7px;padding:5px 10px;margin-bottom:8px">
-      <span id="focus-total-info" style="font-size:11px;color:${hClr};font-weight:600">${hTxt}</span>
-      <div style="display:flex;gap:4px">
-        <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="equalFocus()">↔ Равномерно</button>
-        <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="clearFocus()">✕ Сбросить</button>
+  // Хедер фокуса — при наличии хотя бы одного регулярного проекта
+  if (showFocusBar) {
+    const otNote   = hasScheduledOT ? ` · разовые −${schedOTPct}%` : '';
+    const barUsed  = Math.min(100, effectiveUsed);
+    const barColor = focusIsOver ? '#F85149' : effectiveUsed >= 85 ? '#D29922' : '#3FB950';
+    const hBg      = focusIsOver ? 'rgba(248,81,73,.08)'  : 'rgba(45,212,191,.05)';
+    const hBrd     = focusIsOver ? 'rgba(248,81,73,.25)'  : 'rgba(45,212,191,.18)';
+    const hClr     = focusIsOver ? 'var(--red)' : effectiveUsed >= 85 ? 'var(--amber)' : 'var(--teal)';
+    const hTxt     = focusIsOver
+      ? `⚠️ Перегруз: ${effectiveUsed}% — освободи ${effectiveUsed - 100}%`
+      : `Фокус: ${effectiveUsed}% занято · резерв ${Math.max(0, focusReserve)}%${otNote}`;
+    chtml += `<div id="focus-header" style="background:${hBg};border:1px solid ${hBrd};border-radius:7px;padding:6px 10px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+        <span id="focus-total-info" style="font-size:11px;color:${hClr};font-weight:600">${hTxt}</span>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="equalFocus()">↔ Равномерно</button>
+          <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="clearFocus()">✕ Сбросить</button>
+        </div>
+      </div>
+      <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+        <div class="focus-bar-fill" style="height:100%;width:${barUsed}%;background:${barColor};border-radius:2px;transition:width .3s"></div>
       </div>
     </div>`;
   }
@@ -525,8 +533,20 @@ function renderGame() {
             ${c.oneTime?'<span class="tag purple" style="font-size:10px;">Разовый</span>':''}
             ${deadlineBadge}
           </div>
-          <div class="client-desc">
+          <div class="client-desc" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="modifier-badge ${mb}" style="font-size:10px;padding:2px 6px">${ml}</span>
+            ${(()=>{
+              const _pLoad = getProjectLoad(c);
+              const _thr   = getTeamThroughput();
+              const _totLoad = getTotalLoad();
+              if (isWaiting) {
+                return `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(120,120,120,.12);color:var(--muted);font-weight:600">⚙️ ${_pLoad} <span style="font-weight:400;font-size:9px">— старт через ${waitMos} мес.</span></span>`;
+              }
+              const _willOvld = _totLoad > _thr;
+              const _bg  = _willOvld ? 'rgba(248,81,73,.12)' : 'rgba(45,212,191,.1)';
+              const _col = _willOvld ? 'var(--red)' : 'var(--teal)';
+              return `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${_bg};color:${_col};font-weight:600">⚙️ ${_pLoad} / ${_thr}</span>`;
+            })()}
           </div>
           ${progressBar}
           ${focusBar}
@@ -575,28 +595,45 @@ function renderGame() {
     <div class="pnl-row"><span>Зарплаты</span><span class="neg">−${fmt(staffCost)}</span></div>
     <div class="pnl-row"><span>Overhead</span><span class="neg">−${fmt(OVERHEAD)}</span></div>
     ${G.loan ? `<div class="pnl-row">
-        <span style="color:var(--amber)">🏦 Кредит «${G.loan.label}»</span>
+        <span style="color:var(--amber)">${G.loan.icon||'🏦'} Кредит «${G.loan.label}»</span>
         <span style="color:var(--amber);font-weight:600">−${fmt(G.loan.monthlyPayment)}</span>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:3px;padding-left:2px">ещё ${G.loan.monthsRemaining} мес. · остаток долга ${fmtK(G.loan.monthlyPayment * G.loan.monthsRemaining)}</div>` : ''}
+      <div style="font-size:10px;color:var(--muted);margin-bottom:2px;padding-left:2px">ещё ${G.loan.monthsRemaining} мес. · остаток ${fmtK(G.loan.monthlyPayment * G.loan.monthsRemaining)}</div>
+      ${G.loan.debuff?.type === 'speed_debuff' ? `<div style="font-size:10px;color:var(--red);padding-left:2px;margin-bottom:3px">⚡ ${G.loan.debuff.label}</div>` : ''}` : ''}
     <div class="divider"></div>
     <div class="pnl-row total"><span>Расход/мес</span><span class="neg">−${fmt(burnRate)}</span></div>
     <div style="font-size:10px;color:var(--muted);margin-top:5px">Выручка — при завершении проектов</div>
     ${(()=>{
-      if (!G.loan) {
-        const loanTier = getLoanTier(G.reputation);
-        if (loanTier) {
-          return `<div class="divider" style="margin:8px 0"></div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-              <div>
-                <div style="font-size:11px;color:var(--sub)">🏦 Кредитная линия</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtK(loanTier.principal)} · ${fmtK(loanTier.monthlyPayment)}/мес × ${loanTier.months} мес. (${loanTier.label})</div>
-              </div>
-              <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:4px 10px;flex-shrink:0;white-space:nowrap" onclick="takeLoan()">Взять кредит</button>
-            </div>`;
-        }
-      }
-      return '';
+      if (G.loan) return '';
+      const loans = getLoansInfo(G.reputation);
+      const availCount = loans.filter(t => t.available).length;
+      const rows = loans.map(t => {
+        const locked    = !t.available;
+        const debuffTag = t.debuff
+          ? `<div style="font-size:9px;color:var(--red);margin-top:2px">⚠ ${t.debuff.label}</div>`
+          : '';
+        const lockTag   = locked
+          ? `<span style="font-size:9px;color:var(--muted);margin-left:4px">🔒 реп ≥${t.minRep}</span>`
+          : '';
+        const btn = locked
+          ? `<button class="btn btn-xs btn-ghost" style="font-size:9px;padding:2px 7px;opacity:.35;flex-shrink:0" disabled>Взять</button>`
+          : `<button class="btn btn-xs btn-ghost" style="font-size:9px;padding:2px 7px;flex-shrink:0" onclick="takeLoanById('${t.id}')">Взять</button>`;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);opacity:${locked?'0.45':'1'}">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:11px;font-weight:600;color:${locked?'var(--muted)':'var(--text)'}">${t.icon} ${t.label}${lockTag}</div>
+            <div style="font-size:10px;color:var(--sub);margin-top:1px">${fmtK(t.principal)} · ${fmtK(t.monthlyPayment)}/мес × ${t.months} мес.</div>
+            ${debuffTag}
+          </div>
+          ${btn}
+        </div>`;
+      }).join('');
+      return `<div class="divider" style="margin:8px 0"></div>
+        <div style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none"
+             onclick="(()=>{const el=document.getElementById('loan-list');const arr=document.getElementById('loan-arr');el.style.display=el.style.display==='none'?'block':'none';arr.textContent=el.style.display==='none'?'▸':'▾';})()">
+          <span style="font-size:11px;color:var(--sub);font-weight:600">🏦 Кредитные линии <span style="font-weight:400;color:var(--muted)">(${availCount} доступно)</span></span>
+          <span id="loan-arr" style="font-size:10px;color:var(--muted)">▸</span>
+        </div>
+        <div id="loan-list" style="display:none;margin-top:4px">${rows}</div>`;
     })()}`;
 
   const pct=Math.min(100,Math.round(G.money/SCENARIO.settings.winCondition*100));
@@ -989,7 +1026,7 @@ function endGame(won) { buildDashboard(won); _uiNavigate('screen-results'); }
 function buildDashboard(won) {
   const spec=SPECS[G.spec];
   document.getElementById('r-icon').textContent=won?'🏆':'💸';
-  document.getElementById('r-title').textContent=won?'Агентство вышло на 3M!':'Деньги кончились';
+  document.getElementById('r-title').textContent=won?'Агентство вышло на 7.5M!':'Деньги кончились';
   document.getElementById('r-title').style.color=won?'var(--green)':'var(--red)';
   document.getElementById('r-sub').textContent=won
     ?`${spec.name} — ${G.monthsPlayed} мес. Инвесторы уже звонят.`
@@ -1048,7 +1085,7 @@ function buildChart() {
   const px=i=>PL+(i/(hist.length-1))*cW, py=m=>PT+cH-((m-minM)/rng)*cH;
   const pts=hist.map((h,i)=>`${px(i).toFixed(1)},${py(h.money).toFixed(1)}`).join(' ');
   const area=`M${px(0).toFixed(1)},${(PT+cH).toFixed(1)} `+hist.map((h,i)=>`L${px(i).toFixed(1)},${py(h.money).toFixed(1)}`).join(' ')+` L${px(hist.length-1).toFixed(1)},${(PT+cH).toFixed(1)} Z`;
-  const goalY=py(3000000), showGoal=goalY>=PT&&goalY<=PT+cH;
+  const goalY=py(SCENARIO.settings.winCondition), showGoal=goalY>=PT&&goalY<=PT+cH;
   const dc2={hire:'#4F6EF7',client:'#3FB950',event:'#D29922',churn:'#F85149'};
   const dots=DECISIONS.map(d=>{
     const idx=Math.min(d.monthIdx,hist.length-1);
@@ -1069,7 +1106,7 @@ function buildChart() {
     <line x1="${PL}" y1="${PT+cH/2}" x2="${W-PR}" y2="${PT+cH/2}" stroke="#1C2330" stroke-width="1"/>
     <line x1="${PL}" y1="${PT+cH}" x2="${W-PR}" y2="${PT+cH}" stroke="#30363D" stroke-width="1"/>
     ${minM<0?`<line x1="${PL}" y1="${py(0).toFixed(1)}" x2="${W-PR}" y2="${py(0).toFixed(1)}" stroke="#F85149" stroke-width=".8" stroke-dasharray="3,3" opacity=".5"/>`:''}
-    ${showGoal?`<line x1="${PL}" y1="${goalY.toFixed(1)}" x2="${W-PR}" y2="${goalY.toFixed(1)}" stroke="#3FB950" stroke-width="1" stroke-dasharray="4,3" opacity=".6"/><text x="${W-PR-2}" y="${goalY-4}" fill="#3FB950" font-size="9" text-anchor="end" opacity=".8">Цель 3M</text>`:''}
+    ${showGoal?`<line x1="${PL}" y1="${goalY.toFixed(1)}" x2="${W-PR}" y2="${goalY.toFixed(1)}" stroke="#3FB950" stroke-width="1" stroke-dasharray="4,3" opacity=".6"/><text x="${W-PR-2}" y="${goalY-4}" fill="#3FB950" font-size="9" text-anchor="end" opacity=".8">Цель 7.5M</text>`:''}
     <path d="${area}" fill="url(#cg)"/>
     <polyline points="${pts}" fill="none" stroke="#4F6EF7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${ticks}${xlbls}
