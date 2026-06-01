@@ -106,30 +106,61 @@ function _uiShowConfirm(icon, title, body, confirmText, confirmClass, onConfirm)
   document.getElementById('event-modal').classList.add('active');
 }
 
-function _uiFocusChanged({ cid, pct, totalPct, isOver, preview, focusableIds }) {
+function _uiFocusChanged({ cid, pct, totalPct, isOver, previews, preview, focusableIds }) {
+  // Слайдер + инпут изменённого проекта
   const rangeEl = document.getElementById('focus-range-' + cid);
   const valEl   = document.getElementById('focus-val-'   + cid);
-  const prevEl  = document.getElementById('focus-prev-'  + cid);
   if (rangeEl) { rangeEl.value = pct; rangeEl.style.setProperty('--fill', pct + '%'); }
   if (valEl)   valEl.value = pct;
 
-  const warnEl = document.getElementById('focus-total-warn');
-  const resEl  = document.getElementById('focus-reserve');
-  if (warnEl) {
-    warnEl.style.display = isOver ? 'flex' : 'none';
-    if (isOver) { const sp = warnEl.querySelector('span'); if (sp) sp.textContent = `⚠ Суммарный фокус: ${totalPct}% — освободи ${totalPct - 100}% у других проектов`; }
+  // Хедер фокуса — фиксированная высота, меняется только содержимое (без layout-сдвигов)
+  const headerEl = document.getElementById('focus-header');
+  const infoEl   = document.getElementById('focus-total-info');
+  if (headerEl && infoEl) {
+    // Считаем эффективное использование: регулярные + запланированные разовые
+    const _thr2      = Math.max(1, getTeamThroughput());
+    const _schedPct  = G.activeClients.filter(c=>c.oneTime&&c._scheduled)
+                         .reduce((s,c)=>s+Math.round(getProjectLoad(c)/_thr2*100),0);
+    const _effective = totalPct + _schedPct;
+    const _isOver    = _effective > 100;
+    const _otNote    = _schedPct > 0 ? ` · разовые −${_schedPct}%` : '';
+    headerEl.style.background  = _isOver ? 'rgba(248,81,73,.1)'  : 'rgba(45,212,191,.07)';
+    headerEl.style.borderColor = _isOver ? 'rgba(248,81,73,.3)'  : 'rgba(45,212,191,.2)';
+    infoEl.style.color         = _isOver ? 'var(--red)'          : 'var(--teal)';
+    infoEl.textContent = _isOver
+      ? `⚠️ Суммарный фокус: ${_effective}% — освободи ${_effective - 100}%`
+      : `✦ Резерв фокуса: ${100 - _effective}%${_otNote}`;
   }
-  if (resEl) {
-    resEl.style.display = isOver ? 'none' : 'flex';
-    if (!isOver) { const sp = resEl.querySelector('span'); if (sp) sp.textContent = `✦ Резерв: ${100 - totalPct}%`; }
-  }
+
+  // Граница focus-row — только для регулярных проектов
   (focusableIds || []).forEach(fid => {
+    const c = G.activeClients.find(a => a.id === fid);
+    if (c?.oneTime) return;
     const rowEl = document.getElementById('focus-row-' + fid);
     if (rowEl) rowEl.style.borderColor = isOver ? 'rgba(248,81,73,.3)' : 'transparent';
   });
-  if (prevEl) {
-    prevEl.style.color = pct >= 60 ? 'var(--green)' : pct >= 30 ? 'var(--teal)' : 'var(--amber)';
-    prevEl.textContent = `+${preview.perMonth}%/мес · ~${preview.mthsLeft} мес. до завершения`;
+
+  // Превью для всех проектов в focusableIds
+  const allPreviews = previews || {};
+  const allIds = (focusableIds || [cid]);
+  allIds.forEach(fid => {
+    const prevEl = document.getElementById('focus-prev-' + fid);
+    if (!prevEl) return;
+    const p    = allPreviews[fid] || (fid === cid ? preview : null) || { perMonth:0, perMonthRaw:0, mthsLeft:99 };
+    const fPct = fid === cid ? pct : (G.activeClients.find(a=>a.id===fid)?._focus ?? 50);
+    prevEl.style.color = fPct >= 60 ? 'var(--green)' : fPct >= 30 ? 'var(--teal)' : 'var(--amber)';
+    const delta    = (p.perMonthRaw || p.perMonth) - p.perMonth;
+    const fatLabel = delta > 0 ? ` (−${delta}% усталость)` : '';
+    const spd      = getSpeed();
+    const spdLabel = spd > 1.05 ? ` ⚡×${spd.toFixed(2)}` : '';
+    prevEl.textContent = `+${p.perMonth}%/мес${spdLabel}${fatLabel} · ~${p.mthsLeft} мес. до завершения`;
+  });
+
+  // btn-advance: блокировать только при превышении фокуса регулярных проектов
+  const advBtn = document.getElementById('btn-advance');
+  if (advBtn) {
+    advBtn.disabled = isOver;
+    advBtn.title    = isOver ? 'Суммарный фокус превышает 100% — скорректируй распределение' : '';
   }
 }
 
@@ -240,25 +271,42 @@ function renderGame() {
     </div>`;
   }
 
-  const focusable    = G.activeClients.filter(c => !c.oneTime);
-  const totalFocusW  = focusable.reduce((s,c) => s + (c._focus??50), 0);
-  const totalFocusPct= focusable.reduce((s,c) => s + (c._focus??50), 0); // raw сумма %
-  const showFocus    = focusable.length >= 2;
-  const focusIsOver  = showFocus && totalFocusPct > 100;
-  const focusReserve = 100 - totalFocusPct;
+  // Фокус: все регулярные проекты участвуют в бюджете — включая те, что в периоде ожидания
+  // (фикс: иначе их _focus не считался в totalFocusW и не блокировал btn-advance)
+  const allRegular   = G.activeClients.filter(c => !c.oneTime);
+  const totalFocusW  = allRegular.reduce((s,c) => s + (c._focus??50), 0);
+  // Для отображения слайдеров — только активно прогрессирующие (не в периоде ожидания)
+  const focusable    = G.activeClients.filter(c =>
+    !c.oneTime && !(c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val)
+  );
+  const showFocusBar = focusable.length >= 1;
+  // Разовые запланированные — резервируют % из общего пула фокуса
+  const _thrForPct     = Math.max(1, getTeamThroughput());
+  const schedOTPct     = G.activeClients.filter(c=>c.oneTime&&c._scheduled)
+                           .reduce((s,c)=>s+Math.round(getProjectLoad(c)/_thrForPct*100),0);
+  const effectiveUsed  = totalFocusW + schedOTPct;   // регулярные + разовые вместе
+  const focusReserve   = 100 - effectiveUsed;
+  const focusIsOver    = effectiveUsed > 100;
+  const hasScheduledOT = schedOTPct > 0;
+  // Хедер: при 2+ регулярных ИЛИ при любом кол-ве регулярных если запланирован разовый
+  const showFocusHeader = focusable.length >= 2 || (focusable.length >= 1 && hasScheduledOT);
 
-  // Баннер суммарного фокуса (показывается над карточками)
-  if (showFocus) {
-    chtml += focusIsOver
-      ? `<div id="focus-total-warn" style="display:flex;align-items:center;gap:6px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:7px;padding:6px 10px;margin-bottom:8px">
-          <span style="font-size:18px;line-height:1">⚠️</span>
-          <span style="font-size:11px;color:var(--red);font-weight:600">Суммарный фокус: ${totalFocusPct}% — освободи ${totalFocusPct - 100}% у других проектов</span>
-         </div>
-         <div id="focus-reserve" style="display:none"></div>`
-      : `<div id="focus-total-warn" style="display:none"></div>
-         <div id="focus-reserve" style="display:flex;align-items:center;gap:6px;background:rgba(45,212,191,.07);border:1px solid rgba(45,212,191,.2);border-radius:7px;padding:5px 10px;margin-bottom:8px">
-          <span style="font-size:11px;color:var(--teal)">✦ Резерв фокуса: <strong>${focusReserve}%</strong></span>
-         </div>`;
+  // Хедер фокуса — единый пул для регулярных и разовых
+  if (showFocusHeader) {
+    const otNote = hasScheduledOT ? ` · разовые −${schedOTPct}%` : '';
+    const hBg  = focusIsOver ? 'rgba(248,81,73,.1)'  : 'rgba(45,212,191,.07)';
+    const hBrd = focusIsOver ? 'rgba(248,81,73,.3)'  : 'rgba(45,212,191,.2)';
+    const hClr = focusIsOver ? 'var(--red)'          : 'var(--teal)';
+    const hTxt = focusIsOver
+      ? `⚠️ Суммарный фокус: ${effectiveUsed}% — освободи ${effectiveUsed - 100}%`
+      : `✦ Резерв фокуса: ${focusReserve}%${otNote}`;
+    chtml += `<div id="focus-header" style="display:flex;align-items:center;justify-content:space-between;background:${hBg};border:1px solid ${hBrd};border-radius:7px;padding:5px 10px;margin-bottom:8px">
+      <span id="focus-total-info" style="font-size:11px;color:${hClr};font-weight:600">${hTxt}</span>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="equalFocus()">↔ Равномерно</button>
+        <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="clearFocus()">✕ Сбросить</button>
+      </div>
+    </div>`;
   }
 
   G.activeClients.forEach(c=>{
@@ -290,10 +338,11 @@ function renderGame() {
     const isWaiting = c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0)<=c.modifier.val;
     const waitMos   = isWaiting ? c.modifier.val-(c._monthsSigned||0) : 0;
 
-    // Бюджет (П.9: показываем portfolio-бонус чтобы игрок видел эффект мультипликатора)
-    const budget    = c._totalBudget||0;
-    const pfM       = getPortfolioMultiplier();
-    const pfBoostPct= Math.round((pfM - 1) * 100);
+    // Бюджет — показываем реальную ожидаемую выплату с учётом мультипликатора портфолио
+    const budget     = c._totalBudget||0;
+    const pfM        = getPortfolioMultiplier();
+    const pfBoostPct = Math.round((pfM - 1) * 100);
+    const actualPayout = pfBoostPct > 0 ? Math.round(budget * pfM) : budget; // реальная выплата
     const budgetStr = c.oneTime
       ? `${fmtK(budget)}<small> разово</small>`
       : isWaiting
@@ -301,7 +350,10 @@ function renderGame() {
         : (() => {
             const origStr = (c._originalBudget && c._originalBudget !== budget && (c._milestonesPaid||[]).length > 0)
               ? `<div style="font-size:9px;color:var(--sub);text-decoration:line-through">${fmtK(c._originalBudget)} полный</div>` : '';
-            const pfStr = pfBoostPct > 0 ? `<div style="font-size:9px;color:var(--purple);font-weight:600;margin-top:1px">+${pfBoostPct}% портфолио</div>` : '';
+            // Показываем реальную выплату (с бонусом), а не базовую
+            const pfStr = pfBoostPct > 0
+              ? `<div style="font-size:9px;color:var(--purple);font-weight:600;margin-top:1px">💎 +${pfBoostPct}% портфолио → ${fmtK(actualPayout)}</div>`
+              : '';
             return `${origStr}${fmtK(budget)}<small> при сдаче</small>${pfStr}`;
           })();
 
@@ -332,8 +384,8 @@ function renderGame() {
       return '';
     })() : '';
 
-    // Прогресс-бар (не для разовых)
-    const progressBar = !c.oneTime ? `
+    // Прогресс-бар (для всех проектов включая разовые)
+    const progressBar = `
       <div style="margin-top:6px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
           <span style="font-size:10px;color:var(--sub)">Прогресс</span>
@@ -344,34 +396,99 @@ function renderGame() {
           ${milestoneMarkers}
         </div>
         ${milestoneSummary}
+      </div>`;
+
+    // Контролы фокуса — для всех не-разовых при наличии хотя бы одного;
+    //                    для разовых — отдельный упрощённый контрол
+    const myFocus = c._focus != null ? c._focus : (c.oneTime ? 100 : Math.floor(100 / Math.max(1, focusable.length)));
+
+    // Вспомогательная функция расчёта превью (используется для regular и oneTime)
+    const _calcPreview = (focusPct) => {
+      const thr    = getTeamThroughput();
+      const _schedOT = G.activeClients.filter(x => x.oneTime && x._scheduled).reduce((s,x)=>s+getProjectLoad(x),0);
+      const _avail   = Math.max(0, thr - _schedOT);
+      const fMult  = focusPct / 100;
+      const spd    = getSpeed();
+      const fat    = getFatigueMult();
+      let raw;
+      if (c.oneTime) {
+        raw = 100 * fMult * spd;
+      } else {
+        // Синхронно с advanceMonth: efficiency без кэпа min=1 — избыток ускоряет
+        const allocThr  = fMult * _avail;
+        const pLoad     = getProjectLoad(c);
+        const efficiency = pLoad > 0 ? (allocThr / pLoad) : 1;
+        raw = (100 / (c._duration||3)) * efficiency * spd;
+      }
+      const base   = Math.round(raw);
+      const withF  = Math.round(raw * fat);
+      const rem    = Math.max(0, 100 - (c._progress||0));
+      return { base, withF, rem, mthsLeft: withF > 0 ? Math.ceil(rem / withF) : 99 };
+    };
+    const { base: basePerMonth, withF: perMonth, mthsLeft } = _calcPreview(myFocus);
+    const fatigueDelta = basePerMonth - perMonth;
+    const fatigueLabel = fatigueDelta > 0 ? ` <span style="color:var(--red);font-size:9px">(−${fatigueDelta}% усталость)</span>` : '';
+    const _spd = getSpeed();
+    const speedLabel = _spd > 1.05 ? ` <span style="color:var(--teal);font-size:9px">⚡×${_spd.toFixed(2)}</span>` : '';
+    const previewColor = myFocus >= 60 ? 'var(--green)' : myFocus >= 30 ? 'var(--teal)' : 'var(--amber)';
+    const rowBorder    = (!c.oneTime && focusIsOver) ? 'rgba(248,81,73,.3)' : 'transparent';
+
+    // Третий ряд — «Завершить за X мес.» (только для регулярных незавершённых)
+    const targetRow = (!c.oneTime && (c._progress||0) < 95) ? `
+      <div style="display:flex;align-items:center;gap:4px;margin-top:3px">
+        <span style="font-size:10px;color:var(--sub)">За</span>
+        <input type="number" min="1" max="24" step="1"
+          id="focus-target-${c.id}" class="focus-val" style="width:40px"
+          placeholder="мес"
+          onchange="setFocusForMonths('${c.id}',+this.value);this.value=''"
+          onclick="this.select()">
+        <span style="font-size:10px;color:var(--sub)">мес.</span>
       </div>` : '';
 
-    // Контролы фокуса (показываем только когда 2+ активных не-разовых проекта)
-    const myFocus = c._focus != null ? c._focus : Math.floor(100 / Math.max(1, focusable.length));
-    const focusBar = (!c.oneTime && showFocus) ? (()=>{
-      // Превью прогресса при текущем фокусе (фикс п.22: нормируем через 100)
-      const thr      = getTeamThroughput();
-      const totLoad  = getTotalLoad();
-      // Эффективная нагрузка = полная нагрузка × доля реально использованного фокуса
-      const _activeFocusPct = focusable.length > 0 ? Math.min(1, totalFocusW / 100) : 1;
-      const _effectiveLoad  = totLoad * _activeFocusPct;
-      const lratio   = _effectiveLoad > 0 ? Math.min(1, thr / _effectiveLoad) : 1;
-      // focusMult = доля фокуса конкретного проекта от 100% (не от суммы выставленных)
-      const fMult    = myFocus / 100;
-      // П.10: учитываем fatigueMult; П.13: целочисленный результат (без десятых)
-      const _fatigueMult = getFatigueMult();
-      const basePerMonth = Math.round((100 / (c._duration||3)) * lratio * fMult);
-      const perMonth     = Math.round(basePerMonth * _fatigueMult);
-      const remain       = Math.max(0, 100 - (c._progress||0));
-      const mthsLeft     = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
-      // П.16: конкретный дельта усталости (если есть)
-      const fatigueDelta  = basePerMonth - perMonth;
-      const fatigueLabel  = fatigueDelta > 0 ? ` <span style="color:var(--red);font-size:9px">(Усталость: −${fatigueDelta}%)</span>` : '';
-      const previewColor  = myFocus >= 60 ? 'var(--green)' : myFocus >= 30 ? 'var(--teal)' : 'var(--amber)';
-      const rowBorder = focusIsOver ? 'rgba(248,81,73,.3)' : 'transparent';
-      return `
-      <div id="focus-row-${c.id}" style="margin-top:7px;border:1px solid ${rowBorder};border-radius:6px;padding:${focusIsOver?'6px 7px':'0'};transition:border-color .2s,padding .2s">
-        <!-- Ряд 1: слайдер + ввод % + пресет -->
+    // Блок управления ресурсом — разные UI для oneTime и регулярных
+    let focusBar = '';
+    if (c.oneTime) {
+      // Разовый проект: резервирует % из общего пула фокуса
+      const cLoad      = getProjectLoad(c);
+      const thr        = Math.max(1, getTeamThroughput());
+      const cPct       = Math.round(cLoad / thr * 100);       // % который нужен этому проекту
+      // Сколько % уже занято остальными (регулярные + другие запланированные разовые)
+      const otherSchedPct = G.activeClients.filter(x=>x.oneTime&&x._scheduled&&x.id!==c.id)
+                              .reduce((s,x)=>s+Math.round(getProjectLoad(x)/thr*100),0);
+      const availablePct = Math.max(0, 100 - totalFocusW - otherSchedPct);
+      const overload     = availablePct < cPct;
+
+      if (c._scheduled) {
+        focusBar = `
+        <div id="focus-row-${c.id}" style="margin-top:7px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;
+                      background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.25);
+                      border-radius:6px;padding:5px 10px">
+            <span style="font-size:10px;color:var(--teal);font-weight:600">
+              ✓ Выполнить в этом месяце &nbsp;·&nbsp; −${cPct}% фокуса
+            </span>
+            <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 7px;flex-shrink:0;color:var(--sub)"
+                    onclick="toggleOneTimeSchedule('${c.id}')">Отложить</button>
+          </div>
+        </div>`;
+      } else {
+        const infoColor    = overload ? 'var(--amber)' : 'var(--sub)';
+        const overloadHint = overload ? ` <span style="color:var(--amber)">⚠ регулярные замедлятся</span>` : '';
+        focusBar = `
+        <div id="focus-row-${c.id}" style="margin-top:7px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span style="font-size:10px;color:${infoColor}">
+              Требует ${cPct}% фокуса · Доступно ${availablePct}%${overloadHint}
+            </span>
+            <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 7px;flex-shrink:0"
+                    onclick="toggleOneTimeSchedule('${c.id}')">📋 Выполнить в этом месяце</button>
+          </div>
+        </div>`;
+      }
+    } else if (showFocusBar) {
+      // Регулярный проект: слайдер фокуса
+      focusBar = `
+      <div id="focus-row-${c.id}" style="margin-top:7px;border:1px solid ${rowBorder};border-radius:6px;padding:0;transition:border-color .15s">
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
           <span style="font-size:10px;color:var(--sub);flex-shrink:0">Фокус</span>
           <input type="range" min="0" max="100" value="${myFocus}"
@@ -383,26 +500,19 @@ function renderGame() {
             onchange="setFocus('${c.id}',this.value)"
             onclick="this.select()">
           <span style="font-size:10px;color:var(--sub);flex-shrink:0">%</span>
-          <select class="focus-preset" onchange="setFocus('${c.id}',this.value)">
-            <option value="" disabled selected>···</option>
-            <option value="0">0%</option>
-            <option value="20">20%</option>
-            <option value="40">40%</option>
-            <option value="60">60%</option>
-            <option value="80">80%</option>
-            <option value="100">100%</option>
-          </select>
         </div>
-        <!-- Ряд 2: кнопки ±1/±10 + превью -->
         <div style="display:flex;align-items:center;gap:3px">
+          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;color:var(--sub)" onclick="setFocus('${c.id}',0)">0</button>
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',-10)">−10</button>
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',-1)">−1</button>
-          <span style="flex:1;text-align:center;font-size:10px;color:${previewColor}" id="focus-prev-${c.id}">+${perMonth}%/мес${fatigueLabel} · ~${mthsLeft} мес. до завершения</span>
+          <span style="flex:1;text-align:center;font-size:10px;color:${previewColor}" id="focus-prev-${c.id}">+${perMonth}%/мес${speedLabel}${fatigueLabel} · ~${mthsLeft} мес. до завершения</span>
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',+1)">+1</button>
           <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',+10)">+10</button>
+          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;color:var(--sub)" onclick="setFocus('${c.id}',100)">100</button>
         </div>
+        ${targetRow}
       </div>`;
-    })() : '';
+    }
 
     chtml+=`<div class="client-card ${warn}">
       <div class="client-row1">
@@ -489,7 +599,7 @@ function renderGame() {
       return '';
     })()}`;
 
-  const pct=Math.min(100,Math.round(G.money/3000000*100));
+  const pct=Math.min(100,Math.round(G.money/SCENARIO.settings.winCondition*100));
   document.getElementById('g-progress-pct').textContent=pct+'%';
   const bar=document.getElementById('g-progress-bar');
   bar.style.width=pct+'%';

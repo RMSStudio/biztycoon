@@ -534,7 +534,8 @@ function signProject(pid) {
     _originalBudget: totalBudget,  // для расчёта milestone — до вычета аванса
     _totalBudget: totalBudget,
     _progress: 0,   // 0–100%
-    _focus: 50,     // вес фокуса 0–100; итоговый % = _focus / Σ(active _focus) * 100
+    _focus: 50,       // вес фокуса для регулярных проектов; перераспределяется ниже
+    _scheduled: def.oneTime ? false : undefined, // разовые: true = запланировано на этот месяц
     _milestones: _mThresholds,     // массив порогов прогресса [%]
     _milestonePcts: _mPayPcts,     // доля от _originalBudget для каждого milestone
     _milestonesPaid: [],           // индексы уже выплаченных milestone
@@ -1021,24 +1022,59 @@ function liveUpdateFocus(cid, pct) {
   c._focus = pct;
 
   // ── Вычисляем данные для UI (чистая математика из стейта) ─
-  const focusable = G.activeClients.filter(c2 => !c2.oneTime);
-  const totalPct  = focusable.reduce((s, c2) => s + (c2._focus ?? 50), 0);
-  const isOver    = totalPct > 100;
+  // Все регулярные проекты участвуют в бюджете фокуса — включая payment_delay_fixed
+  // в периоде ожидания: их _focus резервирует мощность заранее.
+  // Это предотвращает «скрытый перегруз», когда отложенный проект активируется
+  // с 34%+ фокуса поверх уже занятых 100%.
+  const allRegular = G.activeClients.filter(c2 => !c2.oneTime);
+  const totalPct   = allRegular.reduce((s, c2) => s + (c2._focus ?? 50), 0);
+  const isOver     = totalPct > 100;
+  // focusable — только активно прогрессирующие (для focusableIds и live-превью)
+  const focusable = G.activeClients.filter(c2 =>
+    !c2.oneTime && !(c2.modifier?.type==='payment_delay_fixed' && (c2._monthsSigned||0) <= c2.modifier.val)
+  );
 
-  const thr             = getTeamThroughput();
-  const totLoad         = getTotalLoad();
-  const activeFocusPct  = focusable.length > 0 ? Math.min(1, totalPct / 100) : 1;
-  const effectiveLoad   = totLoad * activeFocusPct;
-  const lratio          = effectiveLoad > 0 ? Math.min(1, thr / effectiveLoad) : 1;
-  const fMult           = pct / 100;
-  const perMonth        = Math.round((100 / (c._duration||3)) * lratio * fMult * getFatigueMult());
-  const remain          = Math.max(0, 100 - (c._progress||0));
-  const mthsLeft        = perMonth > 0 ? Math.ceil(remain / perMonth) : 99;
+  const thr     = getTeamThroughput();
+  const totLoad = getTotalLoad();
+  // Мощность за вычетом запланированных разовых — синхронно с advanceMonth
+  const schedOTLoad   = getScheduledOneTimeLoad();
+  const availForReg   = Math.max(0, thr - schedOTLoad);
+  const overloadPenalty = totLoad > 0 ? Math.min(1, availForReg / totLoad) : 1;
+  const fatMult = getFatigueMult();
+  const spdMult = getSpeed();
+
+  // Превью для всех focusable проектов (regular + oneTime)
+  const allFocusable = G.activeClients.filter(c2 =>
+    !(c2.modifier?.type==='payment_delay_fixed' && (c2._monthsSigned||0) <= c2.modifier.val)
+  );
+  const previews = {};
+  allFocusable.forEach(fc => {
+    const fM  = (fc._focus ?? (fc.oneTime ? 100 : 50)) / 100;
+    let raw;
+    if (fc.oneTime) {
+      raw = 100 * fM * spdMult;
+    } else {
+      // Та же формула что в advanceMonth: efficiency без кэпа min=1 — избыток ускоряет
+      const allocThr  = fM * availForReg;
+      const pLoad     = getProjectLoad(fc);
+      const efficiency = pLoad > 0 ? (allocThr / pLoad) : 1;
+      raw = (100 / (fc._duration||3)) * efficiency * spdMult;
+    }
+    const base        = Math.round(raw);
+    const withFatigue = Math.round(raw * fatMult);
+    const rem         = Math.max(0, 100 - (fc._progress||0));
+    previews[fc.id] = {
+      perMonth:    withFatigue,
+      perMonthRaw: base,
+      mthsLeft:    withFatigue > 0 ? Math.ceil(rem / withFatigue) : 99,
+    };
+  });
 
   // ── Сигнал → UI обновляет слайдеры и превью ──────────
   EventBus.emit('focus_changed', {
     cid, pct, totalPct, isOver,
-    preview:      { perMonth, mthsLeft },
+    previews,                          // превью для всех проектов
+    preview: previews[cid] || { perMonth:0, mthsLeft:99 }, // обратная совместимость
     focusableIds: focusable.map(fc => fc.id),
   });
 }
@@ -1047,6 +1083,58 @@ function adjustFocusBy(cid, delta) {
   const c = G.activeClients.find(a => a.id === cid);
   if (!c) return;
   setFocus(cid, (c._focus || 0) + delta);
+}
+
+// Равномерное распределение фокуса среди регулярных проектов (сумма = 100%)
+function equalFocus() {
+  const fAll = G.activeClients.filter(c => !c.oneTime);
+  if (!fAll.length) return;
+  const base = Math.floor(100 / fAll.length);
+  let rem = 100 - base * fAll.length;
+  fAll.forEach(fc => { fc._focus = base + (rem-- > 0 ? 1 : 0); });
+  _emitRender();
+}
+
+// Сбросить фокус у всех регулярных проектов до 0%
+function clearFocus() {
+  G.activeClients.filter(c => !c.oneTime).forEach(c => { c._focus = 0; });
+  _emitRender();
+}
+
+// Выставить фокус для завершения проекта cid за targetMonths месяцев
+function setFocusForMonths(cid, targetMonths) {
+  targetMonths = Math.max(1, Math.round(+targetMonths));
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c) return;
+  const remaining = Math.max(1, 100 - (c._progress || 0));
+  const thr    = getTeamThroughput();
+  const avail  = Math.max(0, thr - getScheduledOneTimeLoad());
+  const pLoad  = getProjectLoad(c);
+  const spdMult = getSpeed();
+  const fatMult = getFatigueMult();
+  const needPerMonth = remaining / targetMonths;
+  // monthProg = (100/dur) * min(1, fMult*avail/pLoad) * fat * spd = needPerMonth
+  // → fMult = needPerMonth * pLoad / ((100/dur) * fat * spd * avail)
+  const baseRatePerUnit = (100 / (c._duration||3)) * fatMult * spdMult / Math.max(1, pLoad);
+  const requiredFocus = avail > 0 && baseRatePerUnit > 0
+    ? Math.min(100, Math.ceil(needPerMonth / (baseRatePerUnit * avail) * 100))
+    : 100;
+  setFocus(cid, requiredFocus);
+}
+
+// Суммарная нагрузка запланированных разовых проектов
+function getScheduledOneTimeLoad(g=G) {
+  return g.activeClients
+    .filter(c => c.oneTime && c._scheduled)
+    .reduce((s, c) => s + getProjectLoad(c), 0);
+}
+
+// Переключить бронирование разового проекта на этот месяц
+function toggleOneTimeSchedule(cid) {
+  const c = G.activeClients.find(a => a.id === cid);
+  if (!c || !c.oneTime) return;
+  c._scheduled = !c._scheduled;
+  _emitRender();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1073,14 +1161,20 @@ function advanceMonth() {
   );
   const focusCount  = focusActive.length;
   // totalFocusW — сумма выставленных фокусов (0–100 каждый); дефолт — равномерное распределение
-  const totalFocusW = focusActive.reduce((s,c) => s + (c._focus ?? Math.floor(100/Math.max(1,focusActive.length))), 0);
-  // Доля реально используемой мощности: если суммарный фокус 20% → команда работает на 20%
-  // Фикс п.22: нормируем через 100, а не через totalFocusW
-  const activeFocusPct = focusCount > 0 ? clamp(totalFocusW / 100, 0, 1) : 1;
-  // Эффективная нагрузка с учётом фокуса — именно она давит на команду в этом месяце
-  const effectiveLoad = totalLoad * activeFocusPct;
-  const loadRatio  = effectiveLoad > 0 ? throughput / effectiveLoad : 1;
-  const overloaded = loadRatio < 0.95;
+  const totalFocusW    = focusActive.reduce((s,c) => s + (c._focus ?? Math.floor(100/Math.max(1,focusActive.length))), 0);
+  // Защитная нормализация: если суммарный фокус > 100% (edge-case — отложенный проект
+  // активировался с «зарезервированным» фокусом поверх уже занятых 100%), масштабируем вниз,
+  // чтобы суммарная аллокация не превысила availableForRegular.
+  const focusNorm = totalFocusW > 100 ? (100 / totalFocusW) : 1;
+  // Нагрузка запланированных разовых — резервируют мощность из пула
+  const scheduledOneTimeLoad = getScheduledOneTimeLoad();
+  const availableForRegular  = Math.max(0, throughput - scheduledOneTimeLoad);
+  // Перегруз: когда суммарно доступной мощности не хватает для всех проектов
+  const overloaded = availableForRegular < totalLoad * 0.95;
+  // Эффективная нагрузка (фокус-взвешенная + разовые) — для расчёта усталости
+  const activeFocusPct  = focusCount > 0 ? clamp(totalFocusW / 100, 0, 1) : 1;
+  const effectiveLoad   = totalLoad * activeFocusPct + scheduledOneTimeLoad;
+  const loadRatio       = effectiveLoad > 0 ? throughput / effectiveLoad : 1; // для лога
 
   // ── Усталость команды (п.11, fix п.17, rework п.21, fix п.22) ─────
   {
@@ -1105,18 +1199,33 @@ function advanceMonth() {
     // focusMult: доля фокуса проекта от 100 (фикс п.22: нормируем через 100, а не totalFocusW)
     // При равном фокусе 3 проектов (33%+33%+33%) → ×0.33 каждый, суммарно ×1.0 команды
     // При 20%+0%+0% → проект A ×0.20, остальные 0, эффективная нагрузка 20%
-    const _cFocus = c._focus ?? Math.floor(100/Math.max(1,focusCount));
-    const focusMult = _cFocus / 100;
-    const speedMult  = getSpeed();
-    const monthProg = (100 / (c._duration||3)) * Math.min(1, loadRatio) * focusMult * fatigueMult * speedMult;
+    const _cFocus      = c._focus ?? Math.floor(100/Math.max(1,focusCount));
+    const focusMult    = (_cFocus / 100) * focusNorm;  // нормализован если total > 100%
+    // Правильная формула: фокус делит availableForRegular, эффективность = доля покрытия нагрузки
+    // При фокус 50% и thr=14, load_project=7: allocThr=7 → efficiency=1.0 → проект в срок ✓
+    // При фокус 50% и thr=10, load_project=7: allocThr=5 → efficiency=5/7=0.71 → перегруз ✓
+    // При фокус 100% и thr=13, load_project=7: allocThr=13 → efficiency=13/7=1.86 → ускорение ✓
+    // Кэп min(1,...) убран: избыток throughput честно ускоряет проект (прогресс cap=100 ниже)
+    const allocThr     = focusMult * availableForRegular;
+    const pLoad        = getProjectLoad(c);
+    const efficiency   = pLoad > 0 ? (allocThr / pLoad) : 1;
+    const speedMult    = getSpeed();
+    const monthProg    = (100 / (c._duration||3)) * efficiency * fatigueMult * speedMult;
     // Округляем до 2 знаков — устраняет накопление float-погрешности (баг П.13)
     c._progress = Math.min(100, Math.round(((c._progress||0) + monthProg) * 100) / 100);
   });
 
   if (overloaded && G.activeClients.filter(c=>!c.oneTime).length > 0) {
-    const eff = Math.round(loadRatio * 100);
-    addLog(`⚠️ Команда перегружена (нагрузка ${Math.round(totalLoad)} > произв. ${Math.round(throughput)}) — прогресс ×${eff}%`, 'amber');
+    const eff    = Math.round(Math.min(1, availableForRegular / Math.max(1, totalLoad)) * 100);
+    const otNote = scheduledOneTimeLoad > 0 ? ` (разовые −${Math.round(scheduledOneTimeLoad)} ед.)` : '';
+    addLog(`⚠️ Команда перегружена (нагрузка ${Math.round(totalLoad)} > доступно ${Math.round(availableForRegular)}${otNote}) — прогресс ×${eff}%`, 'amber');
   }
+
+  // ② б) Разовые проекты: выполняются только если запланированы на этот месяц (_scheduled)
+  // Не накапливают прогресс пассивно — только по явному бронированию ресурса
+  G.activeClients.filter(c => c.oneTime && c._scheduled).forEach(c => {
+    c._progress = 100;
+  });
 
   // ── Milestone-выплаты T2/T3 ──────────────────────────
   G.activeClients.forEach(c => {
@@ -1206,11 +1315,11 @@ function advanceMonth() {
   G.monthsPlayed++;
   G.tempDiscount = 0;
 
-  addLog(`${monthLabel()}: расходы −${fmt(staffCost+OVERHEAD)} → баланс ${fmt(G.money)}`, 'red');
+  addLog(`расходы −${fmt(staffCost+OVERHEAD)} → баланс ${fmt(G.money)}`, 'red');
 
-  // ⑦ Разовые клиенты: авто-завершение после 1 месяца
+  // ⑦ Разовые клиенты: завершение при прогрессе 100% (зависит от выставленного фокуса)
   G.activeClients = G.activeClients.filter(c=>{
-    if (!c.oneTime || c._monthsSigned < 1) return true;
+    if (!c.oneTime || (c._progress||0) < 100) return true;
     const payout = Math.round((c._totalBudget||c.revenue) * getPortfolioMultiplier());
     G.money += payout;
     G.clientEarnings[c.id] = payout;
