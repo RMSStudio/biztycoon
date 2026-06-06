@@ -93,6 +93,7 @@ function initState() {
     caseScoutBonus: 0,      // суммарный бонус лидов при скаутинге от кейсов
     caseRepPenalty: 0,      // репутационный штраф/мес от провальных кейсов в портфолио
     scoutPool: null,        // сохранённый пул скаутинга (массив project-def или null)
+    candidatePool: [],     // пул кандидатов-специалистов (staff.js)
     loan: null,             // активный кредит { principal, monthlyPayment, monthsRemaining, label }
     teamFatigue: 0,              // усталость команды 0–100: 30+=напряжение, 60+=выгорание, 85+=кризис
     fatigueActionCooldowns: {},  // { paid_leave:N, teambuilding:N, corp_vacation:N } — мес. до доступности
@@ -100,6 +101,11 @@ function initState() {
     speedUpgrades: 0,            // суммарный бонус Speed от перков (0.10/0.15/0.20 за Agile/Scrum/Auto)
   };
   DECISIONS = [];
+
+  // Migrate staff from old format (если есть сохранённый стейт)
+  if (typeof migrateStaffArr === 'function' && G.staff.length > 0) {
+    G.staff = migrateStaffArr(G.staff);
+  }
 }
 
 function rd(text, type) {
@@ -122,7 +128,7 @@ function selectSpec(id) {
 function startGame() {
   if (!G.spec) return;
   if (typeof startRun === 'function') startRun(); // saves.js: открыть новый ран
-  G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[];
+  G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[]; G.candidatePool=[];
   G.tempDiscount=0; G.monthsPlayed=0;
   G.actions=ACTIONS_PER_MONTH; G.reputation=100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
@@ -253,7 +259,7 @@ function nudgeAllNPS(g,delta) {
 function updateAllNPS() {
   const quality=getQuality(), volume=getVolume();
   const overloaded=G.activeClients.length>=getCapacity();
-  const hasManager=!!G.staff.find(s=>s.id==='manager');
+  const hasManager=hasRole('manager');
   const hrBonus=countRole('hr')*3; // +3 NPS/мес per HR
   const churned=[];
 
@@ -1453,6 +1459,9 @@ function advanceMonth() {
 
   // ⑩ NPS update
   updateAllNPS();
+
+  // ⑩-б Staff: monthly state update (mood, loyalty, fast_learner growth, candidate pool decay)
+  if (typeof processStaffMonth === 'function') processStaffMonth();
 
   G.month++;
 

@@ -645,26 +645,47 @@ function renderGame() {
   bar.style.width=pct+'%';
   bar.className='progress-fill '+(pct>=80?'green':pct>=40?'amber':'');
 
-  // ── Team ──
-  let thtml=`<div class="staff-item">
-    <div class="staff-avatar" style="background:rgba(79,110,247,.2)">👤</div>
-    <div class="staff-info"><div class="staff-name">Ты (Фаундер)</div><div class="staff-role">Продажи + Скаутинг</div></div>
-    <div class="staff-cost" style="color:var(--sub)">бесплатно</div>
-  </div>`;
-  G.staff.forEach(s=>{
-    const iid=s._iid||s.id; // fallback для старых объектов
-    thtml+=`<div class="staff-item">
-      <div class="staff-avatar" style="background:rgba(79,110,247,.15)">${s.icon}</div>
-      <div class="staff-info"><div class="staff-name">${s.name}</div><div class="staff-role">${s.role}</div></div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <div class="staff-cost">−${fmt(s.cost)}</div>
-        <button class="btn btn-xs" style="background:rgba(248,81,73,.08);color:var(--red);border:1px solid rgba(248,81,73,.2);font-size:10px;padding:3px 7px;border-radius:5px;font-weight:600;cursor:pointer" onclick="fireStaff('${iid}')" title="Выходное пособие: ${fmt(Math.round(s.cost*0.5))}">Уволить</button>
-      </div>
-    </div>`;
-  });
-  document.getElementById('g-team-list').innerHTML=thtml;
+  // ── Team — rich character cards (staff.js) ──
+  if (typeof renderTeamCards === 'function') {
+    renderTeamCards(document.getElementById('g-team-list'));
+  }
 
-  // ── Hire — сгруппировано по роли, коллапсируемые секции ──
+  // ── Hire — Scout Panel ──
+  const poolCount = (G.candidatePool || []).length;
+  const poolBadge = poolCount > 0
+    ? `<span style="background:var(--teal);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700">${poolCount}</span>`
+    : '';
+  document.getElementById('g-hire-list').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;padding:4px 0">
+      <button class="btn btn-primary" style="width:100%;justify-content:center;gap:8px;font-size:13px"
+              onclick="openStaffScoutModal()">
+        🔍 Скаутинг специалистов ${poolBadge}
+      </button>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <button class="btn btn-ghost" style="font-size:11px;padding:7px 4px;justify-content:center;flex-direction:column;gap:2px;line-height:1.3;text-align:center"
+                onclick="scoutCandidates('free')">
+          <span>Бесплатный</span>
+          <span style="color:var(--muted);font-size:10px">Junior–Middle</span>
+        </button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:7px 4px;justify-content:center;flex-direction:column;gap:2px;line-height:1.3;text-align:center"
+                onclick="scoutCandidates('paid')">
+          <span>Платный</span>
+          <span style="color:var(--teal);font-size:10px">25 000 ₽</span>
+        </button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:7px 4px;justify-content:center;flex-direction:column;gap:2px;line-height:1.3;text-align:center"
+                onclick="scoutCandidates('premium')">
+          <span>Премиум</span>
+          <span style="color:var(--purple);font-size:10px">60 000 ₽</span>
+        </button>
+      </div>
+      ${poolCount > 0
+        ? `<div style="font-size:11px;color:var(--sub);text-align:center;padding:2px 0">
+            ${poolCount} ${poolCount===1?'кандидат':'кандидатов'} ожидают просмотра
+          </div>`
+        : ''}
+    </div>`;
+
+  // ── Legacy hire accordion (hidden — kept for scenario-editor compat) ──
   const dayCostHire=hasRole('hr') ? 1 : HIRE_COST;
   let hhtml='';
   STAFF_ROLES.forEach(role=>{
@@ -726,7 +747,7 @@ function renderGame() {
     });
     hhtml += `</div></div>`;
   });
-  document.getElementById('g-hire-list').innerHTML=hhtml;
+  // (legacy hhtml computed but not applied — scout panel is rendered above)
 
   // Синхронизируем видимость секции найма с _acc.hire
   { const el = document.getElementById('acc-hire'); if (el) el.style.display = _acc.hire ? 'block' : 'none'; }

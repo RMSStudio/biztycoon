@@ -1143,3 +1143,225 @@
     flex: 1;
     min-height: 0;
   }
+
+  /* ══ STAFF v2 — Trait Badges ══ */
+
+  .trait-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 500;
+    padding: 2px 7px; border-radius: 20px;
+    white-space: nowrap;
+  }
+  .trait-pos     { background: rgba(16,185,129,.15); color: var(--green); border: 1px solid rgba(16,185,129,.25); }
+  .trait-neg     { background: rgba(248,81,73,.12);  color: var(--red);   border: 1px solid rgba(248,81,73,.22); }
+  .trait-hidden  { background: rgba(255,255,255,.06); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ══ STAFF v2 — Team Cards (game panel) ══ */
+
+  .staff-char-card {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .staff-char-card:last-child { border-bottom: none; }
+  .founder-card .staff-char-body { flex: 1; }
+
+  .staff-char-avatar {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+
+  .staff-char-body   { flex: 1; min-width: 0; }
+  .staff-char-top    { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+  .staff-char-name   { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .staff-char-role   { font-size: 10px; color: var(--sub); margin-top: 1px; }
+  .staff-char-cost   { font-size: 10px; color: var(--red); flex-shrink: 0; }
+
+  .staff-grade-badge {
+    font-size: 9px; font-weight: 700; letter-spacing: .3px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 5px;
+    margin-left: 4px; vertical-align: middle;
+    color: var(--muted);
+  }
+
+  .staff-char-stats {
+    display: flex; gap: 10px;
+    font-size: 10px; color: var(--sub);
+    margin-top: 5px;
+  }
+  .staff-char-stats span strong { color: var(--text); }
+
+  .staff-char-bars  { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
+  .staff-bar-row    { display: flex; align-items: center; gap: 5px; }
+  .staff-bar-lbl    { font-size: 10px; width: 14px; text-align: center; }
+  .staff-bar-track  { flex: 1; height: 4px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+  .staff-bar-fill   { height: 100%; border-radius: 2px; transition: width .3s; }
+
+  .staff-char-traits { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+  .staff-fire-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 11px;
+    padding: 4px 5px; border-radius: 4px;
+    transition: color .12s, background .12s;
+    flex-shrink: 0; align-self: flex-start;
+    margin-top: 2px;
+  }
+  .staff-fire-btn:hover { color: var(--red); background: rgba(248,81,73,.1); }
+
+  /* ══ STAFF v2 — Candidate Cards (scout modal) ══ */
+
+  .cand-empty {
+    text-align: center; padding: 40px 20px;
+    color: var(--sub); font-size: 13px;
+  }
+
+  .cand-card {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px; margin-bottom: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: border-color .12s;
+  }
+  .cand-card:hover { border-color: rgba(79,110,247,.35); }
+
+  .cand-avatar {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+
+  .cand-info    { flex: 1; min-width: 0; }
+  .cand-header  { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .cand-name    { font-size: 13px; font-weight: 600; color: var(--text); }
+  .cand-age     { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .cand-role    { font-size: 11px; color: var(--sub); margin-top: 1px; }
+  .cand-grade-lbl { font-weight: 600; color: var(--text); }
+  .cand-salary  { font-size: 12px; font-weight: 700; color: var(--teal); flex-shrink: 0; }
+
+  .cand-stats   { display: flex; gap: 12px; font-size: 11px; color: var(--sub); margin-top: 5px; }
+  .cand-stats strong { color: var(--text); }
+
+  .cand-traits  { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+  /* ══ STAFF v2 — Profile Modal ══ */
+
+  .profile-header {
+    display: flex; align-items: center; gap: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .profile-avatar {
+    width: 56px; height: 56px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; flex-shrink: 0;
+  }
+  .profile-name    { font-size: 17px; font-weight: 700; color: var(--text); }
+  .profile-subrole { font-size: 12px; color: var(--sub); margin-top: 3px; }
+  .profile-age     { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .profile-stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 8px; margin-bottom: 16px;
+  }
+  .profile-stat {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px;
+    text-align: center;
+  }
+  .profile-stat-val { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1; }
+  .profile-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  .profile-section-lbl {
+    font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .profile-traits-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+
+  .profile-trait {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    border: 1px solid transparent;
+  }
+  .profile-trait-pos { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.18); }
+  .profile-trait-neg { background: rgba(248,81,73,.07);  border-color: rgba(248,81,73,.18); }
+  .profile-trait-hidden { background: rgba(255,255,255,.04); border-color: var(--border); }
+
+  .trait-icon { font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .trait-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .trait-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ══ STAFF v2 — Interview ══ */
+
+  .itv-section {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px; margin-bottom: 12px;
+  }
+  .itv-title  { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .itv-hint   { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+
+  .itv-question { margin-bottom: 12px; }
+  .itv-q-text   { font-size: 12px; color: var(--text); font-weight: 500; margin-bottom: 6px; font-style: italic; }
+  .itv-options  { display: flex; flex-direction: column; gap: 4px; }
+
+  .itv-option {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 7px 10px; border-radius: 7px;
+    border: 1px solid var(--border);
+    cursor: pointer; font-size: 11px; color: var(--sub);
+    transition: background .12s, border-color .12s;
+  }
+  .itv-option:has(input:checked) {
+    background: rgba(79,110,247,.1);
+    border-color: rgba(79,110,247,.4);
+    color: var(--text);
+  }
+  .itv-option input { margin-top: 1px; flex-shrink: 0; accent-color: var(--accent); }
+
+  .itv-done {
+    text-align: center; padding: 12px;
+    font-size: 12px; color: var(--green);
+    background: rgba(16,185,129,.08);
+    border: 1px solid rgba(16,185,129,.2);
+    border-radius: 8px; margin-bottom: 12px;
+  }
+
+  .itv-reveal-block {
+    background: rgba(79,110,247,.08);
+    border: 1px solid rgba(79,110,247,.2);
+    border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .itv-reveal-title { font-size: 11px; font-weight: 600; color: var(--accent2); }
+  .itv-salary-hint  { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* ══ STAFF v2 — Offer ══ */
+
+  .offer-section {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .offer-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+  .offer-row   { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--sub); }
+  .offer-input {
+    width: 140px; padding: 6px 10px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 7px; color: var(--text);
+    font-size: 13px; font-weight: 600;
+    font-family: inherit; text-align: right;
+  }
+  .offer-input:focus { outline: none; border-color: var(--teal); }
+  .offer-hint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.5; }

@@ -317,6 +317,35 @@
 
 <div class="notif" id="notif"></div>
 
+<!-- ══ STAFF SCOUT MODAL ══ -->
+<div class="modal-overlay" id="staff-scout-modal" onclick="if(event.target===this)closeStaffScoutModal()">
+  <div class="modal modal-wide" style="max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden">
+    <div class="scout-header" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h3>🔍 Скаутинг специалистов</h3>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="closeStaffScoutModal()">✕</button>
+      </div>
+      <p>Найди и найми уникальных специалистов для своего агентства</p>
+    </div>
+    <div id="candidate-pool-list" style="overflow-y:auto;flex:1;min-height:0;padding-right:2px"></div>
+    <button class="btn btn-ghost" onclick="closeStaffScoutModal()"
+            style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
+  </div>
+</div>
+
+<!-- ══ STAFF PROFILE MODAL ══ -->
+<div class="modal-overlay" id="staff-profile-modal" onclick="if(event.target===this)closeStaffProfileModal()">
+  <div class="modal modal-wide" style="max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:12px">
+      <h3 style="font-size:16px;font-weight:700">Профиль кандидата</h3>
+      <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="closeStaffProfileModal()">✕</button>
+    </div>
+    <div id="staff-profile-body" style="overflow-y:auto;flex:1;min-height:0;padding-right:2px"></div>
+    <button class="btn btn-ghost" onclick="closeStaffProfileModal()"
+            style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">← Назад к пулу</button>
+  </div>
+</div>
+
 <!-- ══ SAVE MODAL ══ -->
 <div class="modal-overlay" id="save-modal" onclick="if(event.target===this)closeSaveModal()">
   <div class="modal modal-wide">
@@ -338,6 +367,7 @@
 <script src="scenarios/presets/index.js"></script>
 <!-- scenario-editor до engine.js: applyActiveScenario модифицирует SCENARIO in-place,
      после чего engine.js биндит свои const из уже изменённого объекта -->
+<script src="src/staff.js"></script>
 <script src="src/scenario-editor.js"></script>
 <script>SE.applyActiveScenario();</script>
 <script src="src/engine.js"></script>
