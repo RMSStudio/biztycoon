@@ -121,6 +121,7 @@ function selectSpec(id) {
 
 function startGame() {
   if (!G.spec) return;
+  if (typeof startRun === 'function') startRun(); // saves.js: открыть новый ран
   G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[];
   G.tempDiscount=0; G.monthsPlayed=0;
   G.actions=ACTIONS_PER_MONTH; G.reputation=100;

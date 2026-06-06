@@ -1014,7 +1014,7 @@ function showEvent(ev) {
       document.getElementById('event-modal').classList.remove('active');
       renderGame();
       if (G.money<=0){endGame(false);return;}
-      if (G.money>=3000000){endGame(true);}
+      if (G.money>=SCENARIO.settings.winCondition){endGame(true);}
     };
     div.appendChild(btn);
   });

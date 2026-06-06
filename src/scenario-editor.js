@@ -48,6 +48,64 @@ const SE = (() => {
       eventChanceMult:    1.0,
       customStaff:        [],   // кастомные роли для сценария
       customProjects:     [],   // кастомные проекты для сценария
+      customEvents:       [],   // кастомные события для сценария
+    };
+  }
+
+  // ── Event/choice defaults ─────────────────────────────
+  function _defaultChoice() {
+    return { text:'', desc:'', effects:[] };
+  }
+
+  function _defaultEvent(preset) {
+    const base = {
+      id:              _suid(),
+      icon:            '⚡',
+      title:           '',
+      body:            '',
+      requiresClients: false,
+      chance:          0.15,
+      choices:         [_defaultChoice(), _defaultChoice()],
+    };
+    const P = EVENT_PRESETS[preset] || {};
+    return Object.assign(base, P.data || {}, { id: base.id });
+  }
+
+  // ── Effect fn builder (вызывается в applyActiveScenario) ─
+  function _buildEffectFn(effects) {
+    return function(g) {
+      (effects || []).forEach(eff => {
+        const v = Number(eff.val) || 0;
+        switch (eff.type) {
+          case 'money_add':
+            g.money = (g.money || 0) + v;
+            break;
+          case 'nps_all':
+            Object.keys(g.clientNPS || {}).forEach(id => {
+              g.clientNPS[id] = Math.min(100, Math.max(0, (g.clientNPS[id] || 60) + v));
+            });
+            break;
+          case 'reputation':
+            g.reputation = Math.min(100, Math.max(0, (g.reputation || 0) + v));
+            break;
+          case 'fatigue':
+            g.teamFatigue = Math.min(100, Math.max(0, (g.teamFatigue || 0) + v));
+            break;
+          case 'portfolio':
+            g.portfolio = Math.max(0, (g.portfolio || 0) + v);
+            break;
+          case 'random_money':
+            if (Math.random() < 0.5) g.money = (g.money || 0) + v;
+            break;
+          case 'random_nps':
+            if (Math.random() < 0.5) {
+              Object.keys(g.clientNPS || {}).forEach(id => {
+                g.clientNPS[id] = Math.min(100, Math.max(0, (g.clientNPS[id] || 60) + v));
+              });
+            }
+            break;
+        }
+      });
     };
   }
 
@@ -185,6 +243,21 @@ const SE = (() => {
         ev.chance = Math.min(1, Math.max(0, ev._baseChance * ecm));
       });
     }
+
+    // Inject custom events — rebuild fn from effects each time
+    if (ov.customEvents && ov.customEvents.length > 0 && typeof SCENARIO.events !== 'undefined') {
+      ov.customEvents.forEach(ev => {
+        SCENARIO.events = SCENARIO.events.filter(e => e.id !== ev.id);
+        SCENARIO.events.push({
+          ...ev,
+          chance: Math.min(1, (ev.chance || 0.15) * ecm),
+          choices: (ev.choices || []).map(c => ({
+            ...c,
+            fn: _buildEffectFn(c.effects),
+          })),
+        });
+      });
+    }
   }
 
   // ── UI State ──────────────────────────────────────────
@@ -319,11 +392,7 @@ const SE = (() => {
     }
 
     if (section === 'events') {
-      return `
-        <p class="se-section-note">×0 = события отключены; ×1 = стандарт; ×2 = хаотичная игра.</p>
-        <div class="se-fields">
-          ${_multField('Частота событий', 'eventChanceMult', ov.eventChanceMult, 0, 3.0, 0.1, 'Влияет на chance каждого события в пуле')}
-        </div>`;
+      return _renderEventsSection(sc);
     }
 
     return '<p style="color:var(--muted)">Раздел в разработке</p>';
@@ -347,7 +416,10 @@ const SE = (() => {
 
         <div class="se-subsection-title" style="margin-top:28px">
           Кастомные сотрудники
-          <button class="btn btn-teal se-add-btn" onclick="SE._addStaff()">+ Добавить роль</button>
+          <div style="display:flex;gap:8px;margin-left:auto">
+            <button class="se-lib-btn" onclick="SE._openPresetModal('staff')">📚 Из библиотеки</button>
+            <button class="btn btn-teal se-add-btn" style="margin-left:0" onclick="SE._addStaff()">+ Добавить</button>
+          </div>
         </div>
         ${staff.length === 0
           ? `<p class="se-section-note">Роли под конкретный бизнес-сценарий — добавляются в пул найма поверх базовых.</p>`
@@ -388,6 +460,307 @@ const SE = (() => {
       </div>`;
   }
 
+  // ── Events section ────────────────────────────────────
+  const EFFECT_TYPES = {
+    money_add:    { label:'Деньги ±₽',          unit:'rub', min:-500000, max:500000, step:5000 },
+    nps_all:      { label:'NPS всех клиентов',  unit:'nps', min:-30,     max:30,     step:1    },
+    reputation:   { label:'Репутация ±',         unit:'rep', min:-20,     max:20,     step:1    },
+    fatigue:      { label:'Усталость команды ±', unit:'pct', min:-30,     max:30,     step:5    },
+    portfolio:    { label:'Портфолио ±',         unit:'q',   min:-10,     max:10,     step:1    },
+    random_money: { label:'Случайно: деньги ±₽', unit:'rub', min:0,      max:500000, step:5000 },
+    random_nps:   { label:'Случайно: NPS ±',     unit:'nps', min:-20,    max:20,     step:1    },
+  };
+
+  // Пресеты для быстрого старта
+  const EVENT_PRESETS = {
+    blank:   { label:'Пустое',           data:{} },
+    money:   { label:'Финансовый шок',   data:{ icon:'💸', title:'Внезапный счёт', body:'Непредвиденные расходы. Решение за тобой.', requiresClients:false, chance:0.15,
+               choices:[
+                 { text:'Оплатить сейчас (−50 000 ₽)', desc:'Устраняет проблему быстро', effects:[{type:'money_add', val:-50000}] },
+                 { text:'Отложить', desc:'Репутация немного падает', effects:[{type:'reputation', val:-5}] },
+               ]}},
+    nps:     { label:'NPS-кризис',       data:{ icon:'📉', title:'Клиенты недовольны', body:'Что-то пошло не так. NPS просел у всех.', requiresClients:true, chance:0.15,
+               choices:[
+                 { text:'Антикризисный аудит (−30 000 ₽)', desc:'NPS +15 у всех', effects:[{type:'money_add', val:-30000},{type:'nps_all', val:15}] },
+                 { text:'Переждать', desc:'NPS −18 у всех', effects:[{type:'nps_all', val:-18}] },
+               ]}},
+    bonus:   { label:'Неожиданный бонус', data:{ icon:'🎉', title:'Удача на рынке', body:'Рынок поднялся, клиент доволен.', requiresClients:false, chance:0.10,
+               choices:[
+                 { text:'Принять бонус', desc:'Дополнительный доход', effects:[{type:'random_money', val:60000}] },
+                 { text:'Реинвестировать', desc:'Репутация растёт', effects:[{type:'reputation', val:8}] },
+               ]}},
+    team:    { label:'Конфликт в команде', data:{ icon:'⚡', title:'Напряжение в команде', body:'Усталость сказывается на работе.', requiresClients:false, chance:0.12,
+               choices:[
+                 { text:'Тимбилдинг (−25 000 ₽)', desc:'NPS +10, усталость −15', effects:[{type:'money_add', val:-25000},{type:'nps_all', val:10},{type:'fatigue', val:-15}] },
+                 { text:'Поговорить самому', desc:'50% шанс — NPS ±8', effects:[{type:'random_nps', val:-8}] },
+               ]}},
+  };
+
+  function _renderEventsSection(sc) {
+    const ov     = sc.overrides;
+    const events = ov.customEvents || [];
+    const presetOpts = Object.entries(EVENT_PRESETS).map(([k,v]) =>
+      `<option value="${k}">${v.label}</option>`).join('');
+
+    return `
+      <div class="se-team-section">
+        <div class="se-subsection-title">Глобальный множитель</div>
+        <p class="se-section-note">×0 = события отключены · ×1 = стандарт · ×2 = хаотичная игра</p>
+        <div class="se-fields">
+          ${_multField('Частота событий', 'eventChanceMult', ov.eventChanceMult, 0, 3.0, 0.1, 'Влияет на шанс каждого события в пуле')}
+        </div>
+
+        <div class="se-subsection-title" style="margin-top:28px">
+          Кастомные события
+          <div style="display:flex;gap:8px;margin-left:auto;align-items:center">
+            <button class="se-lib-btn" onclick="SE._openPresetModal('events')">📚 Из библиотеки</button>
+            <select class="se-staff-grade-sel" id="se-event-preset-sel" style="font-size:11px">
+              ${presetOpts}
+            </select>
+            <button class="btn btn-teal se-add-btn" style="margin-left:0"
+                    onclick="SE._addEvent(document.getElementById('se-event-preset-sel').value)">
+              + Добавить
+            </button>
+          </div>
+        </div>
+        ${events.length === 0
+          ? `<p class="se-section-note">События появляются случайно раз в несколько месяцев и предлагают игроку выбор с последствиями.</p>`
+          : ''}
+        <div class="se-staff-list" id="se-event-list">
+          ${events.map(ev => _eventCard(ev)).join('')}
+        </div>
+      </div>`;
+  }
+
+  function _eventCard(ev) {
+    const id = ev.id;
+    return `
+      <div class="se-staff-card se-event-card" id="se-event-${id}">
+        <!-- Шапка -->
+        <div class="se-staff-header">
+          <input class="se-project-icon" type="text" maxlength="4"
+                 value="${_esc(ev.icon||'⚡')}" placeholder="⚡"
+                 oninput="SE._eventFieldChange('${id}','icon',this.value)">
+          <input class="se-staff-role" type="text"
+                 value="${_esc(ev.title)}" placeholder="Название события..."
+                 oninput="SE._eventFieldChange('${id}','title',this.value)">
+          <button class="se-staff-del" onclick="SE._removeEvent('${id}')" title="Удалить">✕</button>
+        </div>
+
+        <!-- Описание события -->
+        <textarea class="se-event-body" rows="2"
+                  placeholder="Описание ситуации, которую увидит игрок..."
+                  oninput="SE._eventFieldChange('${id}','body',this.value)">${_esc(ev.body||'')}</textarea>
+
+        <!-- Шанс + флаг клиентов -->
+        <div class="se-project-row" style="align-items:flex-end;gap:20px">
+          <div class="se-project-sel-group" style="flex:1">
+            <span class="se-field-lbl">Шанс появления/мес</span>
+            <div class="se-field-row">
+              <input type="range" class="se-slider" min="0.02" max="0.8" step="0.02"
+                     value="${ev.chance||0.15}"
+                     oninput="document.getElementById('se-ev-${id}-ch-num').value=Math.round(this.value*100);
+                              SE._eventFieldChange('${id}','chance',+this.value)">
+              <input type="number" class="se-num-input" id="se-ev-${id}-ch-num"
+                     min="2" max="80" step="2" value="${Math.round((ev.chance||0.15)*100)}"
+                     oninput="SE._eventFieldChange('${id}','chance',Math.min(80,Math.max(2,+this.value||2))/100)">
+              <span class="se-field-unit">%</span>
+            </div>
+          </div>
+          <label class="se-toggle-opt" style="padding-bottom:6px">
+            <input type="checkbox" ${ev.requiresClients?'checked':''}
+                   onchange="SE._eventFieldChange('${id}','requiresClients',this.checked)">
+            Требует активных клиентов
+          </label>
+        </div>
+
+        <!-- Варианты выбора -->
+        <div class="se-project-subsection">Варианты выбора</div>
+        <div class="se-choices-list" id="se-choices-${id}">
+          ${(ev.choices||[]).map((c,ci) => _choiceBlock(id, ci, c)).join('')}
+        </div>
+        ${(ev.choices||[]).length < 3
+          ? `<button class="se-add-choice-btn" onclick="SE._addChoice('${id}')">+ Добавить вариант</button>`
+          : ''}
+      </div>`;
+  }
+
+  function _choiceBlock(evId, ci, c) {
+    return `
+      <div class="se-choice-block" id="se-choice-${evId}-${ci}">
+        <div class="se-choice-header">
+          <span class="se-choice-num">Вариант ${ci+1}</span>
+          ${ci >= 2 ? `<button class="se-staff-del" onclick="SE._removeChoice('${evId}',${ci})" style="font-size:11px;padding:3px 7px">✕</button>` : ''}
+        </div>
+        <input class="se-staff-role" type="text" style="font-size:13px"
+               value="${_esc(c.text||'')}" placeholder="Текст кнопки выбора..."
+               oninput="SE._choiceFieldChange('${evId}',${ci},'text',this.value)">
+        <input class="se-staff-desc" type="text" style="border-top:1px solid var(--border);padding-top:6px"
+               value="${_esc(c.desc||'')}" placeholder="Подсказка под кнопкой..."
+               oninput="SE._choiceFieldChange('${evId}',${ci},'desc',this.value)">
+        <div class="se-effects-list" id="se-effects-${evId}-${ci}">
+          ${(c.effects||[]).map((eff,ei) => _effectRow(evId, ci, ei, eff)).join('')}
+        </div>
+        <button class="se-add-effect-btn" onclick="SE._addEffect('${evId}',${ci})">+ эффект</button>
+      </div>`;
+  }
+
+  function _effectRow(evId, ci, ei, eff) {
+    const def  = EFFECT_TYPES[eff.type] || EFFECT_TYPES.money_add;
+    const opts = Object.entries(EFFECT_TYPES).map(([k,v]) =>
+      `<option value="${k}" ${eff.type===k?'selected':''}>${v.label}</option>`).join('');
+    const fid = `se-eff-${evId}-${ci}-${ei}`;
+    return `
+      <div class="se-effect-row" id="${fid}">
+        <select class="se-staff-grade-sel" style="flex:1.5;font-size:11px"
+                onchange="SE._effectFieldChange('${evId}',${ci},${ei},'type',this.value,'${fid}')">
+          ${opts}
+        </select>
+        <input type="range" class="se-slider" id="${fid}-slider"
+               min="${def.min}" max="${def.max}" step="${def.step}" value="${eff.val||0}"
+               oninput="document.getElementById('${fid}-num').value=this.value;
+                        SE._effectFieldChange('${evId}',${ci},${ei},'val',+this.value,'${fid}')">
+        <input type="number" class="se-num-input" id="${fid}-num"
+               min="${def.min}" max="${def.max}" step="${def.step}" value="${eff.val||0}"
+               oninput="document.getElementById('${fid}-slider').value=this.value;
+                        SE._effectFieldChange('${evId}',${ci},${ei},'val',+this.value,'${fid}')">
+        <span class="se-field-unit" style="min-width:24px">${_unitSuffix(def.unit)}</span>
+        <button class="se-staff-del" style="padding:3px 7px;font-size:11px"
+                onclick="SE._removeEffect('${evId}',${ci},${ei})">✕</button>
+      </div>`;
+  }
+
+  // ── Events CRUD ────────────────────────────────────────
+  function _addEvent(preset) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc) return;
+    if (!sc.overrides.customEvents) sc.overrides.customEvents = [];
+    const ev = _defaultEvent(preset);
+    sc.overrides.customEvents.push(ev);
+    _save(all);
+    const list = document.getElementById('se-event-list');
+    if (list) list.insertAdjacentHTML('beforeend', _eventCard(ev));
+  }
+
+  function _removeEvent(evId) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    sc.overrides.customEvents = sc.overrides.customEvents.filter(e => e.id !== evId);
+    _save(all);
+    const card = document.getElementById('se-event-' + evId);
+    if (card) card.remove();
+  }
+
+  function _eventFieldChange(evId, field, value) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    const ev = sc.overrides.customEvents.find(e => e.id === evId);
+    if (!ev) return;
+    ev[field] = value;
+    _save(all);
+  }
+
+  function _addChoice(evId) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    const ev = sc.overrides.customEvents.find(e => e.id === evId);
+    if (!ev || (ev.choices||[]).length >= 3) return;
+    ev.choices.push(_defaultChoice());
+    _save(all);
+    // Re-render choices block
+    const cList = document.getElementById('se-choices-' + evId);
+    if (cList) cList.innerHTML = ev.choices.map((c,ci) => _choiceBlock(evId, ci, c)).join('');
+    // Hide add button if 3 choices now
+    if (ev.choices.length >= 3) {
+      const btn = cList?.nextElementSibling;
+      if (btn && btn.classList.contains('se-add-choice-btn')) btn.style.display = 'none';
+    }
+  }
+
+  function _removeChoice(evId, ci) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    const ev = sc.overrides.customEvents.find(e => e.id === evId);
+    if (!ev || !ev.choices || ci < 2) return;
+    ev.choices.splice(ci, 1);
+    _save(all);
+    const cList = document.getElementById('se-choices-' + evId);
+    if (cList) cList.innerHTML = ev.choices.map((c,ci) => _choiceBlock(evId, ci, c)).join('');
+    const btn = cList?.nextElementSibling;
+    if (btn && btn.classList.contains('se-add-choice-btn')) btn.style.display = '';
+  }
+
+  function _choiceFieldChange(evId, ci, field, value) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    const ev = sc.overrides.customEvents.find(e => e.id === evId);
+    if (!ev || !ev.choices[ci]) return;
+    ev.choices[ci][field] = value;
+    _save(all);
+  }
+
+  function _addEffect(evId, ci) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    const ev = sc.overrides.customEvents.find(e => e.id === evId);
+    if (!ev || !ev.choices[ci]) return;
+    const newEff = { type:'money_add', val:0 };
+    ev.choices[ci].effects.push(newEff);
+    const ei = ev.choices[ci].effects.length - 1;
+    _save(all);
+    const efList = document.getElementById(`se-effects-${evId}-${ci}`);
+    if (efList) efList.insertAdjacentHTML('beforeend', _effectRow(evId, ci, ei, newEff));
+  }
+
+  function _removeEffect(evId, ci, ei) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    const ev = sc.overrides.customEvents.find(e => e.id === evId);
+    if (!ev || !ev.choices[ci]) return;
+    ev.choices[ci].effects.splice(ei, 1);
+    _save(all);
+    // Re-render all effects to fix indices
+    const efList = document.getElementById(`se-effects-${evId}-${ci}`);
+    if (efList) efList.innerHTML = ev.choices[ci].effects.map((e,i) => _effectRow(evId, ci, i, e)).join('');
+  }
+
+  function _effectFieldChange(evId, ci, ei, field, value, fid) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customEvents) return;
+    const ev = sc.overrides.customEvents.find(e => e.id === evId);
+    if (!ev || !ev.choices[ci] || !ev.choices[ci].effects[ei]) return;
+    ev.choices[ci].effects[ei][field] = field === 'val' ? Number(value) : value;
+    _save(all);
+    // If type changed — update slider/num bounds
+    if (field === 'type') {
+      const def = EFFECT_TYPES[value] || EFFECT_TYPES.money_add;
+      const slider = document.getElementById(fid + '-slider');
+      const num    = document.getElementById(fid + '-num');
+      if (slider) { slider.min = def.min; slider.max = def.max; slider.step = def.step; slider.value = 0; }
+      if (num)    { num.min = def.min; num.max = def.max; num.step = def.step; num.value = 0; }
+      ev.choices[ci].effects[ei].val = 0;
+      _save(all);
+    }
+  }
+
   // ── Projects section ──────────────────────────────────
   const PROJECT_TYPES   = { small:'Small', store:'Brand/Store', corp:'Corp', brand:'Брендинг' };
   const PROJECT_RARITY  = { common:'Common', uncommon:'Uncommon', rare:'Rare', epic:'Epic' };
@@ -417,7 +790,10 @@ const SE = (() => {
 
         <div class="se-subsection-title" style="margin-top:28px">
           Кастомные проекты
-          <button class="btn btn-teal se-add-btn" onclick="SE._addProject()">+ Добавить проект</button>
+          <div style="display:flex;gap:8px;margin-left:auto">
+            <button class="se-lib-btn" onclick="SE._openPresetModal('projects')">📚 Из библиотеки</button>
+            <button class="btn btn-teal se-add-btn" style="margin-left:0" onclick="SE._addProject()">+ Добавить</button>
+          </div>
         </div>
         ${projects.length === 0
           ? `<p class="se-section-note">Проекты под конкретный бизнес-сценарий — добавляются в пул скаутинга.</p>`
@@ -922,6 +1298,115 @@ const SE = (() => {
     reader.readAsText(file);
   }
 
+  // ── Preset modal ─────────────────────────────────────
+
+  const PRESET_CAT_LABELS = { staff:'Персонал', projects:'Проекты', events:'События' };
+
+  function _openPresetModal(cat) {
+    if (!_editingId) return;
+    const presets = (window.SE_PRESETS || {})[cat] || [];
+    if (!presets.length) return;
+
+    // Group by _label
+    const groups = {};
+    presets.forEach((p, idx) => {
+      const lbl = p._label || 'Прочее';
+      if (!groups[lbl]) groups[lbl] = [];
+      groups[lbl].push({ p, idx });
+    });
+
+    const groupHtml = Object.entries(groups).map(([lbl, items]) => `
+      <div class="se-modal-group">
+        <div class="se-modal-group-title">${lbl}</div>
+        <div class="se-modal-cards">
+          ${items.map(({ p, idx }) => `
+            <div class="se-modal-card">
+              <div class="se-modal-card-icon">${p.icon || ''}</div>
+              <div class="se-modal-card-body">
+                <div class="se-modal-card-name">${_esc(p.name || p.role || p.title || '')}</div>
+                <div class="se-modal-card-desc">${_esc(p.desc || p.body || '')}</div>
+              </div>
+              <button class="se-modal-add-btn" onclick="SE._addFromPreset('${cat}',${idx})">＋</button>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'se-preset-overlay';
+    overlay.className = 'se-preset-overlay';
+    overlay.innerHTML = `
+      <div class="se-preset-modal">
+        <div class="se-preset-modal-header">
+          <span>${PRESET_CAT_LABELS[cat] || cat} — библиотека пресетов</span>
+          <button class="se-preset-close" onclick="SE._closePresetModal()">×</button>
+        </div>
+        <div class="se-preset-modal-body">
+          ${groupHtml}
+        </div>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) SE._closePresetModal(); });
+    document.body.appendChild(overlay);
+    // Animate in
+    requestAnimationFrame(() => overlay.classList.add('se-preset-overlay--visible'));
+  }
+
+  function _closePresetModal() {
+    const overlay = document.getElementById('se-preset-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('se-preset-overlay--visible');
+    overlay.addEventListener('transitionend', () => overlay.remove(), { once:true });
+  }
+
+  function _addFromPreset(cat, idx) {
+    const preset = ((window.SE_PRESETS || {})[cat] || [])[idx];
+    if (!preset || !_editingId) return;
+
+    // Strip internal _* keys, assign new id
+    const base = Object.fromEntries(Object.entries(preset).filter(([k]) => !k.startsWith('_')));
+    base.id = _suid();
+
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc) return;
+
+    if (cat === 'staff') {
+      if (!sc.overrides.customStaff) sc.overrides.customStaff = [];
+      sc.overrides.customStaff.push(base);
+      _save(all);
+      const list = document.getElementById('se-staff-list');
+      if (list) list.insertAdjacentHTML('beforeend', _staffCard(base));
+    } else if (cat === 'projects') {
+      if (!sc.overrides.customProjects) sc.overrides.customProjects = [];
+      // Deep-clone modifier/prepayment/requirements
+      base.modifier     = { ...(base.modifier     || { type:'none', val:0, val2:0 }) };
+      base.prepayment   = { ...(base.prepayment   || { enabled:false, prob:0.5, pct:0.3 }) };
+      base.requirements = { ...(base.requirements || { minQ:0, minV:0, minPortfolio:0, requiresDev:false }) };
+      // Fallback budget range from tier
+      if (!base.budgetMin) {
+        const _tr = { 1:[90000,165000], 2:[220000,440000], 3:[550000,1320000], 4:[1500000,3500000] };
+        const [bMin, bMax] = _tr[base.tier] || [90000, 165000];
+        base.budgetMin = bMin; base.budgetMax = bMax;
+      }
+      sc.overrides.customProjects.push(base);
+      _save(all);
+      const list = document.getElementById('se-project-list');
+      if (list) list.insertAdjacentHTML('beforeend', _projectCard(base));
+    } else if (cat === 'events') {
+      if (!sc.overrides.customEvents) sc.overrides.customEvents = [];
+      // Deep-clone choices & effects
+      base.choices = (base.choices || []).map(c => ({
+        ...c,
+        effects: (c.effects || []).map(e => ({ ...e })),
+      }));
+      sc.overrides.customEvents.push(base);
+      _save(all);
+      const list = document.getElementById('se-event-list');
+      if (list) list.insertAdjacentHTML('beforeend', _eventCard(base));
+    }
+
+    _closePresetModal();
+  }
+
   // ── Sync intro stats ──────────────────────────────────
   function _syncIntroStats() {
     const active   = getActive();
@@ -959,6 +1444,18 @@ const SE = (() => {
     _projectModChange,
     _projectPreChange,
     _projectRerenderBudget,
+    _openPresetModal,
+    _closePresetModal,
+    _addFromPreset,
+    _addEvent,
+    _removeEvent,
+    _eventFieldChange,
+    _addChoice,
+    _removeChoice,
+    _choiceFieldChange,
+    _addEffect,
+    _removeEffect,
+    _effectFieldChange,
   };
 
 })();

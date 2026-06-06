@@ -1,20 +1,51 @@
 // ══════════════════════════════════════════════════════
-//  SAVES — система сохранений
+//  SAVES v2 — система сохранений по ранам
+//
+//  Структура хранилища:
+//    btz_runs_v2: Run[]
+//    Run: { runId, startTs, scenario, label, steps: Step[] }
+//    Step: { id, type:'auto'|'manual', month, money, label, ts, state }
+//
+//  Правила:
+//    · хранятся последние MAX_RUNS ранов
+//    · внутри рана — все шаги без ограничений
+//    · новый ран создаётся при startGame() → startRun()
+//    · loadSave() переключает "текущий ран" на тот, откуда загрузка
+//
 //  Зависит от: events.js (EventBus), engine.js (G, DECISIONS, notify, monthLabel)
-//
-//  Два типа сохранений:
-//    auto   — создаётся автоматически после каждого advanceMonth
-//             хранит последние MAX_AUTO_SAVES месяцев (кольцевой буфер)
-//    manual — создаётся вручную (Ctrl+S / кнопка 💾)
-//             хранит последние MAX_MANUAL_SAVES слотов
-//
-//  Полный откат: loadSave(id) восстанавливает G и DECISIONS целиком.
 // ══════════════════════════════════════════════════════
 
-const SAVES_KEY_AUTO   = 'btz_saves_auto';
-const SAVES_KEY_MANUAL = 'btz_saves_manual';
-const MAX_AUTO_SAVES   = 48;   // по месяцу на протяжении всей партии
-const MAX_MANUAL_SAVES = 10;
+const RUNS_KEY   = 'btz_runs_v2';
+const CURR_KEY   = 'btz_current_run';
+const MAX_RUNS   = 10;
+
+// ── Миграция из старого формата ───────────────────────
+
+(function _migrate() {
+  const oldAuto   = localStorage.getItem('btz_saves_auto');
+  const oldManual = localStorage.getItem('btz_saves_manual');
+  if (!oldAuto && !oldManual) return;
+  if (_loadRuns().length > 0) return; // уже мигрировали
+
+  const autoArr   = JSON.parse(oldAuto   || '[]');
+  const manualArr = JSON.parse(oldManual || '[]');
+  const steps     = [...manualArr, ...autoArr].sort((a,b) => a.ts - b.ts);
+
+  if (steps.length === 0) return;
+
+  const runId = `run_import`;
+  const run = {
+    runId,
+    startTs: steps[0]?.ts || Date.now(),
+    scenario: 'agency',
+    label: 'Импорт (старый формат)',
+    steps,
+  };
+  localStorage.setItem(RUNS_KEY, JSON.stringify([run]));
+  localStorage.removeItem('btz_saves_auto');
+  localStorage.removeItem('btz_saves_manual');
+  console.info('[saves] Мигрировано из старого формата:', steps.length, 'шагов');
+})();
 
 // ── Сериализация / десериализация ─────────────────────
 
@@ -26,34 +57,69 @@ function _snap() {
 }
 
 function _restore(snapshot) {
-  const s = snapshot;
-  Object.keys(s.G).forEach(k => { G[k] = s.G[k]; });
-  // DECISIONS — let-переменная в engine.js, доступна в этом же скоупе
-  DECISIONS = (s.DECISIONS || []).slice();
+  Object.keys(snapshot.G).forEach(k => { G[k] = snapshot.G[k]; });
+  DECISIONS = (snapshot.DECISIONS || []).slice();
+}
+
+// ── Run management ────────────────────────────────────
+
+function startRun() {
+  const runs   = _loadRuns();
+  const runNum = runs.filter(r => r.runId !== 'run_import').length + 1;
+  const runId  = `run_${Date.now()}`;
+  const label  = `Ран #${runNum} — ${new Date().toLocaleDateString('ru-RU', { day:'numeric', month:'short' })}`;
+
+  runs.unshift({
+    runId,
+    startTs:  Date.now(),
+    scenario: typeof SCENARIO !== 'undefined' ? (SCENARIO.name || SCENARIO.id) : '—',
+    label,
+    steps: [],
+  });
+
+  // Оставить только MAX_RUNS
+  while (runs.length > MAX_RUNS) runs.pop();
+
+  _saveRuns(runs);
+  localStorage.setItem(CURR_KEY, runId);
+}
+
+function _currentRunId() {
+  return localStorage.getItem(CURR_KEY) || null;
+}
+
+function _currentRun() {
+  const id = _currentRunId();
+  return id ? _loadRuns().find(r => r.runId === id) || null : null;
 }
 
 // ── Auto-save ─────────────────────────────────────────
 
 function autoSave() {
   if (!G || G.month == null) return;
+  const runId = _currentRunId();
+  if (!runId) return;
   try {
-    const saves = _loadRaw(SAVES_KEY_AUTO);
+    const runs = _loadRuns();
+    const run  = runs.find(r => r.runId === runId);
+    if (!run) return;
+
     const entry = {
-      id:    `auto_m${G.month}`,
+      id:    `auto_${runId}_m${G.month}`,
       type:  'auto',
       month: G.month,
       money: G.money,
-      label: (monthLabel ? monthLabel(-1) : `Месяц ${G.month}`) + ' — авто',
+      label: (typeof monthLabel === 'function' ? monthLabel(-1) : `Месяц ${G.month}`) + ' — авто',
       ts:    Date.now(),
       state: _snap(),
     };
-    const idx = saves.findIndex(s => s.id === entry.id);
-    if (idx >= 0) saves[idx] = entry;
-    else          saves.push(entry);
-    // кольцевой буфер: удаляем самые старые
-    saves.sort((a,b) => a.month - b.month);
-    while (saves.length > MAX_AUTO_SAVES) saves.shift();
-    _saveRaw(SAVES_KEY_AUTO, saves);
+
+    // Перезаписать шаг того же месяца (кольцевой буфер внутри рана)
+    const idx = run.steps.findIndex(s => s.id === entry.id);
+    if (idx >= 0) run.steps[idx] = entry;
+    else          run.steps.push(entry);
+
+    _saveRuns(runs);
   } catch(e) {
     console.warn('autoSave failed:', e);
   }
@@ -63,23 +129,27 @@ function autoSave() {
 
 function quickSave(label) {
   if (!G || G.month == null) { notify('Игра ещё не начата', 'error'); return; }
+  const runId = _currentRunId();
+  if (!runId) { notify('Нет активного рана', 'error'); return; }
   try {
-    const saves = _loadRaw(SAVES_KEY_MANUAL);
+    const runs = _loadRuns();
+    const run  = runs.find(r => r.runId === runId);
+    if (!run) return;
+
     const ts    = Date.now();
     const entry = {
       id:    `manual_${ts}`,
       type:  'manual',
       month: G.month,
       money: G.money,
-      label: label || ((monthLabel ? monthLabel(-1) : `М${G.month}`) + ' — ручное'),
+      label: label || ((typeof monthLabel === 'function' ? monthLabel(-1) : `М${G.month}`) + ' — ручное'),
       ts,
       state: _snap(),
     };
-    saves.unshift(entry);
-    while (saves.length > MAX_MANUAL_SAVES) saves.pop();
-    _saveRaw(SAVES_KEY_MANUAL, saves);
+
+    run.steps.unshift(entry);
+    _saveRuns(runs);
     notify('💾 Сохранено', 'success');
-    // обновить список если модал открыт
     if (document.getElementById('save-modal')?.classList.contains('active')) {
       _renderSaveList();
     }
@@ -92,14 +162,16 @@ function quickSave(label) {
 // ── Load ──────────────────────────────────────────────
 
 function loadSave(id) {
-  const entry = _allSaves().find(s => s.id === id);
-  if (!entry) { notify('Сохранение не найдено', 'error'); return; }
+  const found = _findStepWithRun(id);
+  if (!found) { notify('Сохранение не найдено', 'error'); return; }
   try {
-    _restore(entry.state);
+    _restore(found.step.state);
+    // Переключаем "текущий ран" на тот, откуда загружаем
+    localStorage.setItem(CURR_KEY, found.run.runId);
     EventBus.emit('render');
     EventBus.emit('navigate', { screen: 'screen-game' });
     closeSaveModal();
-    notify(`⏮ Загружено: ${entry.label}`, 'success');
+    notify(`⏮ Загружено: ${found.step.label}`, 'success');
   } catch(e) {
     console.warn('loadSave failed:', e);
     notify('Ошибка загрузки', 'error');
@@ -109,34 +181,45 @@ function loadSave(id) {
 // ── Delete ────────────────────────────────────────────
 
 function deleteSave(id) {
-  // manual
-  let saves = _loadRaw(SAVES_KEY_MANUAL);
-  const before = saves.length;
-  saves = saves.filter(s => s.id !== id);
-  if (saves.length < before) { _saveRaw(SAVES_KEY_MANUAL, saves); }
-  else {
-    // auto
-    saves = _loadRaw(SAVES_KEY_AUTO).filter(s => s.id !== id);
-    _saveRaw(SAVES_KEY_AUTO, saves);
-  }
+  const runs = _loadRuns();
+  runs.forEach(run => {
+    run.steps = run.steps.filter(s => s.id !== id);
+  });
+  _saveRuns(runs);
   _renderSaveList();
 }
 
-// ── Getters ───────────────────────────────────────────
-
-function _allSaves() {
-  const auto   = _loadRaw(SAVES_KEY_AUTO);
-  const manual = _loadRaw(SAVES_KEY_MANUAL);
-  return [...manual, ...auto].sort((a,b) => b.ts - a.ts);
+function deleteRun(runId) {
+  if (!confirm('Удалить весь ран и все его сохранения?')) return;
+  const runs = _loadRuns().filter(r => r.runId !== runId);
+  _saveRuns(runs);
+  if (_currentRunId() === runId) localStorage.removeItem(CURR_KEY);
+  _renderSaveList();
 }
 
-function _loadRaw(key) {
-  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+// ── Internal helpers ──────────────────────────────────
+
+function _findStepWithRun(id) {
+  for (const run of _loadRuns()) {
+    const step = run.steps.find(s => s.id === id);
+    if (step) return { run, step };
+  }
+  return null;
+}
+
+function _loadRuns() {
+  try { return JSON.parse(localStorage.getItem(RUNS_KEY) || '[]'); }
   catch { return []; }
 }
 
-function _saveRaw(key, arr) {
-  localStorage.setItem(key, JSON.stringify(arr));
+function _saveRuns(runs) {
+  localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
+}
+
+// ── Public helpers ────────────────────────────────────
+
+function hasSaves() {
+  return _loadRuns().some(r => r.steps.length > 0);
 }
 
 // ── Modal UI ──────────────────────────────────────────
@@ -154,66 +237,93 @@ function _renderSaveList() {
   const el = document.getElementById('save-list');
   if (!el) return;
 
-  const manual = _loadRaw(SAVES_KEY_MANUAL);
-  const auto   = _loadRaw(SAVES_KEY_AUTO).slice().reverse(); // новые сверху
+  const runs     = _loadRuns();
+  const currId   = _currentRunId();
 
-  const fmtMoney = v => {
-    if (v == null) return '—';
-    return new Intl.NumberFormat('ru-RU').format(Math.round(v)) + ' ₽';
-  };
-  const fmtTime = ts => {
+  const fmtMoney = v => v == null ? '—'
+    : new Intl.NumberFormat('ru-RU').format(Math.round(v)) + ' ₽';
+  const fmtTime  = ts => {
     const d = new Date(ts);
     return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'short' })
            + ' ' + d.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
   };
 
-  const renderEntry = (s) => {
-    const isManual = s.type === 'manual';
-    const typeIcon = isManual ? '📌' : '🔄';
-    const typeCol  = isManual ? 'var(--purple)' : 'var(--sub)';
-    const moneyCol = (s.money||0) >= 0 ? 'var(--green)' : 'var(--red)';
+  if (runs.length === 0 || runs.every(r => r.steps.length === 0)) {
+    el.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:12px 0">
+      Сохранений нет — начни игру, чтобы появились авто-сохранения.</p>`;
+    return;
+  }
+
+  const renderStep = (step) => {
+    const isManual  = step.type === 'manual';
+    const icon      = isManual ? '📌' : '🔄';
+    const moneyCol  = (step.money||0) >= 0 ? 'var(--green)' : 'var(--red)';
+    const typeColor = isManual ? 'var(--purple)' : 'var(--sub)';
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg2);border-radius:8px;margin-bottom:6px">
-        <span style="font-size:16px;flex-shrink:0">${typeIcon}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.label}</div>
-          <div style="font-size:10px;color:${typeCol};margin-top:1px">${fmtTime(s.ts)} · <span style="color:${moneyCol}">${fmtMoney(s.money)}</span></div>
+      <div class="sv-step">
+        <span class="sv-step-icon">${icon}</span>
+        <div class="sv-step-info">
+          <div class="sv-step-label">${step.label}</div>
+          <div class="sv-step-meta" style="color:${typeColor}">
+            ${fmtTime(step.ts)} · <span style="color:${moneyCol}">${fmtMoney(step.money)}</span>
+          </div>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-teal" style="font-size:11px;padding:5px 10px" onclick="loadSave('${s.id}')">⏮ Загрузить</button>
-          ${isManual ? `<button class="btn btn-ghost" style="font-size:11px;padding:5px 8px;color:var(--red)" onclick="deleteSave('${s.id}')">✕</button>` : ''}
+        <div class="sv-step-actions">
+          <button class="btn btn-teal" style="font-size:11px;padding:5px 10px"
+                  onclick="loadSave('${step.id}')">⏮ Загрузить</button>
+          ${isManual
+            ? `<button class="btn btn-ghost" style="font-size:11px;padding:5px 8px;color:var(--red)"
+                       onclick="deleteSave('${step.id}')">✕</button>`
+            : ''}
         </div>
       </div>`;
   };
 
-  const manualHtml = manual.length > 0
-    ? manual.map(renderEntry).join('')
-    : `<div style="font-size:12px;color:var(--muted);padding:8px 0">Ручных сохранений нет — нажми Ctrl+S или кнопку выше</div>`;
+  const renderRun = (run, openByDefault) => {
+    const isCurrent   = run.runId === currId;
+    const stepsDesc   = [...run.steps].sort((a,b) => b.ts - a.ts); // новые сверху
+    const manualCnt   = stepsDesc.filter(s => s.type === 'manual').length;
+    const autoCnt     = stepsDesc.filter(s => s.type === 'auto').length;
+    const lastMoney   = stepsDesc[0]?.money;
+    const scenarioLbl = run.scenario ? `<span class="sv-run-tag">${run.scenario}</span>` : '';
+    const currentBadge = isCurrent
+      ? `<span class="sv-run-tag sv-run-current">● Текущий</span>` : '';
 
-  const autoHtml = auto.length > 0
-    ? auto.map(renderEntry).join('')
-    : `<div style="font-size:12px;color:var(--muted);padding:8px 0">Авто-сохранений нет — появятся после завершения первого месяца</div>`;
+    return `
+      <details class="sv-run" ${openByDefault ? 'open' : ''}>
+        <summary class="sv-run-header">
+          <div class="sv-run-title">
+            <span class="sv-run-name">${run.label}</span>
+            ${scenarioLbl}
+            ${currentBadge}
+          </div>
+          <div class="sv-run-meta">
+            ${lastMoney != null ? `<span style="color:var(--teal)">${fmtMoney(lastMoney)}</span>` : ''}
+            <span style="color:var(--muted);font-size:11px">
+              ${manualCnt ? `📌${manualCnt}` : ''} 🔄${autoCnt}
+            </span>
+            <button class="sv-run-del" title="Удалить ран"
+                    onclick="event.preventDefault();deleteRun('${run.runId}')">🗑</button>
+          </div>
+        </summary>
+        <div class="sv-steps">
+          ${stepsDesc.length > 0
+            ? stepsDesc.map(renderStep).join('')
+            : `<p style="color:var(--muted);font-size:12px;padding:8px 0">Нет шагов</p>`}
+        </div>
+      </details>`;
+  };
 
-  el.innerHTML = `
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📌 Ручные (${manual.length}/${MAX_MANUAL_SAVES})</div>
-      ${manualHtml}
-    </div>
-    <div>
-      <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">🔄 Авто-сохранения (${auto.length}/${MAX_AUTO_SAVES})</div>
-      <div style="max-height:280px;overflow-y:auto;padding-right:2px">${autoHtml}</div>
-    </div>`;
+  el.innerHTML = runs.map((run, i) => renderRun(run, i === 0)).join('');
 }
 
 // ── Keyboard shortcut ─────────────────────────────────
 
 document.addEventListener('keydown', e => {
-  // Ctrl+S / Cmd+S — быстрое сохранение
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
     quickSave();
   }
-  // Escape — закрыть модал
   if (e.key === 'Escape') {
     closeSaveModal();
   }

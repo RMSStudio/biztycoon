@@ -40,6 +40,10 @@
             onclick="goTo('screen-scenario-editor');">
       📋 Редактор сценариев
     </button>
+    <button class="btn btn-ghost" id="btn-load-save" style="font-size:12px;padding:8px 14px"
+            onclick="openSaveModal()">
+      📂 Загрузить игру
+    </button>
     <button class="btn btn-primary" id="btn-mode-next"
             onclick="goTo('screen-intro'); SE.syncIntroStats();"
             style="font-size:15px;padding:13px 32px">
@@ -300,7 +304,7 @@
       <p  id="scout-sub"></p>
     </div>
     <div class="scout-grid" id="scout-grid"></div>
-    <div style="display:flex;gap:8px;margin-top:4px;">
+    <div style="display:flex;gap:8px;margin-top:4px;flex-shrink:0;">
       <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="refreshScoutPool()">
         🔄 Обновить пул <span style="color:rgba(255,255,255,.4);font-size:11px">−3 дня</span>
       </button>
@@ -320,17 +324,18 @@
       <h3>💾 Сохранения</h3>
       <p>Ручные сохранения и авто-сохранения по месяцам · <span style="color:var(--sub)">Ctrl+S — быстрое сохранение</span></p>
     </div>
-    <div style="margin-bottom:12px">
+    <div style="margin-bottom:12px;flex-shrink:0">
       <button class="btn btn-primary" onclick="quickSave()" style="width:100%;justify-content:center">💾 Сохранить сейчас</button>
     </div>
     <div id="save-list"></div>
-    <button class="btn btn-ghost" onclick="closeSaveModal()" style="width:100%;justify-content:center;margin-top:10px">Закрыть</button>
+    <button class="btn btn-ghost" onclick="closeSaveModal()" style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
   </div>
 </div>
 
 <script src="src/constants.js"></script>
 <script src="src/events.js"></script>
 <script src="scenarios/agency.js"></script>
+<script src="scenarios/presets/index.js"></script>
 <!-- scenario-editor до engine.js: applyActiveScenario модифицирует SCENARIO in-place,
      после чего engine.js биндит свои const из уже изменённого объекта -->
 <script src="src/scenario-editor.js"></script>
@@ -345,6 +350,12 @@
   initState();
   initEventBus();
   SE.syncIntroStats();
+
+  // Кнопка загрузки: активна только при наличии сохранений
+  (function() {
+    const btn = document.getElementById('btn-load-save');
+    if (btn && !hasSaves()) btn.disabled = true;
+  })();
 
   // Загружаем включённые DLC (асинхронно, не блокирует UI)
   DLC.init();
