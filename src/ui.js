@@ -55,6 +55,9 @@ function _uiNavigate(screen) {
   const el = document.getElementById(screen);
   if (el) el.classList.add('active');
   window.scrollTo(0, 0);
+  // Хуки на конкретные экраны
+  if (screen === 'screen-scenario-editor' && typeof SE !== 'undefined') SE.render();
+  if (screen === 'screen-intro'           && typeof SE !== 'undefined') SE.syncIntroStats();
 }
 
 function _uiSelectSpec(id) {
@@ -1513,5 +1516,5 @@ function resetGame() {
   initEventBus();
   document.querySelectorAll('.spec-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('btn-start-game').disabled=true;
-  _uiNavigate('screen-intro');
+  _uiNavigate('screen-mode');
 }

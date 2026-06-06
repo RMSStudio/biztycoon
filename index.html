@@ -9,24 +9,71 @@
 
 <body>
 
+<!-- ══ MODE SELECT ══ -->
+<div id="screen-mode" class="screen active">
+  <div class="logo-wrap">
+    <div class="logo-icon">🏢</div>
+    <div class="logo-title">BizTycoon</div>
+    <div class="logo-sub">Digital Agency — Prototype v0.4</div>
+  </div>
+
+  <!-- Базовый режим — всегда доступен -->
+  <div class="mode-base-card">
+    <div class="mode-base-left">
+      <span style="font-size:22px">🎮</span>
+      <div>
+        <div class="mode-base-name">Классический режим</div>
+        <div class="mode-base-desc">Управляй агентством, масштабируй команду, достигни финансовой цели.</div>
+      </div>
+    </div>
+    <span class="dlc-pill" style="background:rgba(45,212,191,.14);color:var(--teal)">Базовый</span>
+  </div>
+
+  <!-- Расширения — рендерятся из DLC.getAll() -->
+  <div class="dlc-section-label">Расширения</div>
+  <div id="dlc-cards">
+    <!-- заполняется DLC.renderModeScreen() после загрузки loader.js -->
+  </div>
+
+  <div class="mode-footer" style="margin-top:20px">
+    <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px"
+            onclick="goTo('screen-scenario-editor');">
+      📋 Редактор сценариев
+    </button>
+    <button class="btn btn-primary" id="btn-mode-next"
+            onclick="goTo('screen-intro'); SE.syncIntroStats();"
+            style="font-size:15px;padding:13px 32px">
+      Начать →
+    </button>
+  </div>
+</div>
+
+<!-- ══ SCENARIO EDITOR ══ -->
+<div id="screen-scenario-editor" class="screen">
+  <!-- Заполняется через SE.render() -->
+</div>
+
 <!-- ══ INTRO ══ -->
-<div id="screen-intro" class="screen active">
+<div id="screen-intro" class="screen">
   <div class="logo-wrap">
     <div class="logo-icon">🏢</div>
     <div class="logo-title">BizTycoon</div>
     <div class="logo-sub">Digital Agency — Prototype v0.4</div>
   </div>
   <div class="intro-desc">
-    Ты открываешь <strong>собственное диджитал-агентство</strong>. Клиенты не приходят сами — их нужно искать: каждый <strong>скаутинг</strong> стоит рабочих дней и не гарантирует результат. Каждый найденный проект — свой риск: кто-то задерживает оплату, кто-то платит хорошо, но портит репутацию. Доведи баланс до <strong>3 000 000 ₽</strong>, пока деньги не кончились.
+    Ты открываешь <strong>собственное диджитал-агентство</strong>. Клиенты не приходят сами — их нужно искать: каждый <strong>скаутинг</strong> стоит рабочих дней и не гарантирует результат. Каждый найденный проект — свой риск: кто-то задерживает оплату, кто-то платит хорошо, но портит репутацию. Доведи баланс до <strong>7 500 000 ₽</strong>, пока деньги не кончились.
   </div>
   <div class="stat-row">
-    <div class="stat-box"><div class="val">500 000 ₽</div><div class="lbl">Стартовый капитал</div></div>
+    <div class="stat-box"><div class="val" id="intro-stat-money">1 000 000 ₽</div><div class="lbl">Стартовый капитал</div></div>
     <div class="stat-box"><div class="val">10 дней/мес</div><div class="lbl">Рабочий ресурс</div></div>
-    <div class="stat-box"><div class="val">7 500 000 ₽</div><div class="lbl">Цель</div></div>
+    <div class="stat-box"><div class="val" id="intro-stat-goal">7 500 000 ₽</div><div class="lbl">Цель</div></div>
   </div>
-  <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:16px;padding:15px;" onclick="goTo('screen-spec')">
-    Начать игру →
-  </button>
+  <div style="display:flex;gap:10px;margin-top:4px">
+    <button class="btn btn-ghost" style="padding:13px 18px;font-size:14px" onclick="goTo('screen-mode')">← Назад</button>
+    <button class="btn btn-primary" style="flex:1;justify-content:center;font-size:16px;padding:15px;" onclick="goTo('screen-spec')">
+      Выбрать специализацию →
+    </button>
+  </div>
 </div>
 
 <!-- ══ SPEC ══ -->
@@ -284,10 +331,26 @@
 <script src="src/constants.js"></script>
 <script src="src/events.js"></script>
 <script src="scenarios/agency.js"></script>
+<!-- scenario-editor до engine.js: applyActiveScenario модифицирует SCENARIO in-place,
+     после чего engine.js биндит свои const из уже изменённого объекта -->
+<script src="src/scenario-editor.js"></script>
+<script>SE.applyActiveScenario();</script>
 <script src="src/engine.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/saves.js"></script>
 <script src="src/ai.js"></script>
-<script>initState(); initEventBus();</script>
+<!-- DLC loader — последним; DLC-скрипты грузятся динамически только при включении -->
+<script src="dlc/loader.js"></script>
+<script>
+  initState();
+  initEventBus();
+  SE.syncIntroStats();
+
+  // Загружаем включённые DLC (асинхронно, не блокирует UI)
+  DLC.init();
+
+  // Рендерим карточки расширений на mode-screen
+  DLC.renderModeScreen();
+</script>
 </body>
 </html>

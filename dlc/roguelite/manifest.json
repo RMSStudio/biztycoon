@@ -1,0 +1,18 @@
+{
+  "id": "roguelite",
+  "name": "Rogue-lite",
+  "icon": "⚡",
+  "version": "0.1",
+  "status": "wip",
+  "description": "Процедурные события, уникальные перки между ранами и нарастающая сложность.",
+  "author": "BizTycoon DLC",
+  "scripts": ["roguelite.js"],
+  "styles": [],
+  "hooks": [
+    "game_started",
+    "month_end",
+    "project_completed",
+    "game_ended"
+  ],
+  "notes": "Stub-реализация. Хуки зарегистрированы, механики в разработке. См. backlog/05_roguelite.md"
+}

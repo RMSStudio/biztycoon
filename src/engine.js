@@ -15,10 +15,11 @@ const BUDGET_RANGES     = SCENARIO.budgetRanges;
 const UPGRADES          = SCENARIO.upgrades;
 const SPECS             = SCENARIO.specs;
 const EVENTS            = SCENARIO.events;
-const OVERHEAD          = SCENARIO.settings.overhead;
-const ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
-const SCOUT_COST        = SCENARIO.settings.scoutCost;
-const HIRE_COST         = SCENARIO.settings.hireCost;
+// let (не const) — чтобы initState() ресинкал их после SE.applyActiveScenario()
+let OVERHEAD          = SCENARIO.settings.overhead;
+let ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
+let SCOUT_COST        = SCENARIO.settings.scoutCost;
+let HIRE_COST         = SCENARIO.settings.hireCost;
 
 // ══════════════════════════════════════════════════════
 //  STATE
@@ -63,6 +64,14 @@ const LOAN_TIERS = [
 ];
 
 function initState() {
+  // Применяем активный сценарий и ресинкаем let-биндинги.
+  // Работает и при первом запуске, и при "Играть снова" без перезагрузки страницы.
+  if (typeof SE !== 'undefined') SE.applyActiveScenario();
+  OVERHEAD          = SCENARIO.settings.overhead;
+  ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
+  SCOUT_COST        = SCENARIO.settings.scoutCost;
+  HIRE_COST         = SCENARIO.settings.hireCost;
+
   G = {
     spec:null, money:500000, month:0,
     staff:[], activeClients:[], log:[],
