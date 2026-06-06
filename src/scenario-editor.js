@@ -47,6 +47,42 @@ const SE = (() => {
       projectRevenueMult: 1.0,
       eventChanceMult:    1.0,
       customStaff:        [],   // кастомные роли для сценария
+      customProjects:     [],   // кастомные проекты для сценария
+    };
+  }
+
+  function _defaultProject() {
+    return {
+      id:           _suid(),
+      name:         '',
+      desc:         '',
+      icon:         '📁',
+      tier:         1,
+      type:         'small',    // small | store | corp | brand
+      rarity:       'common',   // common | uncommon | rare | epic
+      prob:         0.70,
+      npsStart:     78,
+      minQ:         0,
+      minV:         0,
+      oneTime:      false,
+      cooldown:     0,
+      // Бюджет
+      useRangeBudget: true,     // true = берём диапазон тира; false = кастомный
+      budgetMin:    100_000,
+      budgetMax:    200_000,
+      revenue:      0,          // ежемесячный доход
+      // Модификатор
+      modifier: {
+        type:  'none',          // none | nps_passive | nps_start | payment_delay | random_bonus | revenue_growth
+        val:   0,
+        val2:  0,               // доп. параметр (шанс для random_bonus и т.п.)
+      },
+      // Предоплата
+      prepayment: {
+        enabled: false,
+        prob:    0.50,          // вероятность получения предоплаты
+        pct:     0.30,          // % от бюджета
+      },
     };
   }
 
@@ -279,15 +315,7 @@ const SE = (() => {
     }
 
     if (section === 'projects') {
-      return `
-        <p class="se-section-note">Бюджетный множитель применяется к тировым диапазонам и разовым проектам.</p>
-        <div class="se-fields">
-          ${_multField('Бюджеты проектов',  'projectBudgetMult',  ov.projectBudgetMult,  0.3, 3.0, 0.1, 'Итоговая выплата при завершении')}
-          ${_multField('Помесячный доход',  'projectRevenueMult', ov.projectRevenueMult, 0.3, 3.0, 0.1, 'Revenue от длинных клиентов каждый месяц')}
-        </div>
-        <div class="se-budget-preview" id="se-budget-preview">
-          ${_budgetPreviewRows(ov.projectBudgetMult)}
-        </div>`;
+      return _renderProjectsSection(sc);
     }
 
     if (section === 'events') {
@@ -359,6 +387,196 @@ const SE = (() => {
                oninput="SE._staffFieldChange('${id}','desc',this.value)">
       </div>`;
   }
+
+  // ── Projects section ──────────────────────────────────
+  const PROJECT_TYPES   = { small:'Small', store:'Brand/Store', corp:'Corp', brand:'Брендинг' };
+  const PROJECT_RARITY  = { common:'Common', uncommon:'Uncommon', rare:'Rare', epic:'Epic' };
+  const MOD_TYPES = {
+    none:           'Нет',
+    nps_passive:    'NPS каждый месяц',
+    nps_start:      'NPS при старте',
+    payment_delay:  'Задержка платежа (%)',
+    random_bonus:   'Случайный бонус',
+    revenue_growth: 'Рост дохода',
+  };
+
+  function _renderProjectsSection(sc) {
+    const ov       = sc.overrides;
+    const projects = ov.customProjects || [];
+    return `
+      <div class="se-team-section">
+        <div class="se-subsection-title">Глобальные множители</div>
+        <p class="se-section-note">Применяются ко всем проектам сценария, включая кастомные</p>
+        <div class="se-fields">
+          ${_multField('Бюджеты проектов',  'projectBudgetMult',  ov.projectBudgetMult,  0.3, 3.0, 0.1, 'Итоговая выплата при завершении')}
+          ${_multField('Помесячный доход',  'projectRevenueMult', ov.projectRevenueMult, 0.3, 3.0, 0.1, 'Revenue от длинных клиентов каждый месяц')}
+        </div>
+        <div class="se-budget-preview" id="se-budget-preview">
+          ${_budgetPreviewRows(ov.projectBudgetMult)}
+        </div>
+
+        <div class="se-subsection-title" style="margin-top:28px">
+          Кастомные проекты
+          <button class="btn btn-teal se-add-btn" onclick="SE._addProject()">+ Добавить проект</button>
+        </div>
+        ${projects.length === 0
+          ? `<p class="se-section-note">Проекты под конкретный бизнес-сценарий — добавляются в пул скаутинга.</p>`
+          : ''}
+        <div class="se-staff-list" id="se-project-list">
+          ${projects.map(p => _projectCard(p)).join('')}
+        </div>
+      </div>`;
+  }
+
+  function _projectCard(p) {
+    const id  = p.id;
+    const mod = p.modifier || { type:'none', val:0, val2:0 };
+    const pre = p.prepayment || { enabled:false, prob:0.5, pct:0.3 };
+
+    return `
+      <div class="se-staff-card se-project-card" id="se-project-${id}">
+
+        <!-- Шапка: иконка + название + тир + удалить -->
+        <div class="se-staff-header">
+          <input class="se-project-icon" type="text" maxlength="4"
+                 value="${_esc(p.icon)}" placeholder="📁"
+                 oninput="SE._projectFieldChange('${id}','icon',this.value)">
+          <input class="se-staff-role" type="text"
+                 value="${_esc(p.name)}" placeholder="Название проекта..."
+                 oninput="SE._projectFieldChange('${id}','name',this.value)">
+          <label class="se-inline-label">T
+            <select class="se-staff-grade-sel" style="width:52px"
+                    onchange="SE._projectFieldChange('${id}','tier',+this.value)">
+              ${[1,2,3,4].map(t => `<option value="${t}" ${p.tier===t?'selected':''}>${t}</option>`).join('')}
+            </select>
+          </label>
+          <button class="se-staff-del" onclick="SE._removeProject('${id}')" title="Удалить">✕</button>
+        </div>
+
+        <!-- Описание -->
+        <input class="se-staff-desc" type="text" style="border-top:none;padding-top:0"
+               value="${_esc(p.desc||'')}" placeholder="Описание проекта..."
+               oninput="SE._projectFieldChange('${id}','desc',this.value)">
+
+        <!-- Тип / Rarity / Вероятность -->
+        <div class="se-project-row">
+          <div class="se-project-sel-group">
+            <span class="se-field-lbl">Тип</span>
+            <select class="se-staff-grade-sel"
+                    onchange="SE._projectFieldChange('${id}','type',this.value)">
+              ${Object.entries(PROJECT_TYPES).map(([k,v]) =>
+                `<option value="${k}" ${p.type===k?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="se-project-sel-group">
+            <span class="se-field-lbl">Rarity</span>
+            <select class="se-staff-grade-sel"
+                    onchange="SE._projectFieldChange('${id}','rarity',this.value)">
+              ${Object.entries(PROJECT_RARITY).map(([k,v]) =>
+                `<option value="${k}" ${p.rarity===k?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="se-project-sel-group" style="flex:1">
+            <span class="se-field-lbl">Вероятность появления</span>
+            <div class="se-field-row">
+              <input type="range" class="se-slider" min="0.05" max="1" step="0.05" value="${p.prob}"
+                     oninput="document.getElementById('se-pf-${id}-prob-num').value=Math.round(this.value*100);
+                              SE._projectFieldChange('${id}','prob',+this.value)">
+              <input type="number" class="se-num-input" id="se-pf-${id}-prob-num"
+                     min="5" max="100" step="5" value="${Math.round(p.prob*100)}"
+                     oninput="var v=Math.min(100,Math.max(5,+this.value||5));
+                              SE._projectFieldChange('${id}','prob',v/100)">
+              <span class="se-field-unit">%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Бюджет -->
+        <div class="se-project-subsection">Бюджет</div>
+        <div class="se-project-budget-toggle">
+          <label class="se-toggle-opt">
+            <input type="radio" name="budget-${id}" value="range" ${p.useRangeBudget?'checked':''}
+                   onchange="SE._projectFieldChange('${id}','useRangeBudget',true); SE._projectRerenderBudget('${id}')">
+            Использовать диапазон тира
+          </label>
+          <label class="se-toggle-opt">
+            <input type="radio" name="budget-${id}" value="custom" ${!p.useRangeBudget?'checked':''}
+                   onchange="SE._projectFieldChange('${id}','useRangeBudget',false); SE._projectRerenderBudget('${id}')">
+            Кастомный диапазон
+          </label>
+        </div>
+        <div id="se-pf-${id}-budget-custom" style="${p.useRangeBudget?'display:none':''}">
+          <div class="se-staff-fields" style="grid-template-columns:1fr 1fr">
+            ${_staffField(id+'_bmin', 'budgetMin', 'Бюджет от', p.budgetMin, 10000, 5000000, 10000, 'rub')}
+            ${_staffField(id+'_bmax', 'budgetMax', 'Бюджет до', p.budgetMax, 10000, 5000000, 10000, 'rub')}
+          </div>
+        </div>
+        <div class="se-staff-fields" style="grid-template-columns:1fr 1fr;margin-top:8px">
+          ${_staffField(id+'_rev', 'revenue', 'Доход/мес', p.revenue, 0, 500000, 5000, 'rub')}
+          ${_staffField(id+'_nps', 'npsStart', 'NPS старт', p.npsStart, 40, 100, 1, 'nps')}
+        </div>
+
+        <!-- Требования -->
+        <div class="se-project-subsection">Требования</div>
+        <div class="se-staff-fields" style="grid-template-columns:1fr 1fr 1fr">
+          ${_staffField(id+'_mq', 'minQ', 'Мин. Q', p.minQ, 0, 30, 1, 'q')}
+          ${_staffField(id+'_mv', 'minV', 'Мин. V', p.minV, 0, 40, 1, 'q')}
+          ${_staffField(id+'_cd', 'cooldown', 'Кулдаун', p.cooldown, 0, 12, 1, 'days')}
+        </div>
+        <div class="se-project-row" style="margin-top:10px;gap:20px">
+          <label class="se-toggle-opt">
+            <input type="checkbox" ${p.oneTime?'checked':''}
+                   onchange="SE._projectFieldChange('${id}','oneTime',this.checked)">
+            Разовый проект
+          </label>
+        </div>
+
+        <!-- Модификатор -->
+        <div class="se-project-subsection">Условия</div>
+        <div class="se-project-row" style="align-items:flex-end;gap:16px">
+          <div class="se-project-sel-group">
+            <span class="se-field-lbl">Модификатор</span>
+            <select class="se-staff-grade-sel"
+                    onchange="SE._projectModChange('${id}','type',this.value)">
+              ${Object.entries(MOD_TYPES).map(([k,v]) =>
+                `<option value="${k}" ${mod.type===k?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div id="se-mod-val-${id}" style="flex:1;${mod.type==='none'?'display:none':''}">
+            ${_staffField(id+'_mv1', 'modVal', _modValLabel(mod.type), mod.val, _modMin(mod.type), _modMax(mod.type), _modStep(mod.type), _modUnit(mod.type))}
+          </div>
+          <div id="se-mod-val2-${id}" style="flex:1;${!_needsVal2(mod.type)?'display:none':''}">
+            ${_staffField(id+'_mv2', 'modVal2', 'Шанс', mod.val2||0, 0, 100, 5, 'pct')}
+          </div>
+        </div>
+
+        <!-- Предоплата -->
+        <div class="se-project-subsection">Предоплата</div>
+        <div class="se-project-row" style="gap:20px;align-items:flex-end">
+          <label class="se-toggle-opt" style="align-self:center">
+            <input type="checkbox" id="se-pre-toggle-${id}" ${pre.enabled?'checked':''}
+                   onchange="SE._projectPreChange('${id}','enabled',this.checked)">
+            Включить
+          </label>
+          <div id="se-pre-fields-${id}" style="${pre.enabled?'':'display:none'};display:${pre.enabled?'flex':'none'};gap:16px;flex:1">
+            ${_staffField(id+'_pp', 'preProb', 'Вероятность', Math.round(pre.prob*100), 5, 100, 5, 'pct')}
+            ${_staffField(id+'_pa', 'preAmt',  '% от бюджета', Math.round(pre.pct*100), 5, 80, 5, 'pct')}
+          </div>
+        </div>
+
+      </div>`;
+  }
+
+  // Helpers для модификаторов
+  function _modValLabel(t) {
+    const m = { nps_passive:'NPS/мес', nps_start:'NPS бонус', payment_delay:'Шанс задержки', random_bonus:'Бонус (₽)', revenue_growth:'Рост/мес (₽)' };
+    return m[t] || 'Значение';
+  }
+  function _modMin(t)  { return t==='nps_passive'||t==='nps_start' ? -20 : 0; }
+  function _modMax(t)  { return t==='random_bonus'||t==='revenue_growth' ? 500000 : (t==='payment_delay' ? 100 : 30); }
+  function _modStep(t) { return t==='random_bonus'||t==='revenue_growth' ? 5000 : 1; }
+  function _modUnit(t) { return t==='random_bonus'||t==='revenue_growth' ? 'rub' : (t==='payment_delay' ? 'pct' : 'nps'); }
+  function _needsVal2(t) { return t === 'random_bonus'; }
 
   // ── Field builders ────────────────────────────────────
 
@@ -508,6 +726,90 @@ const SE = (() => {
     _save(all);
   }
 
+  // ── Projects CRUD ─────────────────────────────────────
+  function _addProject() {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc) return;
+    if (!sc.overrides.customProjects) sc.overrides.customProjects = [];
+    const np = _defaultProject();
+    sc.overrides.customProjects.push(np);
+    _save(all);
+    const list = document.getElementById('se-project-list');
+    if (list) list.insertAdjacentHTML('beforeend', _projectCard(np));
+  }
+
+  function _removeProject(projectId) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customProjects) return;
+    sc.overrides.customProjects = sc.overrides.customProjects.filter(p => p.id !== projectId);
+    _save(all);
+    const card = document.getElementById('se-project-' + projectId);
+    if (card) card.remove();
+  }
+
+  function _projectFieldChange(projectId, field, value) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customProjects) return;
+    const p = sc.overrides.customProjects.find(p => p.id === projectId);
+    if (!p) return;
+    // Поля внутри nested объектов
+    if (field === 'modVal')       { p.modifier.val  = value; }
+    else if (field === 'modVal2') { p.modifier.val2 = value; }
+    else if (field === 'preProb') { p.prepayment.prob = value / 100; }
+    else if (field === 'preAmt')  { p.prepayment.pct  = value / 100; }
+    else                          { p[field] = value; }
+    _save(all);
+  }
+
+  function _projectModChange(projectId, field, value) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customProjects) return;
+    const p = sc.overrides.customProjects.find(p => p.id === projectId);
+    if (!p) return;
+    p.modifier[field] = value;
+    _save(all);
+    // Show/hide modifier value fields
+    const valEl  = document.getElementById('se-mod-val-'  + projectId);
+    const val2El = document.getElementById('se-mod-val2-' + projectId);
+    if (valEl)  valEl.style.display  = (value === 'none') ? 'none' : '';
+    if (val2El) val2El.style.display = _needsVal2(value) ? '' : 'none';
+  }
+
+  function _projectPreChange(projectId, field, value) {
+    if (!_editingId) return;
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customProjects) return;
+    const p = sc.overrides.customProjects.find(p => p.id === projectId);
+    if (!p) return;
+    p.prepayment[field] = value;
+    _save(all);
+    // Show/hide prepayment fields
+    if (field === 'enabled') {
+      const el = document.getElementById('se-pre-fields-' + projectId);
+      if (el) el.style.display = value ? 'flex' : 'none';
+    }
+  }
+
+  function _projectRerenderBudget(projectId) {
+    // Show/hide custom budget fields
+    const all = _all();
+    const sc  = all.find(s => s.meta.id === _editingId);
+    if (!sc || !sc.overrides.customProjects) return;
+    const p = sc.overrides.customProjects.find(p => p.id === projectId);
+    if (!p) return;
+    const el = document.getElementById('se-pf-' + projectId + '-budget-custom');
+    if (el) el.style.display = p.useRangeBudget ? 'none' : '';
+  }
+
   // ── Public event handlers ─────────────────────────────
   function _selectScenario(id) {
     _editingId = id;
@@ -651,6 +953,12 @@ const SE = (() => {
     _addStaff,
     _removeStaff,
     _staffFieldChange,
+    _addProject,
+    _removeProject,
+    _projectFieldChange,
+    _projectModChange,
+    _projectPreChange,
+    _projectRerenderBudget,
   };
 
 })();
