@@ -523,8 +523,10 @@ function _legacyShowScout(offers) {
             return `<span class="project-rev">${revStr}</span>
         <span class="project-rev-label">разово</span>`;
           }
-          return `<span class="project-rev">${fmt(p.revenue)}</span>
-        <span class="project-rev-label">/мес</span>`;
+          const [bMin, bMax] = BUDGET_RANGES[p.tier] || BUDGET_RANGES[1];
+          const mHint = p.tier===4 ? ' · 3 этапа' : p.tier===3 ? ' · 2 этапа' : p.tier===2 ? ' · 1 этап' : '';
+          return `<span class="project-rev">${fmtK(bMin)}–${fmtK(bMax)}</span>
+        <span class="project-rev-label">бюджет${mHint}</span>`;
         })()}
         <span class="modifier-badge ${p.modBadge}">${p.modifier.label}</span>
       </div>
