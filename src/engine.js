@@ -348,6 +348,7 @@ function _generateOffers() {
   };
 
   const pool=PROJECT_POOL.filter(p=>
+    !p._lifecycleTest &&          // [DEV] исключаем LC-тест из обычного пула
     p.tier<=maxTier &&
     rarityOk(p.rarity||'common') &&
     (!p.requiresDev  || hasRole('developer')) &&
@@ -396,6 +397,31 @@ function refreshScoutPool() {
   G.scoutPool=_generateOffers();
   showScoutResults(G.scoutPool);
   _emitRender();
+}
+
+// [DEV] Lifecycle-тест — показывает только проекты с флагом _lifecycleTest:true.
+// Бесплатно, без затраты дней. Убрать/скрыть перед релизом.
+function doLifecycleScouting() {
+  const lcProjects = PROJECT_POOL.filter(p => p._lifecycleTest);
+  if (!lcProjects.length) {
+    notify('Lifecycle-проекты не найдены в пуле','error');
+    return;
+  }
+  // [DEV] Если нет активных сотрудников — инжектируем тестовую команду.
+  // Без стаффа throughput=0 → work-фазы никогда не прогрессируют.
+  const activeStaff = (G.staff || []).filter(s => s.status !== 'fired');
+  if (activeStaff.length === 0) {
+    G.staff = G.staff || [];
+    if (!G.staff.find(s => s.id === '_lc_dev_1')) {
+      // load:5 каждому → суммарный throughput=10, хватит на 1–2 проекта
+      G.staff.push({ id:'_lc_dev_1', name:'Тест-Дизайнер', role:'designer', icon:'🎨', salary:0, load:5, status:'active', _isDevTest:true });
+      G.staff.push({ id:'_lc_dev_2', name:'Тест-Разраб',   role:'developer',icon:'💻', salary:0, load:5, status:'active', _isDevTest:true });
+      addLog('🧪 LC-тест: добавлена тестовая команда (load×2, salary=0)', 'muted');
+    }
+  }
+  const lcPool = lcProjects.map(p => ({ ...p, _prepaymentPossible: false }));
+  G.scoutPool = lcPool;
+  showScoutResults(G.scoutPool);
 }
 
 // showScoutResults / closeScout / showConfirm — DOM-реализации в ui.js
@@ -661,6 +687,16 @@ function signProject(pid) {
   if (def.oneTime && def.cooldown) {
     G.oneTimeCooldown = def.cooldown;
     addLog(`⏳ Следующий разовый заказ доступен через ${def.cooldown} мес.`, 'muted');
+  }
+
+  // ── Lifecycle-проекты: перехватываем, закрываем скаут, запускаем F1 ──
+  if (def._lifecycleTest && typeof Projects !== 'undefined') {
+    G.scoutPool = null;
+    closeScout();
+    Projects.initLCState(client);
+    Projects.showPhasePopup(client);
+    _emitRender();
+    return;
   }
 
   // Убираем подписанный проект из пула; пул остаётся открытым если ещё есть офферы
@@ -1298,6 +1334,8 @@ function advanceMonth() {
   const fatigueMult = getFatigueMult();
 
   G.activeClients.filter(c=>!c.oneTime).forEach(c=>{
+    // LC-проекты: пропускаем тик пока не достигли work-фазы
+    if (c._lcPhase && !c._lcPhase.startsWith('work_')) return;
     // payment_delay_fixed: прогресс не идёт пока не истёк период ожидания
     if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return;
     // focusMult: доля фокуса проекта от 100 (фикс п.22: нормируем через 100, а не totalFocusW)
@@ -1330,6 +1368,38 @@ function advanceMonth() {
   G.activeClients.filter(c => c.oneTime && c._scheduled).forEach(c => {
     c._progress = 100;
   });
+
+  // ② в) LC work-фазы: work-события + авто-переход при 100%
+  if (typeof Projects !== 'undefined') {
+    // Work-события: ~25% шанс в месяц при progress 20–90% и нет pending
+    G.activeClients.forEach(c => {
+      if (!c._lcPhase || !c._lcPhase.startsWith('work_')) return;
+      if (c._lcPendingDecision) return;
+      const prog = c._progress || 0;
+      if (prog >= 20 && prog < 95 && Math.random() < 0.25) {
+        Projects.triggerWorkEvent(c);
+      }
+    });
+
+    // Авто-переход при 100% (только если нет pending decision)
+    const lcWork = G.activeClients.filter(c =>
+      c._lcPhase && c._lcPhase.startsWith('work_') &&
+      !c._lcPendingDecision &&
+      Math.round(c._progress || 0) >= 100
+    );
+    lcWork.forEach(c => {
+      const workOrder = ['work_0','work_1','work_2'];
+      const wIdx = workOrder.indexOf(c._lcPhase);
+      if (wIdx < workOrder.length - 1) {
+        // work_0 → work_1 → work_2: сбрасываем прогресс, идём дальше
+        c._progress = 0;
+        Projects.advancePhase(c);
+      } else {
+        // work_2 завершена — переходим к Review (F9)
+        Projects.advancePhase(c);
+      }
+    });
+  }
 
   // ── Milestone-выплаты T2/T3 ──────────────────────────
   G.activeClients.forEach(c => {

@@ -212,6 +212,11 @@
         <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
           🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>
         </button>
+        <!-- [DEV] Lifecycle-тест — убрать перед релизом -->
+        <button onclick="doLifecycleScouting()" title="DEV: показать только lifecycle-тестовые проекты"
+          style="margin-top:6px;width:100%;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:rgba(168,85,247,.9);border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;">
+          🧪 LC-тест <span style="color:rgba(168,85,247,.5);font-weight:400">без затрат дней</span>
+        </button>
       </div>
 
       <!-- Команда + Найм (объединённая панель) -->
@@ -296,6 +301,72 @@
   </div>
 </div>
 
+<!-- ══ LC PHASE MODAL ══ -->
+<div class="modal-overlay" id="lc-modal">
+  <div class="modal" style="max-width:500px;width:100%">
+    <!-- Шапка: фаза + индикаторы -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:6px">
+      <span id="lc-modal-phase"
+        style="font-size:11px;font-weight:700;color:var(--amber);
+               background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.3);
+               border-radius:4px;padding:2px 8px;letter-spacing:.3px"></span>
+      <div style="display:flex;gap:12px;align-items:center">
+        <span id="lc-mood-val" style="font-size:11px;font-weight:600">😊 60</span>
+        <span id="lc-risk-val" style="font-size:11px;font-weight:600">⚠️ 0</span>
+      </div>
+    </div>
+    <!-- Иконка + заголовок -->
+    <div class="modal-icon" id="lc-modal-icon">📝</div>
+    <div class="modal-title" id="lc-modal-title"></div>
+    <!-- Тело -->
+    <div class="modal-body" id="lc-modal-body" style="margin-bottom:12px"></div>
+    <!-- Варианты -->
+    <div class="modal-choices" id="lc-modal-choices"></div>
+  </div>
+</div>
+
+<!-- ══ LC DETAIL PANEL ══ -->
+<div class="modal-overlay" id="lc-detail-modal" onclick="if(event.target===this)Projects.closeDetailPanel()">
+  <div class="modal" style="max-width:560px;width:100%;max-height:85vh;overflow-y:auto">
+    <!-- Шапка -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:17px;font-weight:700;color:var(--text)" id="lc-detail-name">—</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px" id="lc-detail-tier">—</div>
+      </div>
+      <button onclick="Projects.closeDetailPanel()"
+        style="font-size:14px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 6px">✕</button>
+    </div>
+    <!-- Цепочка фаз -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Этапы проекта</div>
+      <div id="lc-detail-chain" style="overflow-x:auto;padding-bottom:4px"></div>
+    </div>
+    <!-- Метрики -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+      <div style="text-align:center;padding:8px;background:rgba(255,255,255,.04);border-radius:6px;border:1px solid rgba(255,255,255,.06)">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">😊 Настроение</div>
+        <div id="lc-detail-mood">—</div>
+      </div>
+      <div style="text-align:center;padding:8px;background:rgba(255,255,255,.04);border-radius:6px;border:1px solid rgba(255,255,255,.06)">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">⚠️ Риск</div>
+        <div id="lc-detail-risk">—</div>
+      </div>
+      <div style="text-align:center;padding:8px;background:rgba(255,255,255,.04);border-radius:6px;border:1px solid rgba(255,255,255,.06)">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">✨ Качество</div>
+        <div id="lc-detail-quality">—</div>
+      </div>
+    </div>
+    <!-- Теги: скрыты от игрока (внутренние данные) -->
+    <div id="lc-detail-tags" style="display:none"></div>
+    <!-- Активные действия + История решений (заполняется из JS) -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">История решений</div>
+      <div id="lc-detail-history" style="font-size:11px;max-height:280px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ SCOUT MODAL ══ -->
 <div class="modal-overlay" id="scout-modal">
   <div class="modal modal-wide">
@@ -361,6 +432,7 @@
   </div>
 </div>
 
+<!-- BUILD:START -->
 <script src="src/constants.js"></script>
 <script src="src/events.js"></script>
 <script src="scenarios/agency.js"></script>
@@ -371,6 +443,7 @@
 <script src="src/scenario-editor.js"></script>
 <script>SE.applyActiveScenario();</script>
 <script src="src/engine.js"></script>
+<script src="src/projects.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/saves.js"></script>
 <script src="src/ai.js"></script>
@@ -393,5 +466,6 @@
   // Рендерим карточки расширений на mode-screen
   DLC.renderModeScreen();
 </script>
+<!-- BUILD:END -->
 </body>
 </html>

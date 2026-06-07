@@ -242,6 +242,58 @@ const SCENARIO = {
   projects: [
 
     // ─────────────────────────────────────────────
+    //  [DEV] LIFECYCLE TEST — 3 пилотных проекта для отладки нового флоу
+    //  Флаг _lifecycleTest:true — в обычный пул не попадают;
+    //  появляются только через кнопку "🧪 LC-тест" (doLifecycleScouting).
+    // ─────────────────────────────────────────────
+    {
+      // Простейший флоу: T1, без юридики, без доп. фаз
+      // Цель: проверить F0→F1→F2→F3→F5→F6–F8→F9→F10 без F4 и sub-phases
+      id:'lc_simple', tier:1, icon:'🟢', name:'[LC] Лендинг для кафе',
+      desc:'Небольшой заказ — лендинг для местного кафе. Стандартный флоу без юридики и сложных фаз. Идеален для проверки базовой цепочки решений.',
+      revenue:15000, minQ:0, minV:0, type:'small', npsStart:78, oneTime:false, rarity:'common',
+      modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
+      modBadge:'mb-green', prob:1.0,
+      _lifecycleTest: true,
+      _negotiationTier: 'quick',   // 2 решения на старте — без брифа и планирования
+      _duration: 6,
+      requiresLegal: false,
+      hasSubPhases:  false,
+      skipProposal:  false,
+    },
+    {
+      // Полный флоу: T2, с юридикой (если есть юрист), с под-фазами работы
+      // Цель: проверить F4 (Legal) + sub-phases в F6–F8 (рефы, прото)
+      id:'lc_full', tier:2, icon:'🔵', name:'[LC] Ребрендинг ТехноСтарт',
+      desc:'Средний клиент, требует договор и все этапы — от брифа до сдачи. Включены фаза юридики и детальные под-этапы работы (сбор рефов, прото).',
+      revenue:35000, minQ:10, minV:0, type:'corp', npsStart:72, oneTime:false, rarity:'uncommon',
+      modifier:{ type:'nps_start', val:+5, label:'NPS старт +5' },
+      modBadge:'mb-green', prob:1.0,
+      _lifecycleTest: true,
+      _negotiationTier: 'standard', // 4-5 решений — бриф + планирование
+      _duration: 9,
+      requiresLegal: true,
+      hasSubPhases:  true,
+      skipProposal:  false,
+    },
+    {
+      // Конфликтный флоу: T2, без юриста, с высоким риском scope_creep + капризный клиент
+      // Цель: проверить ветки риск-событий, clientMood < 40 на F9, штрафы
+      id:'lc_risky', tier:2, icon:'🔴', name:'[LC] Онлайн-магазин «Каприз»',
+      desc:'Клиент с завышенными ожиданиями. Скоуп плывёт, NPS нестабилен. Нужен для проверки ветки scope_creep, юридических рисков и неудовлетворённого ревью.',
+      revenue:38000, minQ:0, minV:0, type:'store', npsStart:58, oneTime:false, rarity:'uncommon',
+      modifier:{ type:'nps_drain', val:-4, label:'−4 NPS/мес' },
+      modBadge:'mb-amber', prob:1.0,
+      _lifecycleTest: true,
+      _negotiationTier: 'challenge', // 5-шаговый пинг-понг переговоров
+      _duration: 7,
+      requiresLegal: false,
+      hasSubPhases:  false,
+      skipProposal:  false,
+      _riskProfile: { scope_creep: 0.45, external_deadline: 0.30 },
+    },
+
+    // ─────────────────────────────────────────────
     //  TIER 1 — Стартовые разовые (без требований Q/V)
     // ─────────────────────────────────────────────
     {

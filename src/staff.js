@@ -44,6 +44,17 @@ const ROLE_META = {
 };
 const ROLE_IDS = Object.keys(ROLE_META);
 
+// ── Role Categories (для найма-фильтра) ───────────────
+const ROLE_CATEGORIES = [
+  { id: 'creative',   label: 'Дизайн',    emoji: '🎨', roles: ['designer','copywriter','smm'] },
+  { id: 'tech',       label: 'Разработка', emoji: '💻', roles: ['developer'] },
+  { id: 'management', label: 'Управление', emoji: '📋', roles: ['manager','hr'] },
+  { id: 'legal',      label: 'Юридика',    emoji: '⚖️', roles: ['lawyer'] },
+];
+
+// ── Candidate pool filter state ────────────────────────
+let _candidateFilter = null; // null = все; 'creative' | 'tech' | 'management' | 'legal'
+
 // ── Grade Config ───────────────────────────────────────
 
 const GRADE_CFG = {
@@ -487,7 +498,73 @@ function _renderCandidatePool() {
     return;
   }
 
-  el.innerHTML = pool.map(c => _candidateCard(c)).join('');
+  // Count per category for chip badges
+  const catCounts = {};
+  ROLE_CATEGORIES.forEach(cat => {
+    catCounts[cat.id] = pool.filter(c => cat.roles.includes(c.role)).length;
+  });
+
+  // Filter chips
+  const allChip = `<button onclick="setCandidateFilter(null)"
+    style="padding:4px 11px;border-radius:20px;border:1.5px solid ${!_candidateFilter ? 'var(--teal)' : 'rgba(255,255,255,.12)'};
+           background:${!_candidateFilter ? 'rgba(0,212,170,.12)' : 'transparent'};
+           color:var(--fg);font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s">
+    Все <span style="opacity:.6">${pool.length}</span>
+  </button>`;
+
+  const catChips = ROLE_CATEGORIES.map(cat => {
+    const cnt   = catCounts[cat.id];
+    const act   = _candidateFilter === cat.id;
+    const empty = cnt === 0;
+    return `<button onclick="setCandidateFilter('${cat.id}')"
+      style="padding:4px 11px;border-radius:20px;border:1.5px solid ${act ? 'var(--teal)' : 'rgba(255,255,255,.12)'};
+             background:${act ? 'rgba(0,212,170,.12)' : 'transparent'};
+             color:${empty ? 'var(--muted)' : 'var(--fg)'};
+             font-size:11px;cursor:pointer;white-space:nowrap;transition:all .15s;display:inline-flex;align-items:center;gap:5px">
+      ${cat.emoji} ${cat.label}
+      ${cnt > 0 ? `<span style="background:rgba(255,255,255,.1);border-radius:8px;padding:0 5px;font-size:10px;color:var(--sub)">${cnt}</span>` : ''}
+    </button>`;
+  }).join('');
+
+  const filterBar = `<div style="display:flex;flex-wrap:wrap;gap:5px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:10px">
+    ${allChip}${catChips}
+  </div>`;
+
+  // Render: grouped when "Все", flat when category filter active
+  let cardsHtml;
+  if (!_candidateFilter) {
+    // Grouped by category
+    cardsHtml = ROLE_CATEGORIES.map(cat => {
+      const group = pool.filter(c => cat.roles.includes(c.role));
+      if (group.length === 0) return '';
+      return `<div style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.7px;margin-bottom:6px;padding:0 2px;display:flex;align-items:center;gap:6px">
+          <span>${cat.emoji}</span><span>${cat.label}</span>
+          <span style="font-weight:400;opacity:.6">${group.length}</span>
+        </div>
+        <div>${group.map(c => _candidateCard(c)).join('')}</div>
+      </div>`;
+    }).join('');
+    if (!cardsHtml) cardsHtml = `<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">Нет кандидатов</div>`;
+  } else {
+    const cat      = ROLE_CATEGORIES.find(rc => rc.id === _candidateFilter);
+    const filtered = cat ? pool.filter(c => cat.roles.includes(c.role)) : [];
+    cardsHtml = filtered.length > 0
+      ? filtered.map(c => _candidateCard(c)).join('')
+      : `<div style="text-align:center;padding:32px 16px;color:var(--muted)">
+           <div style="font-size:32px;margin-bottom:8px">${cat?.emoji || '🔍'}</div>
+           <div style="font-size:13px">Нет кандидатов в этой категории</div>
+           <div style="font-size:11px;margin-top:4px;opacity:.7">Запусти скаутинг или выбери другую категорию</div>
+         </div>`;
+  }
+
+  el.innerHTML = filterBar + cardsHtml;
+}
+
+function setCandidateFilter(catId) {
+  _candidateFilter = catId || null;
+  _renderCandidatePool();
 }
 
 function _candidateCard(c) {

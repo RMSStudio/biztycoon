@@ -525,6 +525,40 @@ function renderGame() {
       </div>`;
     }
 
+    // ── LC-lifecycle: вычисляем доп. данные для карточки ──
+    const _isLC          = !!c._lcPhase;
+    const _isLCEvent     = _isLC && !c._lcPhase.startsWith('work_');
+    const _lcPhaseBadge  = _isLC && typeof Projects !== 'undefined'
+      ? Projects.renderPhaseBadge(c) : '';
+
+    // Сегментированный прогресс-бар для LC work-фаз (3 этапа на одной шкале)
+    const _lcWorkBar = (() => {
+      if (!_isLC || _isLCEvent) return '';
+      const _wOrder = ['work_0','work_1','work_2'];
+      const _wIdx   = _wOrder.indexOf(c._lcPhase); // 0, 1 или 2
+      const _prog   = c._progress || 0;
+      // Суммарный прогресс: (завершённые фазы × 100 + текущий прогресс) / 3
+      const _total  = Math.round((_wIdx * 100 + _prog) / 3);
+      const _col    = _total >= 66 ? 'var(--teal)' : _total >= 33 ? 'var(--amber)' : 'var(--sub)';
+
+      const _segs = _wOrder.map((_, i) => {
+        const pct  = i < _wIdx ? 100 : i === _wIdx ? _prog : 0;
+        const show = pct > 0;
+        return `<div style="flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--teal);border-radius:2px;transition:width .4s;
+                      opacity:${i < _wIdx ? '.6' : '1'}"></div>
+        </div>`;
+      }).join('<div style="width:3px;flex-shrink:0"></div>');
+
+      return `<div style="margin-top:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:10px;color:var(--sub)">Работа ${_wIdx + 1} из 3</span>
+          <span style="font-size:10px;font-weight:700;color:${_col}">${_total}%</span>
+        </div>
+        <div style="display:flex;gap:2px">${_segs}</div>
+      </div>`;
+    })();
+
     chtml+=`<div class="client-card ${warn}">
       <div class="client-row1">
         <div class="client-icon">${c.icon}</div>
@@ -534,6 +568,7 @@ function renderGame() {
             ${warn==='critical'?'<span class="tag red" style="font-size:10px;">⚠ Уходит</span>':
               warn==='at-risk'?'<span class="tag amber" style="font-size:10px;">Недоволен</span>':''}
             ${c.oneTime?'<span class="tag purple" style="font-size:10px;">Разовый</span>':''}
+            ${_isLC?'<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(168,85,247,.12);color:rgba(168,85,247,.9);font-weight:600;border:1px solid rgba(168,85,247,.3)">LC</span>':''}
             ${deadlineBadge}
           </div>
           <div class="client-desc" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -551,8 +586,8 @@ function renderGame() {
               return `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${_bg};color:${_col};font-weight:600">⚙️ ${_pLoad} / ${_thr}</span>`;
             })()}
           </div>
-          ${progressBar}
-          ${focusBar}
+          ${_isLCEvent ? _lcPhaseBadge : (_isLC ? _lcWorkBar : progressBar) + (_isLC ? _lcPhaseBadge : '')}
+          ${_isLCEvent ? '' : focusBar}
         </div>
         <div class="client-rev">
           ${budgetStr}
@@ -566,9 +601,27 @@ function renderGame() {
         <div class="nps-wrap"><div class="nps-fill" style="width:${nps}%;background:${nc}"></div></div>
         <span class="nps-val" style="color:${nc}">${nps}</span>
         <span class="nps-btn" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
-          ${canComplete?`<button class="btn btn-xs" style="background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.3);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="completeProject('${c.id}')" title="Проект выполнен — получить оплату">🏁 Завершить</button>`:''}
-          <button class="btn btn-xs btn-ghost" onclick="investInClient('${c.id}')" ${!affordable?'disabled':''} title="−20 000₽ → NPS +25">💬 −20К</button>
-          <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>
+          ${_isLC
+            // LC-проект
+            ? `${c._lcPendingDecision
+                // Есть pending decision — красная кнопка "Решить"
+                ? `<button class="btn btn-xs" style="background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.4);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:700;cursor:pointer;animation:pulse 1.5s infinite"
+                     onclick="Projects.resolveWorkEvent('${c.id}')">⚡ Решить</button>`
+                : _isLCEvent
+                  ? `<button class="btn btn-xs" style="background:rgba(210,153,34,.12);color:var(--amber);border:1px solid rgba(210,153,34,.3);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer"
+                       onclick="Projects.showPhasePopup(G.activeClients.find(x=>x.id==='${c.id}'))">
+                       ${Projects.PHASE_ICONS[c._lcPhase]||'▶'} ${Projects.PHASE_LABELS[c._lcPhase]||'Фаза'}
+                     </button>`
+                  : '' /* work-фаза без pending */
+              }
+              <button class="btn btn-xs" style="background:rgba(168,85,247,.08);color:rgba(168,85,247,.9);border:1px solid rgba(168,85,247,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer"
+                onclick="Projects.showDetailPanel('${c.id}')" title="История решений и метрики проекта">📋 Детали</button>
+              <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>`
+            // Обычный проект: стандартные кнопки
+            : `${canComplete?`<button class="btn btn-xs" style="background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.3);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="completeProject('${c.id}')" title="Проект выполнен — получить оплату">🏁 Завершить</button>`:''}
+               <button class="btn btn-xs btn-ghost" onclick="investInClient('${c.id}')" ${!affordable?'disabled':''} title="−20 000₽ → NPS +25">💬 −20К</button>
+               <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>`
+          }
         </span>
       </div>
     </div>`;
@@ -655,8 +708,30 @@ function renderGame() {
   const poolBadge = poolCount > 0
     ? `<span style="background:var(--teal);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700">${poolCount}</span>`
     : '';
+  // ── Team composition summary by category ──
+  const _teamCompHtml = (() => {
+    if (typeof ROLE_CATEGORIES === 'undefined') return '';
+    const active = (G.staff || []).filter(s => s.status !== 'fired');
+    const rows = ROLE_CATEGORIES.map(cat => {
+      const cnt    = active.filter(s => cat.roles.includes(s.role)).length;
+      const hasGap = cnt === 0;
+      return `<div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:12px;width:16px;text-align:center">${cat.emoji}</span>
+        <span style="font-size:11px;color:${hasGap ? 'var(--muted)' : 'var(--sub)'};flex:1">${cat.label}</span>
+        ${cnt > 0
+          ? `<span style="font-size:10px;font-weight:600;color:var(--teal)">${cnt}</span>`
+          : `<span style="font-size:10px;color:rgba(255,255,255,.2)">нет</span>`}
+      </div>`;
+    }).join('');
+    return `<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">Состав команды</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">${rows}</div>
+    </div>`;
+  })();
+
   document.getElementById('g-hire-list').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:8px;padding:4px 0">
+      ${_teamCompHtml}
       <button class="btn btn-primary" style="width:100%;justify-content:center;gap:8px;font-size:13px"
               onclick="openStaffScoutModal()">
         🔍 Скаутинг специалистов ${poolBadge}

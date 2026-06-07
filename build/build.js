@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
  * BizTycoon Build Script
- * Собирает constants + scenario + engine + ui + styles в единый portable HTML.
+ * Собирает все исходники в единый portable HTML.
  *
  * Запуск:
  *   node build/build.js                    → использует сценарий по умолчанию (agency)
  *   node build/build.js --scenario=agency  → явно указать сценарий
  *
  * Результат: dist/BizTycoon.html
+ *
+ * Маркеры в index.html: <!-- BUILD:START --> ... <!-- BUILD:END -->
+ * Всё между ними заменяется инлайн-блоком.
  */
 
 const fs   = require('fs');
@@ -22,55 +25,87 @@ const DIST = path.join(ROOT, 'dist');
 
 if (!fs.existsSync(DIST)) fs.mkdirSync(DIST);
 
-// ── Читаем исходники в правильном порядке ─────────────
+// ── Проверяем сценарий ─────────────────────────────────
 const scenarioPath = path.join(ROOT, 'scenarios', `${SCENARIO_ID}.js`);
 if (!fs.existsSync(scenarioPath)) {
   console.error(`❌  Сценарий не найден: scenarios/${SCENARIO_ID}.js`);
   process.exit(1);
 }
 
-const html      = fs.readFileSync(path.join(ROOT, 'index.html'),          'utf8');
-const css       = fs.readFileSync(path.join(ROOT, 'styles', 'game.css'), 'utf8');
-const constants = fs.readFileSync(path.join(ROOT, 'src', 'constants.js'), 'utf8');
-const events    = fs.readFileSync(path.join(ROOT, 'src', 'events.js'),   'utf8');
-const scenario  = fs.readFileSync(scenarioPath,                           'utf8');
-const eng       = fs.readFileSync(path.join(ROOT, 'src', 'engine.js'),   'utf8');
-const ui        = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'),       'utf8');
-const saves     = fs.readFileSync(path.join(ROOT, 'src', 'saves.js'),    'utf8');
-const ai        = fs.readFileSync(path.join(ROOT, 'src', 'ai.js'),       'utf8');
+// ── Читаем index.html ──────────────────────────────────
+const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 
 // ── CSS: <link> → <style> ─────────────────────────────
+const css = fs.readFileSync(path.join(ROOT, 'styles', 'game.css'), 'utf8');
 let out = html.replace(
   '<link rel="stylesheet" href="styles/game.css">',
   `<style>\n${css}\n</style>`
 );
 
-// ── JS: 4 тега → 1 инлайн-блок ───────────────────────
-const scriptBlock = [
-  '<script src="src/constants.js"></script>',
-  '<script src="src/events.js"></script>',
-  `<script src="scenarios/${SCENARIO_ID}.js"></script>`,
-  '<script src="src/engine.js"></script>',
-  '<script src="src/ui.js"></script>',
-  '<script src="src/saves.js"></script>',
-  '<script src="src/ai.js"></script>',
-  '<script>initState(); initEventBus();</script>',
+// ── Читаем JS-исходники в правильном порядке ──────────
+function read(relPath) {
+  const p = path.join(ROOT, relPath);
+  if (!fs.existsSync(p)) {
+    console.warn(`⚠️  Файл не найден, пропускаем: ${relPath}`);
+    return `/* MISSING: ${relPath} */`;
+  }
+  return fs.readFileSync(p, 'utf8');
+}
+
+// Порядок важен: SE.applyActiveScenario() вызывается ПОСЛЕ scenario-editor.js
+// но ДО engine.js, т.к. он модифицирует SCENARIO in-place, который engine читает при загрузке.
+// Реализуем через два отдельных <script>-тега.
+const preEngineBlocks = [
+  read('src/constants.js'),
+  read('src/events.js'),
+  read(`scenarios/${SCENARIO_ID}.js`),
+  read('scenarios/presets/index.js'),
+  read('src/staff.js'),
+  read('src/scenario-editor.js'),
+];
+
+const postEngineBlocks = [
+  read('src/engine.js'),
+  read('src/projects.js'),
+  read('src/ui.js'),
+  read('src/saves.js'),
+  read('src/ai.js'),
+  read('dlc/loader.js'),
+];
+
+// ── Инлайн-блок (заменяет всё между маркерами) ────────
+const inlined = [
+  // Блок 1: до engine — сценарий + редактор
+  `<script>`,
+  ...preEngineBlocks,
+  `</script>`,
+  // SE модифицирует SCENARIO до того, как engine биндит константы
+  `<script>SE.applyActiveScenario();</script>`,
+  // Блок 2: engine + остальное
+  `<script>`,
+  ...postEngineBlocks,
+  `</script>`,
+  // Инициализация
+  `<script>`,
+  `  initState();`,
+  `  initEventBus();`,
+  `  SE.syncIntroStats();`,
+  `  (function() {`,
+  `    const btn = document.getElementById('btn-load-save');`,
+  `    if (btn && !hasSaves()) btn.disabled = true;`,
+  `  })();`,
+  `  DLC.init();`,
+  `  DLC.renderModeScreen();`,
+  `</script>`,
 ].join('\n');
 
-const inlined = [
-  `<script>`,
-  constants,
-  events,
-  scenario,
-  eng,
-  ui,
-  saves,
-  ai,
-  `</script>`,
-  `<script>initState(); initEventBus();</script>`,
-].join('\n\n');
-
-out = out.replace(scriptBlock, inlined);
+// ── Маркерная замена ───────────────────────────────────
+const markerRe = /<!-- BUILD:START -->[\s\S]*?<!-- BUILD:END -->/;
+if (!markerRe.test(out)) {
+  console.error('❌  Маркеры BUILD:START / BUILD:END не найдены в index.html');
+  process.exit(1);
+}
+out = out.replace(markerRe, inlined);
 
 // ── Пишем результат ───────────────────────────────────
 const outPath = path.join(DIST, 'BizTycoon.html');
