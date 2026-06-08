@@ -245,6 +245,7 @@
   .modal {
     background:var(--bg2); border:1px solid var(--border); border-radius:16px;
     padding:26px; max-width:480px; width:100%;
+    color:var(--text);
     animation:modalIn .2s ease;
   }
   .modal-wide {

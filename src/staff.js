@@ -241,7 +241,18 @@ function generateCandidate(roleId, grade) {
     // Set on hire:
     cost:    null,   // engine compat: monthly salary
     salary:  null,
+    // WU-система назначений
+    _assignedProjectId: null,     // id проекта, на который назначен (null = свободен)
   };
+}
+
+// Вычислить _wu для уже сгенерированного кандидата/сотрудника
+function _recomputeWU(s) {
+  const gradeWU  = { jr: 2, junior: 2, md: 4, middle: 4, sr: 7, senior: 7, lead: 9, star: 12 }[s.grade] || 3;
+  const qualMult = Math.max(0.4, ((s.qStat || s.quality || 50) / 75));
+  const moodMult = Math.max(0.5, ((s.mood ?? 80) / 100));
+  s._wu = Math.round(gradeWU * qualMult * moodMult);
+  return s._wu;
 }
 
 // ── Scout ─────────────────────────────────────────────
@@ -421,6 +432,19 @@ function renderTeamCards(el) {
     const loy   = s.loyalty ?? 70;
     const iid   = s._iid || s.uid || s.id;
 
+    // WU — рабочие единицы (обновляем при каждом рендере)
+    _recomputeWU(s);
+    const wu = s._wu || 0;
+
+    // Бейдж назначения на проект
+    const assignedClient = s._assignedProjectId
+      ? (G.activeClients || []).find(c => c.id === s._assignedProjectId)
+      : null;
+    const assignBadge = assignedClient
+      ? `<span style="display:inline-block;margin-top:4px;padding:2px 6px;border-radius:4px;
+           background:rgba(99,102,241,.18);color:var(--teal);font-size:10px;font-weight:600">
+           📂 ${assignedClient.name || assignedClient.id}</span>` : '';
+
     const visTraits = (s.traits || []).filter(t => t.revealed);
     const traitBadges = visTraits.slice(0, 3).map(t => {
       const td = TRAITS[t.id] || {};
@@ -449,8 +473,10 @@ function renderTeamCards(el) {
         <div class="staff-char-stats">
           <span title="Качество">Q ${s.quality || s.qStat || '—'}</span>
           <span title="Скорость">⚡ ${s.speedStat || '—'}</span>
+          <span title="Мощность — вклад специалиста в прогресс проекта" style="color:var(--teal)">⚙ ${wu} мощн.</span>
           ${s.capacity > 0 ? `<span title="Слоты проектов">📂 +${s.capacity}</span>` : ''}
         </div>
+        ${assignBadge}
         <div class="staff-char-bars">
           <div class="staff-bar-row" title="Настроение: ${mood}%">
             <span class="staff-bar-lbl">😊</span>
@@ -572,6 +598,10 @@ function _candidateCard(c) {
   const color = meta.color || '#6366f1';
   const cfg   = GRADE_CFG[c.grade] || {};
 
+  // Вычислить мощность кандидата
+  _recomputeWU(c);
+  const wu = c._wu || 0;
+
   const vis    = (c.traits || []).filter(t => t.revealed);
   const hidden = (c.traits || []).filter(t => !t.revealed).length;
 
@@ -599,6 +629,7 @@ function _candidateCard(c) {
           <span title="Качество">Q <strong>${c.qStat || c.quality}</strong></span>
           <span title="Скорость">⚡ <strong>${c.speedStat}</strong></span>
           <span title="Опыт">🕐 ${c.experience} л</span>
+          <span title="Мощность — вклад специалиста в прогресс проекта" style="color:var(--teal)">⚙ <strong>${wu}</strong> мощн.</span>
         </div>
         <div class="cand-traits">${traitHtml}</div>
       </div>

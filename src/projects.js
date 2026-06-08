@@ -50,6 +50,45 @@ const Projects = (() => {
     delivery:    '🏁',
   };
 
+  // ── Арт-иллюстрации для каждой фазы ────────────────────
+  const PHASE_ART = {
+    proposal: {
+      artGradient: 'linear-gradient(135deg, #080e1f 0%, #0d1a38 50%, #08101e 100%)',
+      artIcon:     '📝',
+      atmosphere:  'Белый лист и чистый шанс — первое впечатление формируется сейчас',
+    },
+    negotiation: {
+      artGradient: 'linear-gradient(135deg, #120e05 0%, #1e1505 60%, #12100a 100%)',
+      artIcon:     '🤝',
+      atmosphere:  'Переговорный стол: каждая пауза что-то стоит',
+    },
+    brief: {
+      artGradient: 'linear-gradient(135deg, #180900 0%, #2a1100 55%, #180a00 100%)',
+      artIcon:     '📋',
+      atmosphere:  'Бриф — договор о реальности: что хочет клиент vs. что возможно',
+    },
+    legal: {
+      artGradient: 'linear-gradient(135deg, #080e12 0%, #0d1720 55%, #080c10 100%)',
+      artIcon:     '⚖️',
+      atmosphere:  'Юридика скучная, но именно она спасает в нужный момент',
+    },
+    planning: {
+      artGradient: 'linear-gradient(135deg, #001218 0%, #001e26 55%, #001318 100%)',
+      artIcon:     '📐',
+      atmosphere:  'Дорожная карта ещё не реальность — но без неё дорога не начнётся',
+    },
+    review: {
+      artGradient: 'linear-gradient(135deg, #181000 0%, #261800 55%, #181000 100%)',
+      artIcon:     '🔍',
+      atmosphere:  'Момент истины: клиент смотрит, команда ждёт, балансы сходятся',
+    },
+    delivery: {
+      artGradient: 'linear-gradient(135deg, #001400 0%, #001e00 55%, #001400 100%)',
+      artIcon:     '🚀',
+      atmosphere:  'Финальный аккорд — всё вложенное переходит в руки клиента',
+    },
+  };
+
   // ── Строим цепочку фаз для конкретного проекта ─────────
   function buildPhaseChain(def) {
     const tier      = def._negotiationTier || 'standard';
@@ -81,6 +120,7 @@ const Projects = (() => {
     // Базовые параметры до переговоров (для справки)
     client._lcBudgetBase   = client._totalBudget;
     client._lcTimelineBase = client._duration;
+    client._assignedStaff  = client._assignedStaff || []; // назначенные сотрудники (WU-система)
   }
 
   // ── Перейти к следующей фазе ────────────────────────────
@@ -148,7 +188,15 @@ const Projects = (() => {
   }
 
   // Главный рендер LC-модалки
-  function _showLCModal({ client, icon, title, phaseLabel, body, choices }) {
+  function _showLCModal({ client, icon, title, phaseLabel, body, choices, artGradient, artIcon, atmosphere }) {
+    // Auto-inject phase art if caller didn't provide explicit art
+    if (!artGradient && client?._lcPhase && PHASE_ART[client._lcPhase]) {
+      const pa = PHASE_ART[client._lcPhase];
+      artGradient = pa.artGradient;
+      artIcon     = pa.artIcon;
+      atmosphere  = pa.atmosphere;
+    }
+
     const modal = document.getElementById('lc-modal');
     if (!modal) return;
 
@@ -157,10 +205,26 @@ const Projects = (() => {
     const moodCol = mood >= 70 ? 'var(--green)' : mood >= 45 ? 'var(--amber)' : 'var(--red)';
     const riskCol = risk >= 60 ? 'var(--red)' : risk >= 30 ? 'var(--amber)' : 'var(--teal)';
 
-    document.getElementById('lc-modal-icon').textContent  = icon || '📝';
+    // Art-header block для work-событий (gradient + icon + atmosphere)
+    const artHeaderHtml = artGradient ? `
+      <div style="margin:-16px -16px 14px;height:110px;border-radius:10px 10px 0 0;
+                  background:${artGradient};position:relative;display:flex;
+                  flex-direction:column;align-items:center;justify-content:center;gap:4px;
+                  overflow:hidden">
+        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 60%,rgba(255,255,255,.03),transparent 70%)"></div>
+        <span style="font-size:36px;line-height:1;position:relative">${artIcon || icon}</span>
+        ${atmosphere ? `<span style="font-size:11px;color:rgba(255,255,255,.5);font-style:italic;
+                                     text-align:center;max-width:80%;position:relative">${atmosphere}</span>` : ''}
+      </div>` : '';
+
+    // Иконку скрываем если есть art-header (она переезжает туда)
+    const iconEl = document.getElementById('lc-modal-icon');
+    if (iconEl) iconEl.style.display = artGradient ? 'none' : '';
+    if (iconEl && !artGradient) iconEl.textContent = icon || '📝';
+
     document.getElementById('lc-modal-phase').textContent = phaseLabel || '';
     document.getElementById('lc-modal-title').textContent = title || '';
-    document.getElementById('lc-modal-body').innerHTML    = body || '';
+    document.getElementById('lc-modal-body').innerHTML    = artHeaderHtml + (body || '');
     document.getElementById('lc-mood-val').innerHTML =
       `<span style="color:${moodCol};font-weight:700">😊 ${mood}</span>`;
     document.getElementById('lc-risk-val').innerHTML =
@@ -1117,6 +1181,10 @@ const Projects = (() => {
     {
       id: 'client_feedback',
       icon: '💬', title: 'Клиент прислал правки',
+      artGradient: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+      artIcon: '💬',
+      atmosphere: 'Пинг-понг комментариев в чате не утихает с утра',
+      context: c => `${c.name} прислал ${Math.floor(Math.random()*12)+3} замечания — часть критичных`,
       body: 'В середине работы пришли новые комментарии. Как реагируем?',
       choices: [
         {
@@ -1142,6 +1210,10 @@ const Projects = (() => {
     {
       id: 'staff_sick',
       icon: '🤒', title: 'Ключевой исполнитель заболел',
+      artGradient: 'linear-gradient(135deg, #1a0a0a 0%, #2d1515 50%, #1a0a0a 100%)',
+      artIcon: '🤒',
+      atmosphere: 'Холодный офис, пустое рабочее место, дедлайн не двигается',
+      context: c => `Выбыл на ~2 недели — прогресс по ${c.name} под угрозой`,
       body: 'Выбыл на две недели — прогресс под угрозой.',
       choices: [
         {
@@ -1167,6 +1239,10 @@ const Projects = (() => {
     {
       id: 'tech_issue',
       icon: '⚙️', title: 'Технический сбой',
+      artGradient: 'linear-gradient(135deg, #0a0a1a 0%, #1a1a0a 40%, #0d1520 100%)',
+      artIcon: '⚙️',
+      atmosphere: 'Терминал красный, бэкапы в тумане, тикает счётчик',
+      context: c => `Критичный файл/зависимость проекта ${c.name} сломан`,
       body: 'Потеряны файлы или сломана критичная зависимость.',
       choices: [
         {
@@ -1186,6 +1262,10 @@ const Projects = (() => {
     {
       id: 'client_praise',
       icon: '⭐', title: 'Промежуточный результат понравился',
+      artGradient: 'linear-gradient(135deg, #0a1a0a 0%, #0d2b0d 50%, #1a2e0a 100%)',
+      artIcon: '⭐',
+      atmosphere: 'Демо прошло — в воздухе лёгкость и аплодисменты',
+      context: c => `${c.name} в восторге от промежуточной версии`,
       body: 'Показали промежуточную версию — клиент в восторге.',
       choices: [
         {
@@ -1200,6 +1280,10 @@ const Projects = (() => {
     {
       id: 'competitor',
       icon: '🏃', title: 'Конкурент переманивает клиента',
+      artGradient: 'linear-gradient(135deg, #1a0a1a 0%, #2d1228 50%, #150e20 100%)',
+      artIcon: '🏃',
+      atmosphere: 'Рядом другая витрина светится ярче — клиент оглядывается',
+      context: c => `${c.name} намекнул: конкурент дал предложение дешевле`,
       body: 'Клиент намекает: другое агентство предложило дешевле.',
       choices: [
         {
@@ -1225,6 +1309,10 @@ const Projects = (() => {
     {
       id: 'scope_change',
       icon: '📐', title: 'Клиент хочет изменить концепцию',
+      artGradient: 'linear-gradient(135deg, #1a1000 0%, #2b1e00 50%, #1a1a00 100%)',
+      artIcon: '📐',
+      atmosphere: 'Макет уже сдан, но клиент вдруг «нашёл вдохновение»',
+      context: c => `${c.name} хочет переделать ключевую часть в середине работы`,
       body: 'На середине проекта — смена направления.',
       choices: [
         {
@@ -1253,6 +1341,10 @@ const Projects = (() => {
     {
       id: 'unexpected_complexity',
       icon: '🔩', title: 'Неожиданная сложность',
+      artGradient: 'linear-gradient(135deg, #0a0a0a 0%, #1a1020 50%, #0a1020 100%)',
+      artIcon: '🔩',
+      atmosphere: 'Под поверхностью задачи — лабиринт, которого никто не ждал',
+      context: c => `Задача по ${c.name} оказалась в 2–3 раза объёмнее расчётной`,
       body: 'При детальной проработке выяснилось: задача сложнее, чем казалось.',
       choices: [
         {
@@ -1297,11 +1389,15 @@ const Projects = (() => {
     const ev = WORK_EVENTS.find(e => e.id === client._lcPendingDecision.eventId);
     if (!ev) { client._lcPendingDecision = null; _emitRender(); return; }
 
+    const _contextLine = ev.context ? ev.context(client) : '';
     _showLCModal({
       client,
       icon: ev.icon, title: ev.title,
       phaseLabel: `${client.icon} ${client.name}  ·  ${PHASE_LABELS[client._lcPhase] || 'Работа'}`,
-      body: `<span style="color:var(--sub)">${ev.body}</span>`,
+      body: `<span style="color:var(--sub)">${ev.body}</span>${_contextLine ? `<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.4);font-style:italic">${_contextLine}</div>` : ''}`,
+      artGradient: ev.artGradient || null,
+      artIcon:     ev.artIcon     || ev.icon,
+      atmosphere:  ev.atmosphere  || null,
       choices: ev.choices.map(ch => ({
         text: ch.text, desc: ch.desc, effect: ch.effect, highlight: ch.highlight,
         fn: () => {

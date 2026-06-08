@@ -682,61 +682,114 @@ const SCENARIO = {
   //  fatigueReduce → разовое снижение усталости (с кулдауном)
   // ══════════════════════════════════════════════════
   upgrades: [
-    // — Q-перки —
+    // ── Колонка 0: Качество ─────────────────────────────────────────
     {
       id:'tools_q', icon:'🖥️', name:'Проф. инструментарий',
       desc:'Figma Pro, Adobe CC — команда работает без ограничений. Q +4',
       cost:25000, days:1, qBonus:4, repBonus:0, oneTime:true, speedBonus:0,
+      treePos:{col:0,row:0},
     },
     {
       id:'training_q', icon:'📚', name:'Курсы по дизайну',
       desc:'Онлайн-обучение + внутренний воркшоп для команды. Q +7',
       cost:45000, days:2, qBonus:7, repBonus:0, oneTime:true, speedBonus:0,
+      treePos:{col:0,row:1},
     },
     {
       id:'consultant_q', icon:'🎯', name:'UX-консультант',
       desc:'Разовый аудит от топ-специалиста: Q-рост и репутация. Q +10',
       cost:72000, days:1, qBonus:10, repBonus:3, oneTime:true, speedBonus:0,
+      treePos:{col:0,row:2},
     },
     {
-      id:'freelance_q', icon:'✏️', name:'Фриланс-дизайнер',
-      desc:'Временная помощь — Q только в этом месяце. Q +7',
-      cost:30000, days:1, qBonus:7, repBonus:0, oneTime:false, speedBonus:0,
+      id:'standards_q', icon:'📐', name:'Стандарты качества',
+      desc:'Внутренние гайдлайны и чеклисты — ревью-риск снижается, Q растёт стабильно',
+      cost:95000, days:2, qBonus:5, repBonus:2, oneTime:true, speedBonus:0,
+      treePos:{col:0,row:3}, draft:true,
     },
-    // — Speed-перки —
+    // ── Колонка 1: Скорость ─────────────────────────────────────────
     {
       id:'agile', icon:'⚡', name:'Agile-внедрение',
-      desc:'Спринты и итерации — команда сдаёт задачи быстрее',
+      desc:'Спринты и итерации — команда сдаёт задачи быстрее. Прогресс +10%',
       cost:40000, days:2, qBonus:0, repBonus:0, oneTime:true, speedBonus:0.10,
+      treePos:{col:1,row:0},
     },
     {
       id:'scrum', icon:'🔄', name:'Scrum-мастер',
       desc:'Внешний коуч настраивает ретро и планирование. Прогресс проектов +15%',
       cost:65000, days:2, qBonus:0, repBonus:0, oneTime:true, speedBonus:0.15,
+      treePos:{col:1,row:1},
     },
     {
-      id:'automation', icon:'🤖', name:'Автоматизация процессов',
+      id:'automation', icon:'🤖', name:'Автоматизация',
       desc:'Рутина уходит в скрипты. Прогресс всех проектов +20%',
       cost:90000, days:3, qBonus:0, repBonus:0, oneTime:true, speedBonus:0.20,
+      treePos:{col:1,row:2},
     },
-    // — Восстановление усталости —
+    {
+      id:'ai_workflow', icon:'🧠', name:'ИИ-воркфлоу',
+      desc:'Генерация, препродакшн, ресёрч — ИИ берёт на себя рутину. Прогресс +25%',
+      cost:180000, days:3, qBonus:0, repBonus:0, oneTime:true, speedBonus:0.25,
+      treePos:{col:1,row:3}, draft:true,
+    },
+    // ── Колонка 2: Команда ──────────────────────────────────────────
     {
       id:'paid_leave', icon:'🏖️', name:'Оплачиваемые выходные',
       desc:'Команда отдыхает пару дней — быстрый сброс накопленного стресса',
       cost:12000, days:1, qBonus:0, repBonus:0, oneTime:false, speedBonus:0,
       fatigueReduce:12, cooldownMonths:1,
+      treePos:{col:2,row:0},
     },
     {
       id:'teambuilding', icon:'🎉', name:'Тимбилдинг',
       desc:'Командный офлайн-день: игры, еда, живое общение — существенный откат усталости',
       cost:28000, days:2, qBonus:0, repBonus:0, oneTime:false, speedBonus:0,
       fatigueReduce:22, cooldownMonths:2,
+      treePos:{col:2,row:1},
     },
     {
-      id:'corp_vacation', icon:'✈️', name:'Корпоративный отпуск',
+      id:'corp_vacation', icon:'✈️', name:'Корп. отпуск',
       desc:'Полноценный отдых команды. Снимает даже сильное выгорание. Доступен при усталости ≥40',
       cost:55000, days:3, qBonus:0, repBonus:0, oneTime:false, speedBonus:0,
       fatigueReduce:38, cooldownMonths:3, minFatigue:40,
+      treePos:{col:2,row:2},
+    },
+    {
+      id:'mentorship', icon:'🌱', name:'Программа менторства',
+      desc:'Senior-специалисты ведут джунов: быстрый рост команды, настроение растёт',
+      cost:80000, days:2, qBonus:3, repBonus:0, oneTime:true, speedBonus:0,
+      treePos:{col:2,row:3}, draft:true,
+    },
+    // ── Колонка 3: Репутация ────────────────────────────────────────
+    {
+      id:'portfolio_site', icon:'🌐', name:'Портфолио-сайт',
+      desc:'Собственный сайт с кейсами — новые клиенты находят агентство сами. Реп +3',
+      cost:35000, days:2, qBonus:0, repBonus:3, oneTime:true, speedBonus:0,
+      treePos:{col:3,row:0}, draft:true,
+    },
+    {
+      id:'case_studies', icon:'📄', name:'Кейс-стади',
+      desc:'Детальные разборы проектов привлекают качественных клиентов. Реп +5, Q +2',
+      cost:70000, days:2, qBonus:2, repBonus:5, oneTime:true, speedBonus:0,
+      treePos:{col:3,row:1}, draft:true,
+    },
+    {
+      id:'awards', icon:'🏆', name:'Отраслевые награды',
+      desc:'Победа в конкурсах открывает доступ к клиентам уровня корп+. Реп +8',
+      cost:130000, days:3, qBonus:0, repBonus:8, oneTime:true, speedBonus:0,
+      treePos:{col:3,row:2}, draft:true,
+    },
+    {
+      id:'industry_pr', icon:'📡', name:'PR в индустрии',
+      desc:'Медиаприсутствие, выступления, лидерство — агентство становится именем. Реп +12',
+      cost:210000, days:3, qBonus:0, repBonus:12, oneTime:true, speedBonus:0,
+      treePos:{col:3,row:3}, draft:true,
+    },
+    // ── Быстрые действия (без позиции в дереве) ─────────────────────
+    {
+      id:'freelance_q', icon:'✏️', name:'Фриланс-дизайнер',
+      desc:'Временная помощь — Q только в этом месяце. Q +7',
+      cost:30000, days:1, qBonus:7, repBonus:0, oneTime:false, speedBonus:0,
     },
   ],
 

@@ -184,20 +184,60 @@ function getFatigueMult(g=G) {
   return ft >= 85 ? 0.70 : ft >= 60 ? 0.85 : ft >= 30 ? 0.95 : 1.0;
 }
 
-// ── THROUGHPUT / LOAD ────────────────────────────────────
-// Производительность команды (базовая = 10 у фаундера + throughput каждого сотрудника)
-function getTeamThroughput(g=G) {
-  return 10 + g.staff.reduce((s,x) => s + (x.throughput||0), 0);
+// ── МОЩНОСТЬ ─────────────────────────────────────────────
+// Мощность одного сотрудника (целое число мощн.): grade × качество × настроение
+function calcStaffWorkUnit(s) {
+  if (!s || s.status === 'fired') return 0;
+  const gradeWU  = { jr: 2, md: 4, sr: 7 }[s.grade] || 3;
+  const qualMult = Math.max(0.4, ((s.qStat || s.quality || 50) / 75));
+  const moodMult = Math.max(0.5, ((s.mood ?? 80) / 100));
+  return Math.round(gradeWU * qualMult * moodMult);
 }
 
-// Нагрузка одного проекта по тиру
-// payment_delay_fixed: в период ожидания проект не нагружает команду
+// Мощность команды (2 у фаундера + мощн. каждого сотрудника)
+function getTeamThroughput(g=G) {
+  return 2 + g.staff.reduce((s,x) => s + calcStaffWorkUnit(x), 0);
+}
+
+// Мощность конкретного проекта: 2 (фаундер) + мощн. назначенных сотрудников
+function getProjectThroughput(c) {
+  const assigned = (G.staff || []).filter(s =>
+    s.status !== 'fired' &&
+    (c._assignedStaff || []).includes(s._iid || s.id)
+  );
+  return 2 + assigned.reduce((sum, s) => sum + calcStaffWorkUnit(s), 0);
+}
+
+// Назначить сотрудника на проект (один сотрудник — один проект)
+function assignStaffToProject(staffId, projectId) {
+  unassignStaff(staffId);
+  const project = (G.activeClients || []).find(c => c.id === projectId);
+  const staff   = (G.staff || []).find(s => (s._iid || s.id) === staffId);
+  if (!project || !staff) return;
+  project._assignedStaff = project._assignedStaff || [];
+  project._assignedStaff.push(staffId);
+  staff._assignedProjectId = projectId;
+  _emitRender();
+}
+
+// Снять сотрудника со всех проектов
+function unassignStaff(staffId) {
+  const staff = (G.staff || []).find(s => (s._iid || s.id) === staffId);
+  if (staff) staff._assignedProjectId = null;
+  (G.activeClients || []).forEach(c => {
+    if (c._assignedStaff) c._assignedStaff = c._assignedStaff.filter(id => id !== staffId);
+  });
+}
+
+// Мощность, которую требует проект (по тиру) — целевая нагрузка/мес.
+// Тир 1: 4, Тир 2: 8, Тир 3: 14 — шкала пропорциональна мощн. сотрудников (jr=2, md=4, sr=7)
+// payment_delay_fixed: в период ожидания проект не потребляет мощность
 function getProjectLoad(c) {
   if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return 0;
-  return c.tier === 3 ? 24 : c.tier === 2 ? 14 : 7;
+  return c.tier === 3 ? 14 : c.tier === 2 ? 8 : 4;
 }
 
-// Суммарная нагрузка от активных не-разовых проектов
+// Суммарная мощность, требуемая всеми активными не-разовыми проектами
 function getTotalLoad(g=G) {
   return g.activeClients.filter(c=>!c.oneTime).reduce((s,c) => s + getProjectLoad(c), 0);
 }
@@ -490,8 +530,8 @@ function _legacyShowScout(offers) {
       reqRow = `<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">${chips.join('')}</div>`;
     }
 
-    // ── Load chip ──
-    const tierLoad  = p.tier===3?24:p.tier===2?14:7;
+    // ── Мощность chip (скаут-карточка) ──
+    const tierLoad  = getProjectLoad(p);
     const hasDelay  = p.modifier?.type==='payment_delay_fixed';
     const curLoad   = getTotalLoad();
     const curThr    = getTeamThroughput();
@@ -500,12 +540,12 @@ function _legacyShowScout(offers) {
     const loadBg    = willOvld ? 'rgba(248,81,73,.12)' : 'rgba(45,212,191,.1)';
     const loadCol   = willOvld ? 'var(--red)' : 'var(--teal)';
     const loadNote  = hasDelay
-      ? `<span style="font-size:10px;color:var(--muted)">загрузка начнётся через ${p.modifier.val} мес.</span>`
+      ? `<span style="font-size:10px;color:var(--muted)">мощность начнёт тратиться через ${p.modifier.val} мес.</span>`
       : willOvld
-        ? `<span style="font-size:10px;color:var(--red)">⚠ перегруз: ${projLoad}/${curThr} произв.</span>`
-        : `<span style="font-size:10px;color:var(--muted)">${projLoad}/${curThr} произв. после подписания</span>`;
+        ? `<span style="font-size:10px;color:var(--red)">⚠ нужно ${projLoad} мощн., есть ${curThr}</span>`
+        : `<span style="font-size:10px;color:var(--muted)">${projLoad} / ${curThr} мощн. после подписания</span>`;
     const loadRow = `<div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${loadBg};color:${loadCol};font-weight:600">⚙️ ${tierLoad}</span>
+      <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${loadBg};color:${loadCol};font-weight:600">⚙ ${tierLoad} мощн.</span>
       ${loadNote}
     </div>`;
 
@@ -626,6 +666,7 @@ function signProject(pid) {
     _milestones: _mThresholds,     // массив порогов прогресса [%]
     _milestonePcts: _mPayPcts,     // доля от _originalBudget для каждого milestone
     _milestonesPaid: [],           // индексы уже выплаченных milestone
+    _assignedStaff: [],            // массив _iid назначенных сотрудников
   };
 
   // nps_start: override starting NPS
@@ -744,6 +785,7 @@ function hireStaff(id) {
 function buyUpgrade(id) {
   const def = UPGRADES.find(u => u.id === id);
   if (!def) return;
+  if (def.draft) { notify('⚗ Этот перк в разработке — появится в следующем обновлении', 'info'); return; }
   if (def.oneTime && G.upgrades[id]) { notify('Уже куплено ✓','error'); return; }
   if (!def.oneTime && !def.fatigueReduce && G.tempQBonus >= def.qBonus) { notify('Фриланс уже активен этот месяц','error'); return; }
   if (G.actions < def.days) { notify(`Нужно ≥${def.days} дн.`,'error'); return; }
@@ -1338,19 +1380,12 @@ function advanceMonth() {
     if (c._lcPhase && !c._lcPhase.startsWith('work_')) return;
     // payment_delay_fixed: прогресс не идёт пока не истёк период ожидания
     if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return;
-    // focusMult: доля фокуса проекта от 100 (фикс п.22: нормируем через 100, а не totalFocusW)
-    // При равном фокусе 3 проектов (33%+33%+33%) → ×0.33 каждый, суммарно ×1.0 команды
-    // При 20%+0%+0% → проект A ×0.20, остальные 0, эффективная нагрузка 20%
-    const _cFocus      = c._focus ?? Math.floor(100/Math.max(1,focusCount));
-    const focusMult    = (_cFocus / 100) * focusNorm;  // нормализован если total > 100%
-    // Правильная формула: фокус делит availableForRegular, эффективность = доля покрытия нагрузки
-    // При фокус 50% и thr=14, load_project=7: allocThr=7 → efficiency=1.0 → проект в срок ✓
-    // При фокус 50% и thr=10, load_project=7: allocThr=5 → efficiency=5/7=0.71 → перегруз ✓
-    // При фокус 100% и thr=13, load_project=7: allocThr=13 → efficiency=13/7=1.86 → ускорение ✓
-    // Кэп min(1,...) убран: избыток throughput честно ускоряет проект (прогресс cap=100 ниже)
-    const allocThr     = focusMult * availableForRegular;
+    // Per-project throughput: 2 (фаундер) + WU назначенных сотрудников
+    // Нет сотрудников → efficiency ≈ 0.28 (очень медленно), Sr-разраб → ~1.0+
+    // Кэп 2.5: избыток мощности честно ускоряет проект (прогресс cap=100 ниже)
     const pLoad        = getProjectLoad(c);
-    const efficiency   = pLoad > 0 ? (allocThr / pLoad) : 1;
+    const projThr      = getProjectThroughput(c);
+    const efficiency   = pLoad > 0 ? Math.min(2.5, projThr / pLoad) : 1;
     const speedMult    = getSpeed();
     const monthProg    = (100 / (c._duration||3)) * efficiency * fatigueMult * speedMult;
     // Округляем до 2 знаков — устраняет накопление float-погрешности (баг П.13)
@@ -1360,7 +1395,7 @@ function advanceMonth() {
   if (overloaded && G.activeClients.filter(c=>!c.oneTime).length > 0) {
     const eff    = Math.round(Math.min(1, availableForRegular / Math.max(1, totalLoad)) * 100);
     const otNote = scheduledOneTimeLoad > 0 ? ` (разовые −${Math.round(scheduledOneTimeLoad)} ед.)` : '';
-    addLog(`⚠️ Команда перегружена (нагрузка ${Math.round(totalLoad)} > доступно ${Math.round(availableForRegular)}${otNote}) — прогресс ×${eff}%`, 'amber');
+    addLog(`⚠️ Команда перегружена (нужно ${Math.round(totalLoad)} мощн., есть ${Math.round(availableForRegular)}${otNote}) — прогресс ×${eff}%`, 'amber');
   }
 
   // ② б) Разовые проекты: выполняются только если запланированы на этот месяц (_scheduled)

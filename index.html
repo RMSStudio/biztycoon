@@ -129,12 +129,28 @@
 
   <div class="game-header">
     <div class="game-logo">BizTycoon <span>/ <span id="g-spec-name"></span></span></div>
+    <!-- Командный мостик: банк + цель + рабочие дни -->
     <div class="header-stats">
+      <div class="hstat">
+        <div class="v amber" id="g-money">500 000 ₽</div>
+        <div class="l">В банке</div>
+      </div>
+      <div class="hstat">
+        <div class="v" id="g-cashflow" style="font-size:12px">+0 ₽</div>
+        <div class="l">Cashflow</div>
+      </div>
+      <!-- Прогресс к цели 7.5M — главный индикатор -->
+      <div class="hstat hstat-goal" style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;margin-bottom:3px">
+          <span style="font-size:10px;color:var(--muted)">Цель 7.5M</span>
+          <span id="g-goal-pct" style="font-size:11px;font-weight:700;color:var(--accent)">0%</span>
+        </div>
+        <div style="height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
+          <div id="g-goal-bar" style="height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width .4s"></div>
+        </div>
+        <div id="g-money-saved" style="font-size:9px;color:var(--muted);margin-top:2px;text-align:right">0 / 7 500 000 ₽</div>
+      </div>
       <div class="hstat"><div class="v" id="g-month">Янв 2026</div><div class="l">Месяц</div></div>
-      <div class="hstat"><div class="v amber" id="g-money">500 000 ₽</div><div class="l">В банке</div></div>
-      <div class="hstat"><div class="v" id="g-cashflow">+0 ₽</div><div class="l">Ожид. cashflow</div></div>
-      <div class="hstat"><div class="v teal" id="g-rep">100</div><div class="l">Репутация</div></div>
-      <div class="hstat"><div class="v" id="g-portfolio" style="color:var(--purple)">0</div><div class="l">Портфолио</div></div>
     </div>
     <button onclick="openSaveModal()" title="Сохранения (Ctrl+S)" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:14px;padding:5px 9px;transition:color .15s,border-color .15s" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">💾</button>
   </div>
@@ -176,13 +192,24 @@
         <div id="g-clients-list"></div>
       </div>
 
-      <div class="panel">
-        <div class="panel-title">P&L этого месяца</div>
-        <div id="g-pnl"></div>
-        <div class="progress-wrap">
-          <div class="progress-label"><span>Цель: 7 500 000 ₽</span><span id="g-progress-pct">0%</span></div>
-          <div class="progress-bar"><div class="progress-fill" id="g-progress-bar" style="width:0%"></div></div>
+      <!-- P&L — свёрнутая сводка, полный разбор по клику -->
+      <div class="panel" style="padding-bottom:0">
+        <div class="panel-title" onclick="toggleAcc('pnl')"
+          style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none">
+          <span>P&L</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="g-pnl-summary" style="font-size:11px;color:var(--sub)">—</span>
+            <span id="acc-arrow-pnl" style="font-size:11px;color:var(--muted)">▸</span>
+          </div>
         </div>
+        <div id="acc-pnl" style="display:none;padding-bottom:10px">
+          <div id="g-pnl"></div>
+        </div>
+      </div>
+      <!-- скрытые DOM-элементы для обратной совместимости с ui.js -->
+      <div style="display:none">
+        <div id="g-progress-pct"></div>
+        <div id="g-progress-bar"></div>
       </div>
 
       <!-- Метрики переехали сюда — рядом с проектами и P&L -->
@@ -212,10 +239,14 @@
         <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
           🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>
         </button>
-        <!-- [DEV] Lifecycle-тест — убрать перед релизом -->
-        <button onclick="doLifecycleScouting()" title="DEV: показать только lifecycle-тестовые проекты"
+        <!-- [DEV] Тестовые кнопки — всегда видны -->
+        <button id="btn-lc-test" onclick="doLifecycleScouting()" title="DEV: lifecycle-тест"
           style="margin-top:6px;width:100%;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:rgba(168,85,247,.9);border-radius:6px;padding:6px 10px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;">
           🧪 LC-тест <span style="color:rgba(168,85,247,.5);font-weight:400">без затрат дней</span>
+        </button>
+        <button onclick="G.money=99999999;renderGame();" title="DEV: бесконечный баланс"
+          style="margin-top:4px;width:100%;background:rgba(45,212,191,.07);border:1px solid rgba(45,212,191,.2);color:rgba(45,212,191,.7);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;">
+          💰 +∞ баланс <span style="color:rgba(45,212,191,.4);font-weight:400">99M₽</span>
         </button>
       </div>
 
@@ -238,10 +269,21 @@
         </div>
       </div>
 
-      <!-- Апгрейды — accordion по категориям -->
-      <div class="panel">
-        <div class="panel-title">Прокачка</div>
-        <div id="g-upgrades-list"></div>
+      <!-- Прокачка — открывается в модале -->
+      <div class="panel" style="padding:10px 12px">
+        <button onclick="openPerkModal()"
+          style="width:100%;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);
+                 border-radius:8px;padding:10px 14px;cursor:pointer;
+                 display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="font-size:18px;line-height:1">🌳</span>
+            <div style="text-align:left">
+              <div style="font-size:13px;font-weight:700;color:var(--text)">Дерево навыков</div>
+              <div id="perk-btn-sub" style="font-size:10px;color:var(--sub);margin-top:1px">Загрузка…</div>
+            </div>
+          </div>
+          <span style="font-size:13px;color:var(--muted)">→</span>
+        </button>
       </div>
 
     </div>
@@ -414,6 +456,38 @@
     <div id="staff-profile-body" style="overflow-y:auto;flex:1;min-height:0;padding-right:2px"></div>
     <button class="btn btn-ghost" onclick="closeStaffProfileModal()"
             style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">← Назад к пулу</button>
+  </div>
+</div>
+
+<!-- ══ STAFF ASSIGN MODAL ══ -->
+<div class="modal-overlay" id="staff-assign-modal" onclick="if(event.target===this)closeAssignModal()">
+  <div class="modal modal-wide" style="max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:12px">
+      <div>
+        <h3 style="font-size:16px;font-weight:700">👥 Команда на проект</h3>
+        <p id="staff-assign-subtitle" style="font-size:12px;color:var(--sub);margin-top:2px"></p>
+      </div>
+      <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="closeAssignModal()">✕</button>
+    </div>
+    <div id="staff-assign-body" style="overflow-y:auto;flex:1;min-height:0;padding-right:2px"></div>
+    <button class="btn btn-ghost" onclick="closeAssignModal()"
+            style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
+  </div>
+</div>
+
+<!-- ══ PERK TREE MODAL ══ -->
+<div class="modal-overlay" id="perk-modal" onclick="if(event.target===this)closePerkModal()">
+  <div class="modal" style="max-width:460px;width:100%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden;padding:18px 18px 14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:14px">
+      <div>
+        <h3 style="font-size:16px;font-weight:700;margin:0">🌳 Дерево навыков</h3>
+        <p id="perk-modal-sub" style="font-size:11px;color:var(--text);margin:3px 0 0"></p>
+      </div>
+      <button class="btn btn-ghost" style="padding:5px 10px;font-size:13px;flex-shrink:0" onclick="closePerkModal()">✕</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;min-height:0;padding-right:2px">
+      <div id="g-upgrades-list"></div>
+    </div>
   </div>
 </div>
 
