@@ -454,8 +454,9 @@ function doLifecycleScouting() {
     G.staff = G.staff || [];
     if (!G.staff.find(s => s.id === '_lc_dev_1')) {
       // load:5 каждому → суммарный throughput=10, хватит на 1–2 проекта
-      G.staff.push({ id:'_lc_dev_1', name:'Тест-Дизайнер', role:'designer', icon:'🎨', salary:0, load:5, status:'active', _isDevTest:true });
-      G.staff.push({ id:'_lc_dev_2', name:'Тест-Разраб',   role:'developer',icon:'💻', salary:0, load:5, status:'active', _isDevTest:true });
+      // grade:'md' → WU=3 через calcStaffWorkUnit; _iid=id → assignment в F5 Planning совпадёт
+      G.staff.push({ id:'_lc_dev_1', _iid:'_lc_dev_1', name:'Тест-Дизайнер', role:'designer', grade:'md', icon:'🎨', salary:0, cost:0, qStat:75, mood:80, status:'active', _isDevTest:true });
+      G.staff.push({ id:'_lc_dev_2', _iid:'_lc_dev_2', name:'Тест-Разраб',   role:'developer', grade:'md', icon:'💻', salary:0, cost:0, qStat:75, mood:80, status:'active', _isDevTest:true });
       addLog('🧪 LC-тест: добавлена тестовая команда (load×2, salary=0)', 'muted');
     }
   }
@@ -656,8 +657,8 @@ function signProject(pid) {
     ...def,
     id: pid+'_'+G.month,
     _monthsSigned: 0,
-    // Дедлайн: явный duration из дефиниции или тир-дефолт (tier1=3, tier2=4, tier3=5 мес.)
-    _duration: def.oneTime ? 1 : (def.duration || (def.tier===1 ? 3 : def.tier===2 ? 4 : 5)),
+    // Дедлайн: LC-проекты хранят _duration (с подчёркиванием); обычные — duration; иначе тир-дефолт
+    _duration: def.oneTime ? 1 : (def._duration || def.duration || (def.tier===1 ? 3 : def.tier===2 ? 4 : 5)),
     _originalBudget: totalBudget,  // для расчёта milestone — до вычета аванса
     _totalBudget: totalBudget,
     _progress: 0,   // 0–100%
@@ -1387,7 +1388,11 @@ function advanceMonth() {
     const projThr      = getProjectThroughput(c);
     const efficiency   = pLoad > 0 ? Math.min(2.5, projThr / pLoad) : 1;
     const speedMult    = getSpeed();
-    const monthProg    = (100 / (c._duration||3)) * efficiency * fatigueMult * speedMult;
+    // LC-проекты: _duration — суммарное время всех work-фаз; делим на их количество
+    // Обычные проекты: _lcChain отсутствует → workPhaseCnt=1 → поведение прежнее
+    const workPhaseCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
+    const phaseDur     = (c._duration || 3) / Math.max(1, workPhaseCnt);
+    const monthProg    = (100 / phaseDur) * efficiency * fatigueMult * speedMult;
     // Округляем до 2 знаков — устраняет накопление float-погрешности (баг П.13)
     c._progress = Math.min(100, Math.round(((c._progress||0) + monthProg) * 100) / 100);
   });
@@ -1439,7 +1444,20 @@ function advanceMonth() {
   // ── Milestone-выплаты T2/T3 ──────────────────────────
   G.activeClients.forEach(c => {
     if (!c._milestones || c._milestones.length === 0 || c.oneTime) return;
-    const progress = c._progress || 0;
+    // LC multi-phase: _progress сбрасывается на каждой work-фазе.
+    // Нормализуем в «глобальный» прогресс 0–100 по всем work-фазам.
+    // Обычные проекты (_lcChain отсутствует): используем _progress напрямую.
+    let progress;
+    const _wPhases = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')) : null;
+    if (_wPhases && _wPhases.length > 0) {
+      const _n       = _wPhases.length;
+      const _curWIdx = c._lcPhase ? _wPhases.indexOf(c._lcPhase) : -1;
+      progress = _curWIdx >= 0
+        ? Math.min(100, ((_curWIdx * 100) + (c._progress || 0)) / _n)
+        : 100;   // review/delivery — все work-фазы завершены
+    } else {
+      progress = c._progress || 0;
+    }
     (c._milestones).forEach((threshold, idx) => {
       if (progress >= threshold && !(c._milestonesPaid||[]).includes(idx)) {
         const payout = Math.round((c._originalBudget||c._totalBudget) * (c._milestonePcts||[])[idx] / 5000) * 5000;
@@ -1547,11 +1565,15 @@ function advanceMonth() {
   });
 
   // ⑧ Штраф просрочки: прогресс < 100% и дедлайн пройден
+  // LC-проекты: дедлайн считается от начала work_0 (_workStartMonth), не от подписания
   G.activeClients.forEach(c=>{
-    if (!c.oneTime && c._duration && (c._monthsSigned||0) > c._duration && (c._progress||0) < 100) {
+    const _effMon = c._workStartMonth != null
+      ? (c._monthsSigned||0) - c._workStartMonth
+      : (c._monthsSigned||0);
+    if (!c.oneTime && c._duration && _effMon > c._duration && (c._progress||0) < 100) {
       const pen = hasRole('lawyer') ? 1 : 2;
       G.reputation = clamp(G.reputation - pen, 0, 100);
-      addLog(`⏰ ${c.name}: просрочен на ${(c._monthsSigned||0)-c._duration} мес. — −${pen} репутации${hasRole('lawyer')?' (юрист −50%)':''}`, 'red');
+      addLog(`⏰ ${c.name}: просрочен на ${_effMon - c._duration} мес. — −${pen} репутации${hasRole('lawyer')?' (юрист −50%)':''}`, 'red');
     }
   });
 

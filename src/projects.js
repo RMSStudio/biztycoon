@@ -138,6 +138,10 @@ const Projects = (() => {
 
     // Work-фазы: проект начинает тикать, поп-ап не нужен
     if (client._lcPhase.startsWith('work_')) {
+      // Фиксируем момент старта первой work-фазы — для корректного дедлайн-отсчёта
+      if (client._lcPhase === 'work_0' && client._workStartMonth == null) {
+        client._workStartMonth = client._monthsSigned || 0;
+      }
       addLog(`▶ ${client.name}: ${PHASE_LABELS[client._lcPhase]} — работа началась`, 'teal');
       _emitRender();
       return;
@@ -230,14 +234,29 @@ const Projects = (() => {
     document.getElementById('lc-risk-val').innerHTML =
       `<span style="color:${riskCol};font-weight:700">⚠️ ${risk}</span>`;
 
+    // Pre-work фазы: автоматически добавляем кнопку «Отказаться от проекта»
+    const _preWorkPhases = ['proposal','negotiation','brief','legal','planning'];
+    const _allChoices = [...(choices || [])];
+    if (client?._lcPhase && _preWorkPhases.includes(client._lcPhase)) {
+      _allChoices.push({
+        text: 'Отказаться от проекта',
+        desc: 'Прекратить сотрудничество на этой стадии.',
+        effect: '−3 репутации',
+        _danger: true,
+        fn: () => _abandonProject(client),
+      });
+    }
+
     const choicesEl = document.getElementById('lc-modal-choices');
     choicesEl.innerHTML = '';
-    (choices || []).forEach(ch => {
+    _allChoices.forEach(ch => {
       const btn = document.createElement('button');
       btn.className = 'modal-choice';
       if (ch.disabled) {
         btn.disabled = true;
         btn.style.cssText = 'opacity:0.38;cursor:not-allowed';
+      } else if (ch._danger) {
+        btn.style.cssText = 'border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.04);color:var(--red);margin-top:4px';
       } else if (ch.highlight) {
         btn.style.cssText = 'border-color:rgba(45,212,191,.4);background:rgba(45,212,191,.06)';
       }
@@ -256,6 +275,24 @@ const Projects = (() => {
   function _closeLCModal() {
     const m = document.getElementById('lc-modal');
     if (m) m.classList.remove('active');
+  }
+
+  // Отказ от проекта на pre-work стадии
+  function _abandonProject(client) {
+    _closeLCModal();
+    const pen = 3;
+    if (typeof G !== 'undefined') {
+      G.reputation = Math.max(0, (G.reputation || 50) - pen);
+      G.activeClients = G.activeClients.filter(a => a.id !== client.id);
+      if (G.clientNPS) delete G.clientNPS[client.id];
+    }
+    const phaseLabel = (typeof PHASE_LABELS !== 'undefined' && PHASE_LABELS[client._lcPhase])
+      || client._lcPhase || 'ранней стадии';
+    if (typeof addLog === 'function')
+      addLog(`🚫 ${client.name}: отказ на стадии «${phaseLabel}» — −${pen} репутации`, 'amber');
+    if (typeof notify === 'function')
+      notify(`${client.icon || ''} ${client.name} — проект отменён`, 'error');
+    _emitRender();
   }
 
   // ══════════════════════════════════════════════════════
@@ -940,7 +977,10 @@ const Projects = (() => {
           fn: () => {
             const bonus = shownTeam ? 10 : 5;
             client._lcQualityBonus = (client._lcQualityBonus || 0) + bonus;
-            client._assignedStaff = staff.map(s => s.id);
+            // Используем _iid || id — совместимо с getProjectThroughput (матчит по _iid)
+            client._assignedStaff = staff.map(s => s._iid || s.id);
+            // Синхронизируем _assignedProjectId на сотруднике для отображения бейджа
+            staff.forEach(s => { s._assignedProjectId = client.id; });
             applyTag(client, 'team_assigned');
             logDecision(client, 'planning', 'team: full', `+${bonus}% качество`);
             _closeLCModal();
@@ -980,8 +1020,19 @@ const Projects = (() => {
     const quality   = client._lcQualityBonus || 0;
     const revisions = client._lcRevisionCount || 0;
 
+    // Бонус/штраф за эффективность стаффинга
+    // eff > 1 — over-deliver, клиент получает больше чем ожидал → бонус до +10
+    // eff < 0.5 — критический андерстаф → штраф до −10
+    let effBonus = 0;
+    if (typeof getProjectThroughput === 'function' && typeof getProjectLoad === 'function') {
+      const _thr  = getProjectThroughput(client);
+      const _load = getProjectLoad(client);
+      const _eff  = _load > 0 ? _thr / _load : 1;
+      effBonus = Math.round(Math.min(10, Math.max(-10, (_eff - 1.0) * 20)));
+    }
+
     // Итоговый счёт: настроение тянет вверх, качество даёт бонус, риск и правки тянут вниз
-    const score = mood * 0.5 + quality * 0.3 - risk * 0.2 - revisions * 3;
+    const score = mood * 0.5 + quality * 0.3 - risk * 0.2 - revisions * 3 + effBonus;
 
     let outcome, label, labelCol, bodyText;
     if (score >= 55) {
@@ -1081,7 +1132,7 @@ const Projects = (() => {
       body: `<div>
         <div style="font-size:15px;font-weight:700;color:${labelCol};margin-bottom:10px">${label}</div>
         <div style="color:var(--sub);font-size:12px;margin-bottom:10px">${bodyText}</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:10px;color:var(--sub)">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;font-size:10px;color:var(--sub)">
           <div style="text-align:center;padding:5px;background:rgba(255,255,255,.04);border-radius:5px">
             😊 Настроение<br><b style="color:${moodCol};font-size:13px">${Math.round(mood)}</b>
           </div>
@@ -1090,6 +1141,9 @@ const Projects = (() => {
           </div>
           <div style="text-align:center;padding:5px;background:rgba(255,255,255,.04);border-radius:5px">
             ✨ Качество<br><b style="color:var(--teal);font-size:13px">+${Math.round(quality)}%</b>
+          </div>
+          <div style="text-align:center;padding:5px;background:rgba(255,255,255,.04);border-radius:5px">
+            ⚡ Команда<br><b style="color:${effBonus >= 0 ? 'var(--green)' : 'var(--red)'};font-size:13px">${effBonus >= 0 ? '+' : ''}${effBonus}</b>
           </div>
           <div style="text-align:center;padding:5px;background:rgba(255,255,255,.04);border-radius:5px">
             🏆 Счёт<br><b style="color:${labelCol};font-size:13px">${Math.round(score)}</b>
