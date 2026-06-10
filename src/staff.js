@@ -61,8 +61,8 @@ const GRADE_CFG = {
   junior: { label:'Junior',    exp:[1,3],   q:[3,5],  speed:[3,5],  salary:[25000,45000],  traits:1, sBonus:0 },
   middle: { label:'Middle',    exp:[3,7],   q:[5,7],  speed:[5,7],  salary:[55000,100000], traits:2, sBonus:0.05 },
   senior: { label:'Senior',    exp:[7,12],  q:[7,9],  speed:[6,8],  salary:[95000,160000], traits:2, sBonus:0.10 },
-  lead:   { label:'Lead',      exp:[10,17], q:[8,10], speed:[7,9],  salary:[150000,250000],traits:3, sBonus:0.15 },
-  star:   { label:'★ Звезда', exp:[8,20],  q:[9,10], speed:[8,10], salary:[220000,450000],traits:3, sBonus:0.20 },
+  lead:   { label:'Lead',      exp:[10,17], q:[8,10], speed:[7,9],  salary:[190000,310000],traits:3, sBonus:0.15 },
+  star:   { label:'★ Звезда', exp:[8,20],  q:[9,10], speed:[8,10], salary:[280000,560000],traits:3, sBonus:0.20 },
 };
 
 // ── Traits ─────────────────────────────────────────────
@@ -246,12 +246,11 @@ function generateCandidate(roleId, grade) {
   };
 }
 
-// Вычислить _wu для уже сгенерированного кандидата/сотрудника
+// Вычислить _wu для уже сгенерированного кандидата/сотрудника.
+// Единый источник правды — calcStaffWorkUnit из engine.js (фикс п.25:
+// раньше здесь была дублирующая формула с расхождением qStat-шкалы).
 function _recomputeWU(s) {
-  const gradeWU  = { jr: 2, junior: 2, md: 4, middle: 4, sr: 7, senior: 7, lead: 9, star: 12 }[s.grade] || 3;
-  const qualMult = Math.max(0.4, ((s.qStat || s.quality || 50) / 75));
-  const moodMult = Math.max(0.5, ((s.mood ?? 80) / 100));
-  s._wu = Math.round(gradeWU * qualMult * moodMult);
+  s._wu = calcStaffWorkUnit(s);
   return s._wu;
 }
 

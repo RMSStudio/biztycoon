@@ -77,7 +77,7 @@ function initState() {
     staff:[], activeClients:[], log:[],
     tempDiscount:0, monthsPlayed:0,
     actions: ACTIONS_PER_MONTH,
-    reputation: 100,
+    reputation: SCENARIO.settings.startReputation ?? 100,
     clientNPS: {},
     clientEarnings: {},
     delayedIncome: 0,
@@ -130,7 +130,7 @@ function startGame() {
   if (typeof startRun === 'function') startRun(); // saves.js: открыть новый ран
   G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[]; G.candidatePool=[];
   G.tempDiscount=0; G.monthsPlayed=0;
-  G.actions=ACTIONS_PER_MONTH; G.reputation=100;
+  G.actions=ACTIONS_PER_MONTH; G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
   G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
@@ -188,8 +188,12 @@ function getFatigueMult(g=G) {
 // Мощность одного сотрудника (целое число мощн.): grade × качество × настроение
 function calcStaffWorkUnit(s) {
   if (!s || s.status === 'fired') return 0;
-  const gradeWU  = { jr: 2, md: 4, sr: 7 }[s.grade] || 3;
-  const qualMult = Math.max(0.4, ((s.qStat || s.quality || 50) / 75));
+  // Грейды staff v2 (junior…star) + легаси-алиасы jr/md/sr (фикс п.25)
+  const gradeWU  = { jr:2, junior:2, md:4, middle:4, sr:7, senior:7, lead:9, star:12 }[s.grade] || 3;
+  // qStat у staff v2 — шкала 0–10, легаси quality — 0–100; нормализуем к 0–100
+  const rawQ     = (s.qStat || s.quality || 50);
+  const q100     = rawQ <= 10 ? rawQ * 10 : rawQ;
+  const qualMult = Math.max(0.4, q100 / 75);
   const moodMult = Math.max(0.5, ((s.mood ?? 80) / 100));
   return Math.round(gradeWU * qualMult * moodMult);
 }
@@ -649,16 +653,20 @@ function signProject(pid) {
     return Math.round((bMin + Math.random() * (bMax - bMin)) / 5000) * 5000;
   })();
 
-  // Milestone-выплаты: T2 — 30% при 50%; T3 — 25% при 33% и 25% при 66%
-  const _mThresholds = def.oneTime ? [] : def.tier===2 ? [50] : def.tier===3 ? [33,66] : [];
-  const _mPayPcts    = def.oneTime ? [] : def.tier===2 ? [0.30] : def.tier===3 ? [0.25,0.25] : [];
+  // Milestone-выплаты: T2 — 40% при 50%; T3/T4 — 30% при 33% и 30% при 66%.
+  // Подняты (было 30% / 25%+25%) под длинные сроки T2~7 / T3~10 мес —
+  // сглаживают кассовый разрыв, не увеличивая сумму контракта
+  const _mThresholds = def.oneTime ? [] : def.tier===2 ? [50] : def.tier>=3 ? [33,66] : [];
+  const _mPayPcts    = def.oneTime ? [] : def.tier===2 ? [0.40] : def.tier>=3 ? [0.30,0.30] : [];
 
   const client={
     ...def,
     id: pid+'_'+G.month,
     _monthsSigned: 0,
-    // Дедлайн: LC-проекты хранят _duration (с подчёркиванием); обычные — duration; иначе тир-дефолт
-    _duration: def.oneTime ? 1 : (def._duration || def.duration || (def.tier===1 ? 3 : def.tier===2 ? 4 : 5)),
+    // Дедлайн: LC-проекты хранят _duration (с подчёркиванием); обычные — duration; иначе тир-дефолт.
+    // Длительности синхронизированы с моделью затрат WIP-ребаланса бюджетов:
+    // T1 ~4 мес, T2 ~7, T3 ~10, T4 ~12 (бюджет ≈ burn команды × срок + маржа)
+    _duration: def.oneTime ? 1 : (def._duration || def.duration || (def.tier===1 ? 4 : def.tier===2 ? 7 : def.tier===3 ? 10 : 12)),
     _originalBudget: totalBudget,  // для расчёта milestone — до вычета аванса
     _totalBudget: totalBudget,
     _progress: 0,   // 0–100%
@@ -1383,10 +1391,11 @@ function advanceMonth() {
     if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return;
     // Per-project throughput: 2 (фаундер) + WU назначенных сотрудников
     // Нет сотрудников → efficiency ≈ 0.28 (очень медленно), Sr-разраб → ~1.0+
-    // Кэп 2.5: избыток мощности честно ускоряет проект (прогресс cap=100 ниже)
+    // Кэп 1.5 (было 2.5): избыток мощности ускоряет, но не схлопывает длительности —
+    // иначе сильная команда сжимала T2 с 9 мес. до ~3.5 и ломала темп партии (SIM2-3)
     const pLoad        = getProjectLoad(c);
     const projThr      = getProjectThroughput(c);
-    const efficiency   = pLoad > 0 ? Math.min(2.5, projThr / pLoad) : 1;
+    const efficiency   = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
     const speedMult    = getSpeed();
     // LC-проекты: _duration — суммарное время всех work-фаз; делим на их количество
     // Обычные проекты: _lcChain отсутствует → workPhaseCnt=1 → поведение прежнее
