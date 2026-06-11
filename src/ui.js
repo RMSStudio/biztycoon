@@ -454,37 +454,62 @@ function renderGame() {
       </div>`;
     })();
 
-    // ── Staff assignment row (WU-capacity bar + chips + кнопка) ──
+    // ── Staff assignment row (v2.8): интерактивные чипы всей команды ──
+    // Назначение — в один клик прямо с карточки: свой чип = снять,
+    // свободный = назначить, занятый на другом проекте = перевести сюда
     const staffAssignRow = (() => {
       if (c.oneTime || _isLCEvent) return '';
-      const assigned = (G.staff || []).filter(s =>
-        (c._assignedStaff || []).includes(s._iid || s.id)
-      );
+      const team  = (G.staff || []).filter(s => s.status !== 'fired');
       const pThr  = typeof getProjectThroughput === 'function' ? getProjectThroughput(c) : 2;
       const pLoad = getProjectLoad(c);
-      const eff   = pLoad > 0 ? Math.min(2.5, pThr / pLoad) : 1;
+      const eff   = pLoad > 0 ? Math.min(1.5, pThr / pLoad) : 1;   // кэп синхронен с advanceMonth
       const effPct = Math.round(eff * 100);
       const barCol = effPct >= 100 ? 'var(--green)' : effPct >= 60 ? 'var(--amber)' : 'var(--red)';
-      const barW   = Math.min(100, (effPct / 250) * 100);
-      const chips  = assigned.map(s => {
-        const meta = (typeof ROLE_META !== 'undefined' && ROLE_META[s.role]) || {};
-        return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 5px;
-          border-radius:4px;background:rgba(99,102,241,.15);color:var(--teal);
-          font-size:10px;font-weight:600">${s.icon || meta.emoji || '👤'} ${(s.name||'').split(' ')[0]||'?'}</span>`;
-      }).join('');
-      return `<div style="margin-top:6px;display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-            <span style="font-size:10px;color:var(--sub)">⚙ ${Math.round(pThr)} / ${pLoad} мощн.</span>
-            <span style="font-size:10px;font-weight:700;color:${barCol}">${effPct}%</span>
-          </div>
-          <div style="height:3px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden">
-            <div style="height:100%;width:${barW}%;background:${barCol};border-radius:2px;transition:width .4s"></div>
-          </div>
-          ${chips ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${chips}</div>` : ''}
+      const barW   = Math.min(100, (effPct / 150) * 100);
+
+      // Фаундер — всегда на каждом проекте (+2 базовых)
+      const chips = [`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
+        border-radius:4px;background:rgba(255,255,255,.05);color:var(--muted);border:1px solid rgba(255,255,255,.1);
+        font-size:10px;font-weight:600" title="Фаундер работает на всех проектах">👤 Ты +2</span>`];
+
+      team.forEach(s => {
+        const iid   = s._iid || s.uid || s.id;
+        const here  = (c._assignedStaff || []).includes(iid);
+        const other = s._assignedProjectId && s._assignedProjectId !== c.id
+          ? (G.activeClients || []).find(x => x.id === s._assignedProjectId) : null;
+        const wu    = calcStaffWorkUnit(s);
+        const first = (s.name || '').split(' ')[0] || '?';
+        const style = here
+          ? 'background:rgba(45,212,191,.16);color:var(--teal);border:1px solid rgba(45,212,191,.45)'
+          : other
+            ? 'background:rgba(210,153,34,.08);color:var(--amber);border:1px dashed rgba(210,153,34,.35);opacity:.85'
+            : 'background:rgba(255,255,255,.04);color:var(--sub);border:1px dashed rgba(255,255,255,.18)';
+        const hint  = here ? 'Снять с проекта'
+          : other ? `Сейчас на «${other.name}» — кликни, чтобы перевести сюда`
+          : 'Назначить на проект';
+        const act   = here ? `unassignAndRefresh('${iid}','${c.id}')` : `assignAndRefresh('${iid}','${c.id}')`;
+        chips.push(`<button style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
+          border-radius:4px;${style};font-size:10px;font-weight:600;cursor:pointer" title="${hint}"
+          onclick="${act}">${s.icon || '👤'} ${first} +${wu}${other ? ' ↪' : here ? ' ✕' : ''}</button>`);
+      });
+
+      const hintRow = team.length === 0
+        ? `<span style="font-size:10px;color:var(--amber)">Команды нет — проект идёт только на твоей мощности (+2)</span>`
+        : pThr < pLoad
+          ? `<span style="font-size:10px;color:var(--amber)">⚠ не хватает ${Math.round(pLoad - pThr)} ед. — кликни по свободным чипам</span>`
+          : '';
+
+      return `<div style="margin-top:6px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px">
+          <span style="font-size:10px;color:var(--sub)">👥 Команда на проекте · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · <b style="color:${barCol}">${effPct}%</b></span>
+          <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px;flex-shrink:0;white-space:nowrap"
+            onclick="openAssignModal('${c.id}')">Подробнее</button>
         </div>
-        <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px;flex-shrink:0;white-space:nowrap"
-          onclick="openAssignModal('${c.id}')">👥 Команда</button>
+        <div style="height:3px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden;margin-bottom:4px">
+          <div style="height:100%;width:${barW}%;background:${barCol};border-radius:2px;transition:width .4s"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center">${chips.join('')}</div>
+        ${hintRow ? `<div style="margin-top:3px">${hintRow}</div>` : ''}
       </div>`;
     })();
 
@@ -1516,10 +1541,10 @@ function _renderAssignModal() {
 
   const pThr  = typeof getProjectThroughput === 'function' ? getProjectThroughput(client) : 2;
   const pLoad = getProjectLoad(client);
-  const eff   = pLoad > 0 ? Math.min(2.5, pThr / pLoad) : 1;
+  const eff   = pLoad > 0 ? Math.min(1.5, pThr / pLoad) : 1;   // кэп синхронен с advanceMonth (v2.4)
   const effPct = Math.round(eff * 100);
   const barCol = effPct >= 100 ? 'var(--green)' : effPct >= 60 ? 'var(--amber)' : 'var(--red)';
-  const barW   = Math.min(100, (effPct / 250) * 100);
+  const barW   = Math.min(100, (effPct / 150) * 100);
 
   const sub = document.getElementById('staff-assign-subtitle');
   if (sub) sub.textContent = `${client.name} · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · ${effPct}%`;
@@ -1559,11 +1584,9 @@ function _renderAssignModal() {
       const otherClient = s._assignedProjectId && s._assignedProjectId !== pid
         ? (G.activeClients || []).find(c => c.id === s._assignedProjectId) : null;
 
-      // Recompute WU inline (same formula as calcStaffWorkUnit)
-      const gradeWU  = { jr: 2, junior: 2, md: 4, middle: 4, sr: 7, senior: 7, lead: 9, star: 12 }[s.grade] || 3;
-      const qualMult = Math.max(0.4, ((s.qStat || s.quality || 50) / 75));
-      const moodMult = Math.max(0.5, ((s.mood ?? 80) / 100));
-      const wu = Math.round(gradeWU * qualMult * moodMult);
+      // WU из единой формулы движка (v2.8: раньше здесь была устаревшая
+      // копия без нормализации qStat — модал занижал мощность)
+      const wu = calcStaffWorkUnit(s);
 
       const btnStyle = isAssigned
         ? `background:rgba(45,212,191,.15);color:var(--teal);border:1px solid rgba(45,212,191,.4)`
