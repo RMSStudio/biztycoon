@@ -296,8 +296,21 @@ function repColor(v) {
 // ══════════════════════════════════════════════════════
 //  NPS ENGINE
 // ══════════════════════════════════════════════════════
+// ── ЕДИНЫЙ КАНАЛ ОЦЕНКИ КЛИЕНТА (фикс п.26) ─────────────
+// LC-проекты: канон — _lcClientMood, clientNPS — зеркало (для карточек,
+// churn-проверки и всех старых механик). Обычные проекты: clientNPS как раньше.
+// ВСЕ изменения отношения клиента должны идти через эту функцию.
+function nudgeClientRating(c, delta, g=G) {
+  if (c._lcChain) {
+    c._lcClientMood = clamp((c._lcClientMood ?? 60) + delta, 0, 100);
+    g.clientNPS[c.id] = c._lcClientMood;
+  } else {
+    g.clientNPS[c.id] = clamp((g.clientNPS[c.id] ?? c.npsStart ?? 70) + delta, 0, 100);
+  }
+}
+
 function nudgeAllNPS(g,delta) {
-  g.activeClients.forEach(c=>{ g.clientNPS[c.id]=clamp((g.clientNPS[c.id]||70)+delta,0,100); });
+  g.activeClients.forEach(c=>{ nudgeClientRating(c, delta, g); });
 }
 
 function updateAllNPS() {
@@ -308,6 +321,22 @@ function updateAllNPS() {
   const churned=[];
 
   G.activeClients.forEach(c=>{
+    // ── LC-проекты: канон — _lcClientMood (фикс п.26) ──
+    // Q/V-гэп, overload и пр. на них НЕ действуют — отношение клиента
+    // формируется решениями фаз, work-событиями и действиями игрока.
+    // Помесячно применяются только модификаторы самого проекта.
+    if (c._lcChain) {
+      let moodDrift = 0;
+      if (c.modifier?.type==='nps_passive') moodDrift += c.modifier.val;
+      if (c.modifier?.type==='nps_drain')   moodDrift += c.modifier.val;
+      if (moodDrift !== 0) nudgeClientRating(c, moodDrift);
+      const mood = c._lcClientMood ?? 60;
+      G.clientNPS[c.id] = mood; // зеркало всегда актуально
+      if      (mood<25) churned.push(c);
+      else if (mood<45) addLog(`⚠️ ${c.name}: настроение ${Math.round(mood)} — клиент недоволен`,'amber');
+      return;
+    }
+
     let nps=G.clientNPS[c.id]??c.npsStart??70;
     const qGap=quality-c.minQ, vGap=volume-c.minV;
 
@@ -356,7 +385,7 @@ function investInClient(cid) {
   if (!c) return;
   G.money-=20000;
   const before=Math.round(G.clientNPS[cid]||70);
-  G.clientNPS[cid]=clamp((G.clientNPS[cid]||70)+25,0,100);
+  nudgeClientRating(c, +25); // единый канал: LC → mood, обычные → NPS
   addLog(`💬 Инвестиция в ${c.name}: NPS ${before}→${Math.round(G.clientNPS[cid])}`,'teal');
   notify(`NPS ${c.name}: ${before}→${Math.round(G.clientNPS[cid])} 📈`,'success');
   rd(`Инвестиция в ${c.name}:  NPS+25`,'event');
@@ -1487,7 +1516,7 @@ function advanceMonth() {
     const victims = G.activeClients.filter(c => !c.oneTime);
     if (victims.length > 0) {
       const target = victims[Math.floor(Math.random() * victims.length)];
-      G.clientNPS[target.id] = clamp((G.clientNPS[target.id]||70) + npsHit, 0, 100);
+      nudgeClientRating(target, npsHit); // единый канал: LC → mood, обычные → NPS
       addLog(`${stateLabel} (усталость ${Math.round(G.teamFatigue)}): NPS «${target.name}» ${npsHit}`, 'amber');
     }
     // Уход сотрудника при выгорании/кризисе

@@ -817,7 +817,7 @@ const SCENARIO = {
             }
           } },
         { text:'Отказать', desc:'NPS у клиента −20 (риск ухода)',
-          fn:g=>{ if(g.activeClients.length>0){ const c=g.activeClients[g.activeClients.length-1]; g.clientNPS[c.id]=Math.max(0,(g.clientNPS[c.id]||60)-20); } } },
+          fn:g=>{ if(g.activeClients.length>0){ const c=g.activeClients[g.activeClients.length-1]; nudgeClientRating(c,-20,g); } } },
       ]
     },
     {

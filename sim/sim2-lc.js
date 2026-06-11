@@ -223,6 +223,20 @@ function runGame(runIdx) {
         .forEach(s => assignStaffToProject(s._iid || s.id, c.id));
     });
 
+    // 2в) Поддержка настроения: «Промежуточный показ» при просевшем mood
+    // (заодно валидирует фикс зеркала mood→clientNPS)
+    (G.activeClients||[]).forEach(c => {
+      if (!c._lcPhase || !c._lcPhase.startsWith('work_')) return;
+      if ((c._lcClientMood ?? 60) < 55 && G.money > 60000) {
+        const before = c._lcClientMood ?? 60;
+        Projects.triggerPlayerAction(c.id, 'interim_demo');
+        const after = c._lcClientMood ?? 60;
+        if (after > before && Math.round(G.clientNPS[c.id]) !== Math.round(after)) {
+          __run.errors.push('MIRROR-FAIL: mood ' + after + ' но clientNPS ' + G.clientNPS[c.id]);
+        }
+      }
+    });
+
     // 3) Снапшот до хода (для отчёта по завершающимся)
     const snap = snapshotLC();
     const doneBefore = (G.completedProjects||[]).length;

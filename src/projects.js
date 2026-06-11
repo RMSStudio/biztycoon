@@ -112,7 +112,9 @@ const Projects = (() => {
     client._lcPhaseIdx    = 0;
     client._lcPhase       = chain[0];     // 'proposal'
     client._lcTags        = {};           // накопленные теги из решений
-    client._lcClientMood  = 60;           // настроение клиента 0–100
+    // Стартовое настроение — от npsStart проекта (единая система оценки клиента):
+    // дифференциация клиентов (lc_simple 78, lc_risky 58) работает и в LC-флоу
+    client._lcClientMood  = client.npsStart ?? 60;  // настроение клиента 0–100
     client._lcRisk        = 0;            // риск проекта 0–100
     client._lcQualityAcc  = 0;            // накопленное качество 0–100
     client._lcHistory     = [];           // лог: [{ phase, month, choice, effect }]
@@ -162,6 +164,10 @@ const Projects = (() => {
 
   function moodDelta(client, delta) {
     client._lcClientMood = Math.max(0, Math.min(100, (client._lcClientMood || 60) + delta));
+    // Зеркало в clientNPS (фикс п.26 + «Промежуточный показ»): карточка проекта
+    // и все старые механики читают clientNPS — без синка изменение настроения
+    // не было видно игроку и не влияло на churn-проверку
+    if (typeof G !== 'undefined' && G.clientNPS) G.clientNPS[client.id] = client._lcClientMood;
   }
 
   function riskDelta(client, delta) {
