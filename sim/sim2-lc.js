@@ -149,20 +149,37 @@ function pumpLCModal(tag) {
   }
 }
 
-// ── Найм: 2 спеца с приоритетом качества (дизайнеры) ──
-// Q-стат нужен против старого NPS-канала: qGap<0 → −14 NPS/мес → уход клиента
+// ── Найм: до 3 спецов, приоритет WU/цена ──────────────
 function lcHire() {
   const team = G.staff.filter(s => s.status !== 'fired');
-  if (team.length >= 2) return;
-  if (G.money < 400000) return;
+  const target = 3;
+  if (team.length >= target) return;
+  const burn = getTotalStaffCost() + (SCENARIO.settings.overhead||0);
+  if (G.money < Math.max(300000, burn * 3)) return;
   if (!(G.candidatePool||[]).length) scoutCandidates('free');
   const pool = [...(G.candidatePool||[])];
-  // приоритет: middle-дизайнер (quality), затем любой middle по quality, затем по WU
   pool.sort((a,b) =>
-    ((b.role==='designer')-(a.role==='designer')) ||
-    ((b.quality||0)-(a.quality||0)) ||
-    (calcStaffWorkUnit(b)-calcStaffWorkUnit(a)));
+    (calcStaffWorkUnit(b)/(b.salaryAsk||1)) - (calcStaffWorkUnit(a)/(a.salaryAsk||1)));
   if (pool.length) hireCandidate(pool[0].uid || pool[0].id, pool[0].salaryAsk);
+}
+
+// ── Помесячная жадная расстановка по дефициту мощности ──
+function lcAssign() {
+  const regular = (G.activeClients||[]).filter(c =>
+    c._lcPhase && c._lcPhase.startsWith('work_'));
+  if (!regular.length) return;
+  G.staff.filter(s => s.status !== 'fired').forEach(s => unassignStaff(s._iid || s.id));
+  const free = G.staff.filter(s => s.status !== 'fired')
+    .sort((a,b) => calcStaffWorkUnit(b) - calcStaffWorkUnit(a));
+  for (const s of free) {
+    let best = null, bestGap = -Infinity;
+    for (const c of regular) {
+      const gap = getProjectLoad(c) - getProjectThroughput(c);
+      if (gap > bestGap) { bestGap = gap; best = c; }
+    }
+    if (!best || bestGap <= 0) break;
+    assignStaffToProject(s._iid || s.id, best.id);
+  }
 }
 
 // ── Снапшот LC-стейта для отчёта по завершённым ───────
@@ -199,8 +216,8 @@ function runGame(runIdx) {
       pumpLCModal('work-event');
     });
 
-    // 2) Подписываем LC-проекты — по одному одновременно (чистый тест флоу)
-    while (!__run.ended && (G.activeClients||[]).length < 1) {
+    // 2) Подписываем LC-проекты — до 2 параллельно (как у игрока с capacity 2)
+    while (!__run.ended && (G.activeClients||[]).length < Math.min(2, getCapacity())) {
       doLifecycleScouting();
       const pool = (G.scoutPool||[]).filter(p =>
         !(G.activeClients||[]).find(c => c.id.startsWith(p.id)));
@@ -213,15 +230,10 @@ function runGame(runIdx) {
     }
     if (__run.ended) break;
 
-    // 2б) Гарантируем назначение команды на work-фазах.
-    // У quick-цепочки нет фазы планирования → _assignedStaff пуст → проект
-    // ползёт на одном фаундере (eff 0.5). Назначаем вручную через движок.
-    (G.activeClients||[]).forEach(c => {
-      if (!c._lcPhase || !c._lcPhase.startsWith('work_')) return;
-      if ((c._assignedStaff||[]).length) return;
-      G.staff.filter(s => s.status !== 'fired')
-        .forEach(s => assignStaffToProject(s._iid || s.id, c.id));
-    });
+    // 2б) Помесячная жадная расстановка по всем work-проектам
+    // (закрывает и quick-цепочку без планирования, и перекосы после
+    // «Назначить всю команду» на втором проекте)
+    lcAssign();
 
     // 2в) Поддержка настроения: «Промежуточный показ» при просевшем mood
     // (заодно валидирует фикс зеркала mood→clientNPS)

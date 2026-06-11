@@ -257,6 +257,7 @@ const SCENARIO = {
       id:'lc_simple', tier:1, icon:'🟢', name:'[LC] Лендинг для кафе',
       desc:'Небольшой заказ — лендинг для местного кафе. Стандартный флоу без юридики и сложных фаз. Идеален для проверки базовой цепочки решений.',
       revenue:15000, minQ:0, minV:0, type:'small', npsStart:78, oneTime:false, rarity:'common',
+      fixedBudget:[700_000, 1_000_000],   // v2.6: бюджет LC под цикл ~5–6 мес с командой
       modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
       modBadge:'mb-green', prob:1.0,
       _lifecycleTest: true,
@@ -272,6 +273,7 @@ const SCENARIO = {
       id:'lc_full', tier:2, icon:'🔵', name:'[LC] Ребрендинг ТехноСтарт',
       desc:'Средний клиент, требует договор и все этапы — от брифа до сдачи. Включены фаза юридики и детальные под-этапы работы (сбор рефов, прото).',
       revenue:35000, minQ:10, minV:0, type:'corp', npsStart:72, oneTime:false, rarity:'uncommon',
+      fixedBudget:[3_000_000, 4_200_000], // v2.6: флагманский LC — 9 мес работы команды
       modifier:{ type:'nps_start', val:+5, label:'NPS старт +5' },
       modBadge:'mb-green', prob:1.0,
       _lifecycleTest: true,
@@ -287,6 +289,7 @@ const SCENARIO = {
       id:'lc_risky', tier:2, icon:'🔴', name:'[LC] Онлайн-магазин «Каприз»',
       desc:'Клиент с завышенными ожиданиями. Скоуп плывёт, NPS нестабилен. Нужен для проверки ветки scope_creep, юридических рисков и неудовлетворённого ревью.',
       revenue:38000, minQ:0, minV:0, type:'store', npsStart:58, oneTime:false, rarity:'uncommon',
+      fixedBudget:[2_400_000, 3_400_000], // v2.6: risk/reward — короче lc_full, капризный клиент
       modifier:{ type:'nps_drain', val:-4, label:'−4 NPS/мес' },
       modBadge:'mb-amber', prob:1.0,
       _lifecycleTest: true,

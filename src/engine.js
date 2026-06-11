@@ -480,19 +480,8 @@ function doLifecycleScouting() {
     notify('Lifecycle-проекты не найдены в пуле','error');
     return;
   }
-  // [DEV] Если нет активных сотрудников — инжектируем тестовую команду.
-  // Без стаффа throughput=0 → work-фазы никогда не прогрессируют.
-  const activeStaff = (G.staff || []).filter(s => s.status !== 'fired');
-  if (activeStaff.length === 0) {
-    G.staff = G.staff || [];
-    if (!G.staff.find(s => s.id === '_lc_dev_1')) {
-      // load:5 каждому → суммарный throughput=10, хватит на 1–2 проекта
-      // grade:'md' → WU=3 через calcStaffWorkUnit; _iid=id → assignment в F5 Planning совпадёт
-      G.staff.push({ id:'_lc_dev_1', _iid:'_lc_dev_1', name:'Тест-Дизайнер', role:'designer', grade:'md', icon:'🎨', salary:0, cost:0, qStat:75, mood:80, status:'active', _isDevTest:true });
-      G.staff.push({ id:'_lc_dev_2', _iid:'_lc_dev_2', name:'Тест-Разраб',   role:'developer', grade:'md', icon:'💻', salary:0, cost:0, qStat:75, mood:80, status:'active', _isDevTest:true });
-      addLog('🧪 LC-тест: добавлена тестовая команда (load×2, salary=0)', 'muted');
-    }
-  }
+  // Бесплатная dev-команда убрана (v2.6): LC-проекты играются с реальным
+  // наймом — без сотрудников work-фазы идут только на мощности фаундера (2 ед.)
   const lcPool = lcProjects.map(p => ({ ...p, _prepaymentPossible: false }));
   G.scoutPool = lcPool;
   showScoutResults(G.scoutPool);

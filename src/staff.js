@@ -57,12 +57,15 @@ let _candidateFilter = null; // null = все; 'creative' | 'tech' | 'management
 
 // ── Grade Config ───────────────────────────────────────
 
+// Зарплаты пересмотрены в v2.6 под LC-экономику (цикл 6–10 мес, доход
+// аванс+milestone+сдача): junior/middle/senior снижены ~20%, чтобы команда
+// из 2–3 специалистов окупалась LC-проектами; lead/star — премиальный тир
 const GRADE_CFG = {
-  junior: { label:'Junior',    exp:[1,3],   q:[3,5],  speed:[3,5],  salary:[25000,45000],  traits:1, sBonus:0 },
-  middle: { label:'Middle',    exp:[3,7],   q:[5,7],  speed:[5,7],  salary:[55000,100000], traits:2, sBonus:0.05 },
-  senior: { label:'Senior',    exp:[7,12],  q:[7,9],  speed:[6,8],  salary:[95000,160000], traits:2, sBonus:0.10 },
-  lead:   { label:'Lead',      exp:[10,17], q:[8,10], speed:[7,9],  salary:[190000,310000],traits:3, sBonus:0.15 },
-  star:   { label:'★ Звезда', exp:[8,20],  q:[9,10], speed:[8,10], salary:[280000,560000],traits:3, sBonus:0.20 },
+  junior: { label:'Junior',    exp:[1,3],   q:[3,5],  speed:[3,5],  salary:[20000,35000],  traits:1, sBonus:0 },
+  middle: { label:'Middle',    exp:[3,7],   q:[5,7],  speed:[5,7],  salary:[40000,70000],  traits:2, sBonus:0.05 },
+  senior: { label:'Senior',    exp:[7,12],  q:[7,9],  speed:[6,8],  salary:[80000,130000], traits:2, sBonus:0.10 },
+  lead:   { label:'Lead',      exp:[10,17], q:[8,10], speed:[7,9],  salary:[170000,280000],traits:3, sBonus:0.15 },
+  star:   { label:'★ Звезда', exp:[8,20],  q:[9,10], speed:[8,10], salary:[250000,480000],traits:3, sBonus:0.20 },
 };
 
 // ── Traits ─────────────────────────────────────────────
