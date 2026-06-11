@@ -94,6 +94,17 @@ const __SPEC_IDS = Object.keys(SPECS);
 
 let __run = null;
 
+// Перехват addLog: считаем срабатывания механик п.27/п.28 без потерь
+// (G.log обрезается движком — regex по нему занижает счёт)
+const __origAddLog = addLog;
+addLog = function(msg, cls) {
+  if (__run && typeof msg === 'string') {
+    if (msg.includes('поэтапная выплата'))       __run.stagedCnt = (__run.stagedCnt || 0) + 1;
+    if (msg.includes('подключена автоматически')) __run.autoCnt  = (__run.autoCnt  || 0) + 1;
+  }
+  return __origAddLog(msg, cls);
+};
+
 EventBus.on('end_game', ({ won }) => { if (__run) { __run.ended = true; __run.won = won; } });
 
 // Обычные события движка (скидка/уход/алгоритм) — решаем как в sim2
@@ -129,7 +140,7 @@ function pumpLCModal(tag) {
     // затем highlight, иначе случайный валидный
     const safe = btns.filter(b => !(b.innerHTML||'').includes('Отказаться от проекта'));
     const cand = safe.length ? safe : btns;
-    const PRIORITY = ['Назначить всю команду', 'Аванс 30%'];
+    const PRIORITY = ['Назначить всю команду', (__run.payPref || 'Аванс 30%')];
     let btn = null;
     for (const p of PRIORITY) { btn = cand.find(b => (b.innerHTML||'').includes(p)); if (btn) break; }
     if (!btn) btn = cand.find(b => (b.style.cssText||'').includes('45,212,191')); // highlight teal
@@ -200,6 +211,8 @@ function snapshotLC() {
 
 function runGame(runIdx) {
   __run = { ended:false, won:false, errors:[], decisions:[], projects:[] };
+  // Чередуем схему оплаты: чётные раны — аванс, нечётные — поэтапная (тест п.27)
+  __run.payPref = (runIdx % 2 === 0) ? 'Аванс 30%' : 'Поэтапная оплата';
   REGISTRY.forEach(el => { el.children.length = 0; el.classList.remove('active'); });
 
   initState();
@@ -273,8 +286,13 @@ function runGame(runIdx) {
     });
   }
 
+  const stagedPays = __run.stagedCnt || 0;
+  const autoAssign = __run.autoCnt || 0;
+
   return {
     run: runIdx + 1,
+    payPref: __run.payPref,
+    stagedPays, autoAssign,
     spec: G.spec,
     won: __run.won || G.money >= __SETTINGS.winCondition,
     bankrupt: __run.ended && !__run.won && G.money <= 0,
@@ -327,7 +345,8 @@ console.log('══════════════════════�
 
 results.forEach(r => {
   const status = r.won ? '🏆 победа' : r.bankrupt ? '💀 банкрот' : '⏰ таймаут';
-  console.log(`\n#${r.run} [${r.spec}] ${status} M${r.months} · финал ${fmtK(r.finalMoney)} · реп ${r.rep} · решений за ран: ${r.nDecisions}`);
+  const mech = `${r.payPref === 'Поэтапная оплата' ? 'поэтапная' : 'аванс'}${r.stagedPays ? ` · этапных выплат ${r.stagedPays}` : ''}${r.autoAssign ? ` · автоназначений ${r.autoAssign}` : ''}`;
+  console.log(`\n#${r.run} [${r.spec}] ${status} M${r.months} · финал ${fmtK(r.finalMoney)} · реп ${r.rep} · решений: ${r.nDecisions} · ${mech}`);
   if (r.completed.length) {
     r.completed.forEach(p => {
       if (p.churned) {

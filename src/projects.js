@@ -127,8 +127,25 @@ const Projects = (() => {
 
   // ── Перейти к следующей фазе ────────────────────────────
   function advancePhase(client) {
-    const chain    = client._lcChain;
-    const nextIdx  = (client._lcPhaseIdx || 0) + 1;
+    const chain     = client._lcChain;
+    const prevPhase = client._lcPhase;
+    const nextIdx   = (client._lcPhaseIdx || 0) + 1;
+
+    // п.27: поэтапная оплата — треть бюджета при завершении каждой work-фазы.
+    // Гард _stagedPaid<3 защищает от повторной выплаты при возврате на правки.
+    if (prevPhase && prevPhase.startsWith('work_') && hasTag(client, 'payment_staged')
+        && (client._stagedPaid || 0) < 3) {
+      const third = Math.round((client._originalBudget || client._totalBudget || 0) / 3 / 5000) * 5000;
+      const payout = Math.min(third, client._totalBudget || 0);
+      if (payout > 0) {
+        client._totalBudget = Math.max(0, (client._totalBudget || 0) - payout);
+        client._stagedPaid  = (client._stagedPaid || 0) + 1;
+        G.money += payout;
+        addLog(`💵 ${client.name}: поэтапная выплата ${client._stagedPaid}/3 — +${fmtK(payout)}`, 'green');
+        notify(`💵 ${client.icon} ${client.name}: этап ${client._stagedPaid}/3 оплачен — +${fmtK(payout)}`, 'success');
+        rd(`Этап ${client._stagedPaid}/3: ${client.name} +${fmtK(payout)}`, 'client');
+      }
+    }
 
     if (nextIdx >= chain.length) {
       finishDelivery(client);
@@ -143,6 +160,16 @@ const Projects = (() => {
       // Фиксируем момент старта первой work-фазы — для корректного дедлайн-отсчёта
       if (client._lcPhase === 'work_0' && client._workStartMonth == null) {
         client._workStartMonth = client._monthsSigned || 0;
+      }
+      // п.28: quick-цепочка не имеет фазы планирования — автоназначаем
+      // свободных сотрудников при входе в work_0, иначе проект тянет один фаундер
+      if (client._lcPhase === 'work_0' && !(client._assignedStaff || []).length
+          && !chain.includes('planning') && typeof assignStaffToProject === 'function') {
+        const free = (G.staff || []).filter(s => s.status !== 'fired' && !s._assignedProjectId);
+        if (free.length) {
+          free.forEach(s => assignStaffToProject(s._iid || s.id, client.id));
+          addLog(`📌 ${client.name}: свободная команда (${free.length} чел.) подключена автоматически`, 'teal');
+        }
       }
       addLog(`▶ ${client.name}: ${PHASE_LABELS[client._lcPhase]} — работа началась`, 'teal');
       _emitRender();
@@ -604,6 +631,12 @@ const Projects = (() => {
           fn: () => {
             riskDelta(client, -5);
             applyTag(client, 'payment_staged');
+            // п.27: поэтапная схема заменяет дефолтные tier-milestone —
+            // иначе выплаты задвоятся (milestone 40% + трети)
+            client._milestones     = [];
+            client._milestonePcts  = [];
+            client._milestonesPaid = [];
+            client._stagedPaid     = 0;
             logDecision(client, 'negotiation', 'payment: staged', 'Поэтапная оплата');
             _closeLCModal();
             advancePhase(client);
