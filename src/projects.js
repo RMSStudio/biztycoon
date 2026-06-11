@@ -20,6 +20,8 @@ const Projects = (() => {
     'work_0',        // F6
     'work_1',        // F7
     'work_2',        // F8
+    'work_3',        // F8b — высокие тиры (v3.0)
+    'work_4',        // F8c — эпические проекты (v3.0)
     'review',        // F9
     'delivery',      // F10
   ];
@@ -33,6 +35,8 @@ const Projects = (() => {
     work_0:      'Работа I',
     work_1:      'Работа II',
     work_2:      'Работа III',
+    work_3:      'Работа IV',
+    work_4:      'Работа V',
     review:      'Ревью',
     delivery:    'Сдача',
   };
@@ -46,6 +50,8 @@ const Projects = (() => {
     work_0:      '▶',
     work_1:      '▶',
     work_2:      '▶',
+    work_3:      '▶',
+    work_4:      '▶',
     review:      '🔍',
     delivery:    '🏁',
   };
@@ -89,19 +95,33 @@ const Projects = (() => {
     },
   };
 
+  // ── Профили цепочек (v3.0): длина флоу зависит от масштаба проекта ──
+  // instant  — разовые/микро: подписал → 1 work-фаза → сдача (без ревью)
+  // short    — T1: лёгкие переговоры, 1 work-фаза, ревью
+  // standard — T2–T3: бриф + планирование, 2 work-фазы
+  // full     — T4–T5: + юридика, 3 work-фазы
+  // epic     — T6–T7: 5 work-фаз, полный контрактный цикл
+  const CHAIN_PROFILES = {
+    instant:  ['proposal', 'work_0', 'delivery'],
+    short:    ['proposal', 'negotiation', 'work_0', 'review', 'delivery'],
+    standard: ['proposal', 'negotiation', 'brief', 'planning', 'work_0', 'work_1', 'review', 'delivery'],
+    full:     ['proposal', 'negotiation', 'brief', 'legal', 'planning', 'work_0', 'work_1', 'work_2', 'review', 'delivery'],
+    epic:     ['proposal', 'negotiation', 'brief', 'legal', 'planning', 'work_0', 'work_1', 'work_2', 'work_3', 'work_4', 'review', 'delivery'],
+  };
+
+  function defaultProfile(def) {
+    if (def.oneTime) return 'instant';
+    const t = def.tier || 1;
+    return t <= 1 ? 'short' : t <= 3 ? 'standard' : t <= 5 ? 'full' : 'epic';
+  }
+
   // ── Строим цепочку фаз для конкретного проекта ─────────
   function buildPhaseChain(def) {
-    const tier      = def._negotiationTier || 'standard';
+    const profile   = def.phaseProfile || defaultProfile(def);
     const needLegal = def.requiresLegal || hasRole('lawyer');
-
-    if (tier === 'quick') {
-      // Только пропозал + переговоры → сразу работа
-      return ['proposal', 'negotiation', 'work_0', 'work_1', 'work_2', 'review', 'delivery'];
-    }
-    // standard / challenge: полный хвост
-    const chain = ['proposal', 'negotiation', 'brief'];
-    if (needLegal) chain.push('legal');
-    chain.push('planning', 'work_0', 'work_1', 'work_2', 'review', 'delivery');
+    let chain = [...(CHAIN_PROFILES[profile] || CHAIN_PROFILES.standard)];
+    // Юридика — только если требуется проектом или в штате есть юрист
+    if (!needLegal) chain = chain.filter(p => p !== 'legal');
     return chain;
   }
 
@@ -451,7 +471,8 @@ const Projects = (() => {
   ];
 
   function _showProposal(client) {
-    const tier = client._negotiationTier || 'standard';
+    // Разовые и микро-проекты — всегда быстрый вариант (1 комбинированный вопрос)
+    const tier = client.oneTime ? 'quick' : (client._negotiationTier || 'standard');
     _lcState = { client, step: 0 };
     if (tier === 'quick') {
       _showProposalQuick(client);
@@ -607,22 +628,41 @@ const Projects = (() => {
       phaseLabel: `${client.icon} ${client.name}  ·  Переговоры — 2/2`,
       body: '<span style="color:var(--sub)">Как структурировать оплату по проекту?</span>',
       choices: [
-        {
-          text: 'Аванс 30% + остаток при сдаче',
-          desc: 'Снижаем риски неоплаты. Клиент может немного напрячься.',
-          effect: '−5 настроения · аванс сразу в кассу',
-          fn: () => {
-            const advance = Math.round(client._totalBudget * 0.30 / 5000) * 5000;
-            client._prepaidAmount = advance;
-            G.money += advance;
-            moodDelta(client, -5);
-            applyTag(client, 'prepayment_30');
-            logDecision(client, 'negotiation', 'payment: prepayment_30', `Аванс ${fmtK(advance)}`);
-            addLog(`💰 ${client.name}: аванс ${fmtK(advance)} — поступил на счёт`, 'green');
-            _closeLCModal();
-            advancePhase(client);
-          },
-        },
+        // v3.0: предоплата — не гарантия, а переговорный ролл с шансом проекта.
+        // prepayChance задаётся в дефиниции (или тир-дефолт); 0 — вариант скрыт.
+        ...(() => {
+          const baseChance = client.prepayChance ?? [0, .25, .35, .45, .50, .55, .60, .65][client.tier || 1] ?? 0;
+          if (baseChance <= 0) return [];
+          const chance = Math.min(0.95, baseChance + (hasRole('lawyer') ? 0.15 : 0));
+          return [{
+            text: `Попробовать выбить аванс 30% (шанс ~${Math.round(chance * 100)}%)`,
+            desc: hasRole('lawyer')
+              ? 'Юрист усиливает позицию (+15% к шансу). При отказе клиент слегка напряжётся.'
+              : 'Если клиент согласится — деньги сразу. При отказе — слегка напряжётся.',
+            effect: 'успех: аванс в кассу · −5 настроения / отказ: −3 настроения · +3 риска',
+            fn: () => {
+              if (Math.random() < chance) {
+                const advance = Math.round(client._totalBudget * 0.30 / 5000) * 5000;
+                client._prepaidAmount = advance;
+                client._totalBudget   = Math.max(0, client._totalBudget - advance);
+                G.money += advance;
+                moodDelta(client, -5);
+                applyTag(client, 'prepayment_30');
+                logDecision(client, 'negotiation', 'payment: prepayment_30', `Аванс ${fmtK(advance)}`);
+                addLog(`💰 ${client.name}: аванс ${fmtK(advance)} — клиент согласился`, 'green');
+                notify(`💰 ${client.name}: аванс ${fmtK(advance)} выбит!`, 'success');
+              } else {
+                moodDelta(client, -3);
+                riskDelta(client, +3);
+                applyTag(client, 'prepayment_refused');
+                logDecision(client, 'negotiation', 'payment: prepay refused', 'Клиент отказал в авансе');
+                addLog(`💢 ${client.name}: в авансе отказано — оплата по ходу проекта`, 'amber');
+              }
+              _closeLCModal();
+              advancePhase(client);
+            },
+          }];
+        })(),
         {
           text: 'Поэтапная оплата (3 части)',
           desc: 'По завершении каждой рабочей фазы — треть суммы.',
@@ -1246,6 +1286,10 @@ const Projects = (() => {
       G.reputation = Math.max(0, (G.reputation || 50) - 5);
       addLog(`💔 Репутация −5 — провальная сдача (NPS ${finalNPS})`, 'red');
     }
+
+    // Портфолио (v3.0-фикс: LC-сдача не начисляла баллы вообще)
+    const pfBonus = Math.round((client.portfolioWeight || client.tier || 1) * 3);
+    G.portfolio   = (G.portfolio || 0) + pfBonus;
 
     G.completedProjects = G.completedProjects || [];
     G.completedProjects.push({

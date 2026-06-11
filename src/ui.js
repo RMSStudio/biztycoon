@@ -228,8 +228,7 @@ function renderGame() {
   // Сводка мощности (v2.7, фокус упразднён): нагрузка всех проектов vs мощность
   // команды. Распределение мощности — через назначение сотрудников (WU-система).
   const _thrForPct    = Math.max(1, getTeamThroughput());
-  const schedOTLoadUI = getScheduledOneTimeLoad();
-  const usedLoad      = getTotalLoad() + schedOTLoadUI;
+  const usedLoad      = getTotalLoad();   // v3.0: разовые включены в общую нагрузку
   const capOver       = usedLoad > _thrForPct;
   if (G.activeClients.length > 0) {
     const pctUsed  = Math.round(usedLoad / _thrForPct * 100);
@@ -238,7 +237,7 @@ function renderGame() {
     const hBg      = capOver ? 'rgba(248,81,73,.08)'  : 'rgba(45,212,191,.05)';
     const hBrd     = capOver ? 'rgba(248,81,73,.25)'  : 'rgba(45,212,191,.18)';
     const hClr     = capOver ? 'var(--red)' : pctUsed >= 85 ? 'var(--amber)' : 'var(--teal)';
-    const otNote   = schedOTLoadUI > 0 ? ` · разовые ${Math.round(schedOTLoadUI)} ед.` : '';
+    const otNote   = '';
     const hTxt     = capOver
       ? `⚠️ Перегруз: проектам нужно ${Math.round(usedLoad)} ед., у команды ${_thrForPct} — прогресс замедлится`
       : `Мощность: занято ${Math.round(usedLoad)} из ${_thrForPct} ед.${otNote}`;
@@ -347,9 +346,7 @@ function renderGame() {
       const spd  = getSpeed();
       const fat  = getFatigueMult();
       let raw;
-      if (c.oneTime) {
-        raw = c._scheduled ? 100 : 0;
-      } else {
+      {
         const pLoad   = getProjectLoad(c);
         const projThr = getProjectThroughput(c);
         const eff     = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
@@ -367,47 +364,10 @@ function renderGame() {
     const _spd = getSpeed();
     const speedLabel = _spd > 1.05 ? ` <span style="color:var(--teal);font-size:9px">⚡×${_spd.toFixed(2)}</span>` : '';
 
-    // Блок ресурса: разовые — бронирование мощности; регулярные — строка темпа
+    // Блок ресурса (v3.0): у всех проектов — строка темпа от назначенной команды
     let resourceRow = '';
-    if (c.oneTime) {
-      // Разовый проект: резервирует единицы мощности из общего пула
-      const cLoad      = getProjectLoad(c);
-      const thr        = Math.max(1, getTeamThroughput());
-      const otherLoad  = getTotalLoad() + G.activeClients
-        .filter(x=>x.oneTime&&x._scheduled&&x.id!==c.id)
-        .reduce((s,x)=>s+getProjectLoad(x),0);
-      const availUnits = Math.max(0, thr - otherLoad);
-      const overload   = availUnits < cLoad;
-
-      if (c._scheduled) {
-        resourceRow = `
-        <div style="margin-top:7px">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;
-                      background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.25);
-                      border-radius:6px;padding:5px 10px">
-            <span style="font-size:10px;color:var(--teal);font-weight:600">
-              ✓ Выполнить в этом месяце &nbsp;·&nbsp; −${Math.round(cLoad)} ед. мощности
-            </span>
-            <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 7px;flex-shrink:0;color:var(--sub)"
-                    onclick="toggleOneTimeSchedule('${c.id}')">Отложить</button>
-          </div>
-        </div>`;
-      } else {
-        const infoColor    = overload ? 'var(--amber)' : 'var(--sub)';
-        const overloadHint = overload ? ` <span style="color:var(--amber)">⚠ остальные замедлятся</span>` : '';
-        resourceRow = `
-        <div style="margin-top:7px">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <span style="font-size:10px;color:${infoColor}">
-              Нужно ${Math.round(cLoad)} ед. · Свободно ${Math.round(availUnits)} из ${thr}${overloadHint}
-            </span>
-            <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 7px;flex-shrink:0"
-                    onclick="toggleOneTimeSchedule('${c.id}')">📋 Выполнить в этом месяце</button>
-          </div>
-        </div>`;
-      }
-    } else {
-      // Регулярный проект: строка темпа от назначенной команды
+    {
+    // Регулярный проект: строка темпа от назначенной команды
       const _assignedCnt = (c._assignedStaff||[]).length;
       const _projThr     = getProjectThroughput(c);
       const _pLoad       = getProjectLoad(c);
@@ -429,11 +389,12 @@ function renderGame() {
     // Сегментированный прогресс-бар для LC work-фаз (3 этапа на одной шкале)
     const _lcWorkBar = (() => {
       if (!_isLC || _isLCEvent) return '';
-      const _wOrder = ['work_0','work_1','work_2'];
-      const _wIdx   = _wOrder.indexOf(c._lcPhase); // 0, 1 или 2
+      // v3.0: сегментов столько, сколько work-фаз в цепочке (1–5)
+      const _wOrder = (c._lcChain || []).filter(ph => ph.startsWith('work_'));
+      if (!_wOrder.length) return '';
+      const _wIdx   = Math.max(0, _wOrder.indexOf(c._lcPhase));
       const _prog   = c._progress || 0;
-      // Суммарный прогресс: (завершённые фазы × 100 + текущий прогресс) / 3
-      const _total  = Math.round((_wIdx * 100 + _prog) / 3);
+      const _total  = Math.round((_wIdx * 100 + _prog) / _wOrder.length);
       const _col    = _total >= 66 ? 'var(--teal)' : _total >= 33 ? 'var(--amber)' : 'var(--sub)';
 
       const _segs = _wOrder.map((_, i) => {
@@ -447,7 +408,7 @@ function renderGame() {
 
       return `<div style="margin-top:6px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-size:10px;color:var(--sub)">Работа ${_wIdx + 1} из 3</span>
+          <span style="font-size:10px;color:var(--sub)">Работа ${_wIdx + 1} из ${_wOrder.length}</span>
           <span style="font-size:10px;font-weight:700;color:${_col}">${_total}%</span>
         </div>
         <div style="display:flex;gap:2px">${_segs}</div>
@@ -458,7 +419,7 @@ function renderGame() {
     // Назначение — в один клик прямо с карточки: свой чип = снять,
     // свободный = назначить, занятый на другом проекте = перевести сюда
     const staffAssignRow = (() => {
-      if (c.oneTime || _isLCEvent) return '';
+      if (_isLCEvent) return '';   // v3.0: разовые тоже назначаются
       const team  = (G.staff || []).filter(s => s.status !== 'fired');
       const pThr  = typeof getProjectThroughput === 'function' ? getProjectThroughput(c) : 2;
       const pLoad = getProjectLoad(c);
@@ -905,7 +866,7 @@ function renderGame() {
   const ftCol = ft>=85?'var(--red)':ft>=60?'var(--amber)':ft>=30?'#e8a838':'var(--green)';
   const ftLabel = ft>=85?'Кризис':ft>=60?'Выгорание':ft>=30?'Напряжение':'Норма';
   // v2.7: эффективная нагрузка — реальная (фокус-взвешивание удалено), зеркалит advanceMonth
-  const _effectiveLoad = getTotalLoad() + getScheduledOneTimeLoad();
+  const _effectiveLoad = getTotalLoad();   // v3.0: разовые уже включены
   const _loadPct2 = getTeamThroughput()>0?_effectiveLoad/getTeamThroughput():0;
   let _fd = _loadPct2>=1.0?10:_loadPct2>=0.85?4:_loadPct2>=0.70?1:-8;
   const _hrSr=G.staff.some(s=>s.id==='hr_sr'),_hrMd=G.staff.some(s=>s.id==='hr'),_hrJr=G.staff.some(s=>s.id==='hr_jr');

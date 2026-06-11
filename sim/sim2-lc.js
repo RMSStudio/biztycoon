@@ -163,7 +163,7 @@ function pumpLCModal(tag) {
 // ── Найм: до 3 спецов, приоритет WU/цена ──────────────
 function lcHire() {
   const team = G.staff.filter(s => s.status !== 'fired');
-  const target = 3;
+  const target = 4;
   if (team.length >= target) return;
   const burn = getTotalStaffCost() + (SCENARIO.settings.overhead||0);
   if (G.money < Math.max(300000, burn * 3)) return;
@@ -229,14 +229,25 @@ function runGame(runIdx) {
       pumpLCModal('work-event');
     });
 
-    // 2) Подписываем LC-проекты — до 2 параллельно (как у игрока с capacity 2)
-    while (!__run.ended && (G.activeClients||[]).length < Math.min(2, getCapacity())) {
-      doLifecycleScouting();
+    // 2) Подписываем проекты из ЕДИНОГО пула (v3.0) — до 2 параллельно
+    let signGuard = 4;
+    while (!__run.ended && (G.activeClients||[]).length < Math.min(2, getCapacity()) && signGuard-- > 0) {
+      if (!G.scoutPool || !G.scoutPool.length) {
+        if (G.actions < SCOUT_COST) break;
+        doScouting();
+      }
+      const Q = getQuality(), V = getVolume();
+      const teamSize = G.staff.filter(s=>s.status!=='fired').length;
       const pool = (G.scoutPool||[]).filter(p =>
-        !(G.activeClients||[]).find(c => c.id.startsWith(p.id)));
-      if (!pool.length) { G.scoutPool = null; break; }
-      const pick = pool[Math.floor(Math.random() * pool.length)];
-      const before = snapshotLC();
+        !(G.activeClients||[]).find(c => c.id.startsWith(p.id)) &&
+        (p.minQ||0) <= Q && (p.minV||0) <= V &&
+        (p.tier||1) <= 3 &&
+        // T1-регулярные не окупают команду — берём их только до найма
+        (p.oneTime || (p.tier||1) >= 2 || teamSize < 2));
+      if (!pool.length) { G.scoutPool = null; continue; }
+      // Приоритет: разовые (быстрый кэш за месяц), затем старший тир
+      const pick = pool.sort((a,b)=>
+        ((b.oneTime?1:0)-(a.oneTime?1:0)) || ((b.tier||1)-(a.tier||1)))[0];
       signProject(pick.id);
       pumpLCModal('sign-chain');           // proposal → … → planning
       if (G.money <= 0) { __run.ended = true; break; }
@@ -252,7 +263,7 @@ function runGame(runIdx) {
     // (заодно валидирует фикс зеркала mood→clientNPS)
     (G.activeClients||[]).forEach(c => {
       if (!c._lcPhase || !c._lcPhase.startsWith('work_')) return;
-      if ((c._lcClientMood ?? 60) < 55 && G.money > 60000) {
+      if ((c._lcClientMood ?? 60) < 60 && G.money > 60000) {
         const before = c._lcClientMood ?? 60;
         Projects.triggerPlayerAction(c.id, 'interim_demo');
         const after = c._lcClientMood ?? 60;
@@ -261,6 +272,13 @@ function runGame(runIdx) {
         }
       }
     });
+
+    // 2г) Прокачка качества: Q-перки открывают T3-проекты (minQ 20–35)
+    for (const uid of ['tools_q','training_q','standards_q','consultant_q']) {
+      const def = UPGRADES.find(u => u.id === uid);
+      if (!def || G.upgrades[uid]) continue;
+      if (G.money > def.cost + 400000 && G.actions >= def.days + 3) buyUpgrade(uid);
+    }
 
     // 3) Снапшот до хода (для отчёта по завершающимся)
     const snap = snapshotLC();

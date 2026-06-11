@@ -234,16 +234,18 @@ function unassignStaff(staffId) {
 }
 
 // Мощность, которую требует проект (по тиру) — целевая нагрузка/мес.
-// Тир 1: 4, Тир 2: 8, Тир 3: 14 — шкала пропорциональна мощн. сотрудников (jr=2, md=4, sr=7)
+// T1–T7 (v3.0): 4 / 8 / 14 / 18 / 24 / 32 / 40 — шкала пропорциональна
+// мощн. сотрудников (jr=2, md=4, sr=7, lead=9, star=12)
 // payment_delay_fixed: в период ожидания проект не потребляет мощность
 function getProjectLoad(c) {
   if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return 0;
-  return c.tier === 3 ? 14 : c.tier === 2 ? 8 : 4;
+  return [0, 4, 8, 14, 18, 24, 32, 40][c.tier] ?? 4;
 }
 
-// Суммарная мощность, требуемая всеми активными не-разовыми проектами
+// Суммарная мощность, требуемая всеми активными проектами
+// (v3.0: разовые включены — они тоже работают через назначение команды)
 function getTotalLoad(g=G) {
-  return g.activeClients.filter(c=>!c.oneTime).reduce((s,c) => s + getProjectLoad(c), 0);
+  return g.activeClients.reduce((s,c) => s + getProjectLoad(c), 0);
 }
 
 // Суммарный пайплайн (ожидаемые выплаты при завершении)
@@ -411,17 +413,22 @@ function _generateOffers() {
   // SMM-специализация: пассивно +1 оффер всегда (стек с HR-SMM)
   if (SPECS[G.spec]?.passive === 'scout_offers') offerCount=Math.min(5, offerCount+(SPECS[G.spec].passiveVal||0));
 
-  const maxTier = G.reputation>=80?4 : G.reputation>=70?3 : G.reputation>=40?2 : 1;
+  // Гейты тиров T1–T7 (v3.0): репутация + портфолио для эндгейма
+  const _rep = G.reputation, _pf = G.portfolio || 0;
+  const maxTier = (_rep>=95 && _pf>=80) ? 7
+                : (_rep>=90 && _pf>=50) ? 6
+                : (_rep>=85 && _pf>=30) ? 5
+                : _rep>=80 ? 4 : _rep>=70 ? 3 : _rep>=40 ? 2 : 1;
 
-  // Rarity weights: epic только при rep≥80, rare при rep≥60
+  // Rarity: legendary при rep≥90, epic при rep≥80, rare при rep≥60
   const rarityOk = r => {
-    if (r==='epic')    return G.reputation >= 80;
-    if (r==='rare')    return G.reputation >= 60;
+    if (r==='legendary') return G.reputation >= 90;
+    if (r==='epic')      return G.reputation >= 80;
+    if (r==='rare')      return G.reputation >= 60;
     return true; // common/uncommon всегда
   };
 
   const pool=PROJECT_POOL.filter(p=>
-    !p._lifecycleTest &&          // [DEV] исключаем LC-тест из обычного пула
     p.tier<=maxTier &&
     rarityOk(p.rarity||'common') &&
     (!p.requiresDev  || hasRole('developer')) &&
@@ -435,14 +442,14 @@ function _generateOffers() {
   for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
     const p=shuffled[i];
     if (Math.random() < (p.prob||0.5))
-      offers.push({ ...p, _prepaymentPossible: !p.oneTime && Math.random() < 0.25 });
+      offers.push({ ...p });
   }
   // Если не набрали нужное количество — берём без prob-фильтра
   if (offers.length < offerCount) {
     for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
       const p=shuffled[i];
       if (!offers.find(o=>o.id===p.id))
-        offers.push({ ...p, _prepaymentPossible: !p.oneTime && Math.random() < 0.25 });
+        offers.push({ ...p });
     }
   }
   return offers;
@@ -472,20 +479,8 @@ function refreshScoutPool() {
   _emitRender();
 }
 
-// [DEV] Lifecycle-тест — показывает только проекты с флагом _lifecycleTest:true.
-// Бесплатно, без затраты дней. Убрать/скрыть перед релизом.
-function doLifecycleScouting() {
-  const lcProjects = PROJECT_POOL.filter(p => p._lifecycleTest);
-  if (!lcProjects.length) {
-    notify('Lifecycle-проекты не найдены в пуле','error');
-    return;
-  }
-  // Бесплатная dev-команда убрана (v2.6): LC-проекты играются с реальным
-  // наймом — без сотрудников work-фазы идут только на мощности фаундера (2 ед.)
-  const lcPool = lcProjects.map(p => ({ ...p, _prepaymentPossible: false }));
-  G.scoutPool = lcPool;
-  showScoutResults(G.scoutPool);
-}
+// doLifecycleScouting удалён (v3.0): единый пул — все проекты идут через
+// lifecycle-флоу из обычного «Скаутинга проектов»
 
 // showScoutResults / closeScout / showConfirm — DOM-реализации в ui.js
 // Engine emit-ит сигналы, UI рендерит модалы
@@ -628,17 +623,16 @@ function _legacyShowScout(offers) {
       </div>
       ${loadRow}
       ${(()=>{
-        if (!p._prepaymentPossible) return '';
-        const [bMin, bMax] = BUDGET_RANGES[p.tier] || [80000, 150000];
-        const advMin = Math.round(bMin * 0.25 / 5000) * 5000;
-        const advMax = Math.round(bMax * 0.35 / 5000) * 5000;
+        // v3.0: предоплата выбивается в переговорах — на карточке показываем шанс проекта
+        if (p.oneTime) return '';
+        const baseChance = p.prepayChance ?? [0, .25, .35, .45, .50, .55, .60, .65][p.tier || 1] ?? 0;
+        if (baseChance <= 0) return `<div style="margin-top:6px;font-size:10px;color:var(--muted)">💸 Без предоплаты — оплата по ходу проекта</div>`;
         const withLawyer = hasRole('lawyer');
-        const chance = withLawyer ? 65 : 50;
+        const chance = Math.round(Math.min(0.95, baseChance + (withLawyer ? 0.15 : 0)) * 100);
         return `<div style="margin-top:6px;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2);border-radius:6px;padding:5px 8px">
-          <div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:2px">💰 Предоплата при подписании</div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-            <span style="font-size:10px;color:var(--sub)">~${fmtK(advMin)}–${fmtK(advMax)} сразу</span>
-            <span style="font-size:10px;font-weight:700;color:var(--green)">${chance}% шанс${withLawyer?' <span style="font-weight:400;color:var(--muted)">(⚖️ +15%)</span>':''}</span>
+            <span style="font-size:10px;color:var(--green);font-weight:600">💰 Аванс 30% можно выбить в переговорах</span>
+            <span style="font-size:10px;font-weight:700;color:var(--green)">~${chance}%${withLawyer?' <span style="font-weight:400;color:var(--muted)">(⚖️ +15%)</span>':''}</span>
           </div>
         </div>`;
       })()}
@@ -671,24 +665,23 @@ function signProject(pid) {
     return Math.round((bMin + Math.random() * (bMax - bMin)) / 5000) * 5000;
   })();
 
-  // Milestone-выплаты: T2 — 40% при 50%; T3/T4 — 30% при 33% и 30% при 66%.
-  // Подняты (было 30% / 25%+25%) под длинные сроки T2~7 / T3~10 мес —
-  // сглаживают кассовый разрыв, не увеличивая сумму контракта
-  const _mThresholds = def.oneTime ? [] : def.tier===2 ? [50] : def.tier>=3 ? [33,66] : [];
-  const _mPayPcts    = def.oneTime ? [] : def.tier===2 ? [0.40] : def.tier>=3 ? [0.30,0.30] : [];
+  // Milestone-выплаты: T2 — 40% при 50%; T3–T4 — 30%+30% при 33/66;
+  // T5–T7 (v3.0) — 25%×3 при 25/50/75. Сглаживают кассовый разрыв длинных
+  // контрактов, не увеличивая сумму. «Поэтапная оплата» в переговорах их заменяет.
+  const _mThresholds = def.oneTime ? [] : def.tier===2 ? [50] : def.tier>=5 ? [25,50,75] : def.tier>=3 ? [33,66] : [];
+  const _mPayPcts    = def.oneTime ? [] : def.tier===2 ? [0.40] : def.tier>=5 ? [0.25,0.25,0.25] : def.tier>=3 ? [0.30,0.30] : [];
 
   const client={
     ...def,
     id: pid+'_'+G.month,
     _monthsSigned: 0,
-    // Дедлайн: LC-проекты хранят _duration (с подчёркиванием); обычные — duration; иначе тир-дефолт.
-    // Длительности синхронизированы с моделью затрат WIP-ребаланса бюджетов:
-    // T1 ~4 мес, T2 ~7, T3 ~10, T4 ~12 (бюджет ≈ burn команды × срок + маржа)
-    _duration: def.oneTime ? 1 : (def._duration || def.duration || (def.tier===1 ? 4 : def.tier===2 ? 7 : def.tier===3 ? 10 : 12)),
+    // Дедлайн: явный _duration/duration или тир-дефолт. Длительности от
+    // модели затрат: T1 4, T2 7, T3 10, T4 12, T5 14, T6 17, T7 20 мес (v3.0)
+    _duration: def.oneTime ? 1 : (def._duration || def.duration ||
+      ([0, 4, 7, 10, 12, 14, 17, 20][def.tier] ?? 12)),
     _originalBudget: totalBudget,  // для расчёта milestone — до вычета аванса
     _totalBudget: totalBudget,
     _progress: 0,   // 0–100%
-    _scheduled: def.oneTime ? false : undefined, // разовые: true = запланировано на этот месяц
     _milestones: _mThresholds,     // массив порогов прогресса [%]
     _milestonePcts: _mPayPcts,     // доля от _originalBudget для каждого milestone
     _milestonesPaid: [],           // индексы уже выплаченных milestone
@@ -722,25 +715,12 @@ function signProject(pid) {
     addLog(`⚠️ Репутация: ${repHit} (серая зона${hasRole('lawyer')?' — юрист −50%':''})`,'red');
   }
 
-  addLog(`✅ Подписан: ${client.name} — бюджет ${fmtK(totalBudget)} при сдаче`,'green');
+  addLog(`✅ Подписан: ${client.name} — бюджет ${fmtK(totalBudget)}`,'green');
   notify(`${client.icon} ${client.name} — контракт подписан!`,'success');
   rd(`Подписан: ${client.name}`,'client');
 
-  // ── Предоплата ──────────────────────────────────────
-  // _prepaymentPossible задаётся в _generateOffers на записи scoutPool, а не в PROJECT_POOL
-  const poolEntry = G.scoutPool ? G.scoutPool.find(p => p.id === pid) : null;
-  if (poolEntry?._prepaymentPossible) {
-    const boost = hasRole('lawyer') ? 0.15 : 0;  // юрист даёт +15% к шансу
-    if (Math.random() < 0.50 + boost) {
-      const pct = 0.25 + Math.random() * 0.10;   // аванс 25–35% от бюджета
-      const adv = Math.round(totalBudget * pct / 5000) * 5000;
-      client._prepaidAmount  = adv;
-      client._totalBudget    = Math.max(0, client._totalBudget - adv);
-      G.money += adv;
-      addLog(`💰 Предоплата «${client.name}»: +${fmtK(adv)} — остаток при сдаче ${fmtK(client._totalBudget)}`, 'green');
-      notify(`💰 Аванс одобрен: +${fmtK(adv)}`, 'success');
-    }
-  }
+  // Предоплата при подписании удалена (v3.0): аванс теперь выбивается
+  // в переговорах (F2) с шансом prepayChance проекта — см. projects.js
 
   // Устанавливаем кулдаун для oneTime-проектов с ограничением
   if (def.oneTime && def.cooldown) {
@@ -748,25 +728,16 @@ function signProject(pid) {
     addLog(`⏳ Следующий разовый заказ доступен через ${def.cooldown} мес.`, 'muted');
   }
 
-  // ── Lifecycle-проекты: перехватываем, закрываем скаут, запускаем F1 ──
-  if (def._lifecycleTest && typeof Projects !== 'undefined') {
-    G.scoutPool = null;
-    closeScout();
+  // ── v3.0: ВСЕ проекты идут через lifecycle-флоу ──────
+  // Убираем подписанный из пула, пул остаётся открытым если есть ещё офферы
+  if (G.scoutPool) G.scoutPool = G.scoutPool.filter(p => p.id !== pid);
+  if (G.scoutPool && G.scoutPool.length === 0) G.scoutPool = null;
+  closeScout();
+  if (typeof Projects !== 'undefined') {
     Projects.initLCState(client);
     Projects.showPhasePopup(client);
-    _emitRender();
-    return;
   }
-
-  // Убираем подписанный проект из пула; пул остаётся открытым если ещё есть офферы
-  if (G.scoutPool) G.scoutPool=G.scoutPool.filter(p=>p.id!==pid);
   _emitRender();
-  if (G.scoutPool && G.scoutPool.length>0) {
-    showScoutResults(G.scoutPool);
-  } else {
-    G.scoutPool=null;
-    closeScout();
-  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1212,20 +1183,8 @@ function takeLoanById(tierId) {
 // Удалены: setFocus, liveUpdateFocus, adjustFocusBy, equalFocus,
 // clearFocus, setFocusForMonths и сигнал 'focus_changed'.
 
-// Суммарная нагрузка запланированных разовых проектов
-function getScheduledOneTimeLoad(g=G) {
-  return g.activeClients
-    .filter(c => c.oneTime && c._scheduled)
-    .reduce((s, c) => s + getProjectLoad(c), 0);
-}
-
-// Переключить бронирование разового проекта на этот месяц
-function toggleOneTimeSchedule(cid) {
-  const c = G.activeClients.find(a => a.id === cid);
-  if (!c || !c.oneTime) return;
-  c._scheduled = !c._scheduled;
-  _emitRender();
-}
+// Бронирование разовых удалено (v3.0): разовые работают через назначение
+// команды, как все проекты — выполняются за месяц при мощности >= нагрузки
 
 // ══════════════════════════════════════════════════════
 //  ADVANCE MONTH
@@ -1245,14 +1204,10 @@ function advanceMonth() {
   const throughput = getTeamThroughput();
   const totalLoad  = getTotalLoad();         // учитывает payment_delay_fixed
 
-  // Нагрузка запланированных разовых — резервируют мощность из пула
-  const scheduledOneTimeLoad = getScheduledOneTimeLoad();
-  const availableForRegular  = Math.max(0, throughput - scheduledOneTimeLoad);
-  // Перегруз: когда суммарно доступной мощности не хватает для всех проектов
-  const overloaded = availableForRegular < totalLoad * 0.95;
-  // Эффективная нагрузка для усталости — реальная: все активные проекты + разовые
-  // (фокус-взвешивание удалено в v2.7 — распределение делает назначение команды)
-  const effectiveLoad   = totalLoad + scheduledOneTimeLoad;
+  // Перегруз: когда суммарной мощности не хватает для всех проектов
+  // (v3.0: разовые включены в totalLoad — бронирование упразднено)
+  const overloaded = throughput < totalLoad * 0.95;
+  const effectiveLoad = totalLoad;
 
   // ── Усталость команды (п.11, fix п.17, rework п.21, fix п.22) ─────
   {
@@ -1271,7 +1226,9 @@ function advanceMonth() {
   }
   const fatigueMult = getFatigueMult();
 
-  G.activeClients.filter(c=>!c.oneTime).forEach(c=>{
+  // v3.0: тикают ВСЕ проекты, включая разовые — у них instant-цепочка
+  // с одной work-фазой и _duration=1: при мощности >= нагрузки готовы за месяц
+  G.activeClients.forEach(c=>{
     // LC-проекты: пропускаем тик пока не достигли work-фазы
     if (c._lcPhase && !c._lcPhase.startsWith('work_')) return;
     // payment_delay_fixed: прогресс не идёт пока не истёк период ожидания
@@ -1293,17 +1250,9 @@ function advanceMonth() {
     c._progress = Math.min(100, Math.round(((c._progress||0) + monthProg) * 100) / 100);
   });
 
-  if (overloaded && G.activeClients.filter(c=>!c.oneTime).length > 0) {
-    const eff    = Math.round(Math.min(1, availableForRegular / Math.max(1, totalLoad)) * 100);
-    const otNote = scheduledOneTimeLoad > 0 ? ` (разовые −${Math.round(scheduledOneTimeLoad)} ед.)` : '';
-    addLog(`⚠️ Команда перегружена (нужно ${Math.round(totalLoad)} мощн., есть ${Math.round(availableForRegular)}${otNote}) — прогресс ×${eff}%`, 'amber');
+  if (overloaded && G.activeClients.length > 0) {
+    addLog(`⚠️ Команда перегружена (нужно ${Math.round(totalLoad)} мощн., есть ${Math.round(throughput)}) — недоукомплектованные проекты идут медленно`, 'amber');
   }
-
-  // ② б) Разовые проекты: выполняются только если запланированы на этот месяц (_scheduled)
-  // Не накапливают прогресс пассивно — только по явному бронированию ресурса
-  G.activeClients.filter(c => c.oneTime && c._scheduled).forEach(c => {
-    c._progress = 100;
-  });
 
   // ② в) LC work-фазы: work-события + авто-переход при 100%
   if (typeof Projects !== 'undefined') {
@@ -1324,15 +1273,14 @@ function advanceMonth() {
       Math.round(c._progress || 0) >= 100
     );
     lcWork.forEach(c => {
-      const workOrder = ['work_0','work_1','work_2'];
+      // v3.0: количество work-фаз определяется цепочкой (1–5)
+      const workOrder = (c._lcChain || []).filter(p => p.startsWith('work_'));
       const wIdx = workOrder.indexOf(c._lcPhase);
-      if (wIdx < workOrder.length - 1) {
-        // work_0 → work_1 → work_2: сбрасываем прогресс, идём дальше
-        c._progress = 0;
+      if (wIdx >= 0 && wIdx < workOrder.length - 1) {
+        c._progress = 0;       // следующая work-фаза — с нуля
         Projects.advancePhase(c);
       } else {
-        // work_2 завершена — переходим к Review (F9)
-        Projects.advancePhase(c);
+        Projects.advancePhase(c);  // последняя work — к Review/Delivery
       }
     });
   }
@@ -1440,36 +1388,23 @@ function advanceMonth() {
 
   addLog(`расходы −${fmt(staffCost+OVERHEAD)} → баланс ${fmt(G.money)}`, 'red');
 
-  // ⑦ Разовые клиенты: завершение при прогрессе 100% (зависит от выставленного фокуса)
-  G.activeClients = G.activeClients.filter(c=>{
-    if (!c.oneTime || (c._progress||0) < 100) return true;
-    const payout = Math.round((c._totalBudget||c.revenue) * getPortfolioMultiplier());
-    G.money += payout;
-    G.clientEarnings[c.id] = payout;
-    const pfBonus = (c.portfolioWeight||c.tier||1) * 2;
-    G.portfolio   = (G.portfolio||0) + pfBonus;
-    G.completedProjects = G.completedProjects||[];
-    G.completedProjects.push({
-      id:c.id, name:c.name, icon:c.icon, tier:c.tier||1,
-      finalNPS:Math.round(G.clientNPS[c.id]||70), monthCompleted:G.month,
-      terminated:false, failed:false, _cased:false, totalEarned:payout,
-    });
-    delete G.clientNPS[c.id];
-    addLog(`📦 ${c.name}: разовый заказ выполнен → +${fmtK(payout)} (+${pfBonus} портфолио)`,'green');
-    rd(`${c.name} — разовый (+${fmtK(payout)})`,'client');
-    return false;
-  });
+  // ⑦ (v3.0) Завершение разовых перенесено в lifecycle-флоу:
+  // instant-цепочка → work_0 → delivery → finishDelivery платит бюджет
 
-  // ⑧ Штраф просрочки: прогресс < 100% и дедлайн пройден
-  // LC-проекты: дедлайн считается от начала work_0 (_workStartMonth), не от подписания
+  // ⑧ Штраф просрочки: дедлайн пройден, а проект ещё не сдан.
+  // Дедлайн — от начала work_0 (_workStartMonth), не от подписания.
+  // v3.0: буфер ×1.6 + 2 мес — _duration описывает идеальный темп (eff=1,
+  // без work-событий и правок), реальный фазовый цикл закономерно длиннее;
+  // штраф должен наказывать плохое ведение, а не сам факт фазового флоу
   G.activeClients.forEach(c=>{
     const _effMon = c._workStartMonth != null
       ? (c._monthsSigned||0) - c._workStartMonth
       : (c._monthsSigned||0);
-    if (!c.oneTime && c._duration && _effMon > c._duration && (c._progress||0) < 100) {
+    const _deadline = Math.round((c._duration||3) * 1.6) + 2;
+    if (!c.oneTime && c._duration && _effMon > _deadline && (c._progress||0) < 100) {
       const pen = hasRole('lawyer') ? 1 : 2;
       G.reputation = clamp(G.reputation - pen, 0, 100);
-      addLog(`⏰ ${c.name}: просрочен на ${_effMon - c._duration} мес. — −${pen} репутации${hasRole('lawyer')?' (юрист −50%)':''}`, 'red');
+      addLog(`⏰ ${c.name}: просрочен на ${_effMon - _deadline} мес. — −${pen} репутации${hasRole('lawyer')?' (юрист −50%)':''}`, 'red');
     }
   });
 

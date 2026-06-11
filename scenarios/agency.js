@@ -231,10 +231,13 @@ const SCENARIO = {
   // T2 (Founder + 2×Md) = ~143к/мес × 9 мес = 1 287к затрат → бюджет 1.5–3М
   // T3/T4 — пропорционально
   budgetRanges: {
-    1: [500_000,   950_000],
-    2: [1_500_000, 3_000_000],
-    3: [4_000_000, 8_000_000],
+    1: [500_000,    950_000],
+    2: [2_000_000,  4_000_000],   // v3.0: фазовый цикл T2 ~12-14 мес — цена от реальной себестоимости
+    3: [5_000_000,  9_000_000],   // v3.0: согласовано с длиной full-цикла
     4: [10_000_000, 20_000_000],
+    5: [18_000_000, 35_000_000],   // v3.0: эндгейм-тиры
+    6: [35_000_000, 70_000_000],
+    7: [75_000_000, 150_000_000],
   },
 
   // ══════════════════════════════════════════════════
@@ -248,19 +251,18 @@ const SCENARIO = {
 
     // ─────────────────────────────────────────────
     //  [DEV] LIFECYCLE TEST — 3 пилотных проекта для отладки нового флоу
-    //  Флаг _lifecycleTest:true — в обычный пул не попадают;
-    //  появляются только через кнопку "🧪 LC-тест" (doLifecycleScouting).
+    //  v3.0: бывшие LC-тестовые проекты влиты в общий пул —
+    //  весь пул работает через lifecycle-флоу.
     // ─────────────────────────────────────────────
     {
       // Простейший флоу: T1, без юридики, без доп. фаз
       // Цель: проверить F0→F1→F2→F3→F5→F6–F8→F9→F10 без F4 и sub-phases
-      id:'lc_simple', tier:1, icon:'🟢', name:'[LC] Лендинг для кафе',
+      id:'lc_simple', tier:1, icon:'🟢', name:'Лендинг для кафе',
       desc:'Небольшой заказ — лендинг для местного кафе. Стандартный флоу без юридики и сложных фаз. Идеален для проверки базовой цепочки решений.',
       revenue:15000, minQ:0, minV:0, type:'small', npsStart:78, oneTime:false, rarity:'common',
       fixedBudget:[700_000, 1_000_000],   // v2.6: бюджет LC под цикл ~5–6 мес с командой
       modifier:{ type:'nps_passive', val:+3, label:'+3 NPS/мес' },
-      modBadge:'mb-green', prob:1.0,
-      _lifecycleTest: true,
+      modBadge:'mb-green', prob:0.6,
       _negotiationTier: 'quick',   // 2 решения на старте — без брифа и планирования
       _duration: 6,
       requiresLegal: false,
@@ -270,13 +272,12 @@ const SCENARIO = {
     {
       // Полный флоу: T2, с юридикой (если есть юрист), с под-фазами работы
       // Цель: проверить F4 (Legal) + sub-phases в F6–F8 (рефы, прото)
-      id:'lc_full', tier:2, icon:'🔵', name:'[LC] Ребрендинг ТехноСтарт',
+      id:'lc_full', tier:2, icon:'🔵', name:'Ребрендинг «ТехноСтарт»',
       desc:'Средний клиент, требует договор и все этапы — от брифа до сдачи. Включены фаза юридики и детальные под-этапы работы (сбор рефов, прото).',
       revenue:35000, minQ:10, minV:0, type:'corp', npsStart:72, oneTime:false, rarity:'uncommon',
       fixedBudget:[3_000_000, 4_200_000], // v2.6: флагманский LC — 9 мес работы команды
       modifier:{ type:'nps_start', val:+5, label:'NPS старт +5' },
-      modBadge:'mb-green', prob:1.0,
-      _lifecycleTest: true,
+      modBadge:'mb-green', prob:0.5,
       _negotiationTier: 'standard', // 4-5 решений — бриф + планирование
       _duration: 9,
       requiresLegal: true,
@@ -286,13 +287,12 @@ const SCENARIO = {
     {
       // Конфликтный флоу: T2, без юриста, с высоким риском scope_creep + капризный клиент
       // Цель: проверить ветки риск-событий, clientMood < 40 на F9, штрафы
-      id:'lc_risky', tier:2, icon:'🔴', name:'[LC] Онлайн-магазин «Каприз»',
+      id:'lc_risky', tier:2, icon:'🔴', name:'Онлайн-магазин «Каприз»',
       desc:'Клиент с завышенными ожиданиями. Скоуп плывёт, NPS нестабилен. Нужен для проверки ветки scope_creep, юридических рисков и неудовлетворённого ревью.',
       revenue:38000, minQ:0, minV:0, type:'store', npsStart:58, oneTime:false, rarity:'uncommon',
       fixedBudget:[2_400_000, 3_400_000], // v2.6: risk/reward — короче lc_full, капризный клиент
       modifier:{ type:'nps_drain', val:-4, label:'−4 NPS/мес' },
-      modBadge:'mb-amber', prob:1.0,
-      _lifecycleTest: true,
+      modBadge:'mb-amber', prob:0.45,
       _negotiationTier: 'challenge', // 5-шаговый пинг-понг переговоров
       _duration: 7,
       requiresLegal: false,
@@ -679,6 +679,74 @@ const SCENARIO = {
       requiresDev:true, minPortfolio:20,
       modifier:{ type:'nps_passive', val:+2, label:'+2 NPS/мес' },
       modBadge:'mb-green', prob:0.15,
+    },
+
+    // ─────────────────────────────────────────────
+    //  TIER 5 — Большие контракты (rep ≥ 85, портфолио ≥ 30) · v3.0
+    // ─────────────────────────────────────────────
+    {
+      id:'federal_bank', tier:5, icon:'🏛', name:'Федеральный банк',
+      desc:'Полный ребрендинг розничного направления: айдентика, диджитал-каналы, внутренние гайды. Тендер выигран — теперь главное не утонуть в согласованиях.',
+      revenue:0, minQ:30, minV:18, type:'corp', npsStart:62, oneTime:false, rarity:'rare',
+      prepayChance:0.55,
+      modifier:{ type:'nps_penalty', val:-60000, threshold:65, label:'KPI-штраф при NPS<65' },
+      modBadge:'mb-amber', prob:0.30,
+    },
+    {
+      id:'retail_giant', tier:5, icon:'🛒', name:'Ритейл-сеть «Полка»',
+      desc:'Восемьсот магазинов по стране и устаревший образ. Перезапуск бренда плюс кампания на федеральных площадках. Много стейкхолдеров, много правок.',
+      revenue:0, minQ:28, minV:22, type:'store', npsStart:60, oneTime:false, rarity:'rare',
+      prepayChance:0.50,
+      modifier:{ type:'revenue_growth', val:0.04, label:'+4% бюджета каждый мес' },
+      modBadge:'mb-teal', prob:0.32,
+    },
+    {
+      id:'airline', tier:5, icon:'✈️', name:'Авиакомпания «Высота»',
+      desc:'Лоукостер хочет выглядеть премиально, не меняя цен. Брендинг, борта, форма экипажа, диджитал. Красивый кейс — если довезёте до конца.',
+      revenue:0, minQ:32, minV:15, type:'corp', npsStart:58, oneTime:false, rarity:'epic',
+      prepayChance:0.45, requiresDev:true,
+      modifier:{ type:'nps_drain', val:-2, label:'−2 NPS/мес — капризный борт' },
+      modBadge:'mb-amber', prob:0.25,
+    },
+
+    // ─────────────────────────────────────────────
+    //  TIER 6 — Корпорации (rep ≥ 90, портфолио ≥ 50) · v3.0
+    // ─────────────────────────────────────────────
+    {
+      id:'oil_corp', tier:6, icon:'🛢', name:'Сырьевой холдинг «Недра»',
+      desc:'Корпорация выходит на розничный рынок и хочет человеческое лицо. Бюджеты огромные, процессы каменные: каждое решение проходит три уровня согласований.',
+      revenue:0, minQ:35, minV:20, type:'corp', npsStart:55, oneTime:false, rarity:'epic',
+      prepayChance:0.60, requiresLegal:true,
+      modifier:{ type:'payment_delay', val:0.30, label:'30% шанс задержки части оплаты' },
+      modBadge:'mb-amber', prob:0.25,
+    },
+    {
+      id:'mega_holding', tier:6, icon:'🏗', name:'Экосистема «Сфера»',
+      desc:'Холдинг собирает десяток сервисов под один зонтичный бренд. Архитектура бренда, нейминг, дизайн-система — работа на год вперёд для всей команды.',
+      revenue:0, minQ:38, minV:25, type:'corp', npsStart:60, oneTime:false, rarity:'epic',
+      prepayChance:0.55, requiresDev:true, minPortfolio:55,
+      modifier:{ type:'revenue_growth', val:0.05, label:'+5% бюджета каждый мес' },
+      modBadge:'mb-teal', prob:0.22,
+    },
+
+    // ─────────────────────────────────────────────
+    //  TIER 7 — Легендарные (rep ≥ 95, портфолио ≥ 80) · v3.0
+    // ─────────────────────────────────────────────
+    {
+      id:'state_program', tier:7, icon:'🏟', name:'Цифровизация региона',
+      desc:'Госпрограмма полного цикла: портал, сервисы, кампания, айдентика региона. Контракт, о котором пишут в отраслевых медиа. И который снится в кошмарах.',
+      revenue:0, minQ:40, minV:28, type:'corp', npsStart:55, oneTime:false, rarity:'legendary',
+      prepayChance:0.70, requiresLegal:true, requiresDev:true, duration:22,
+      modifier:{ type:'payment_delay_fixed', val:2, label:'Старт работ через 2 мес (бюрократия)' },
+      modBadge:'mb-amber', prob:0.18,
+    },
+    {
+      id:'global_brand', tier:7, icon:'🌍', name:'Глобальный бренд «Atlas»',
+      desc:'Международная компания заходит на рынок и ищет локальное агентство флагманского уровня. Победа в этом питче меняет статус студии навсегда.',
+      revenue:0, minQ:42, minV:25, type:'corp', npsStart:62, oneTime:false, rarity:'legendary',
+      prepayChance:0.50, requiresDev:true, minPortfolio:90,
+      modifier:{ type:'nps_penalty', val:-120000, threshold:70, label:'KPI-штраф при NPS<70' },
+      modBadge:'mb-amber', prob:0.15,
     },
   ],
 
