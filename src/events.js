@@ -49,9 +49,7 @@ const EventBus = {
 //  'close_scout'    {}                                  emit_signal("close_scout")
 //  'show_confirm'   {icon,title,body,                   emit_signal("show_confirm", ...)
 //                    confirmText,confirmClass,onConfirm}
-//  'focus_changed'  {cid,pct,totalPct,isOver,           emit_signal("focus_changed", ...)
-//                    preview:{perMonth,mthsLeft},
-//                    focusableIds}
+//  ('focus_changed' удалён в v2.7 — система фокуса упразднена)
 //  'ai_purchased'        {}                             emit_signal("ai_purchased")
 //  'ai_upgrading'        {level, months}               emit_signal("ai_upgrading", ...)
 //  'ai_training_complete' {level}                      emit_signal("ai_training_complete", ...)

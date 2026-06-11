@@ -107,67 +107,8 @@ function _uiShowConfirm(icon, title, body, confirmText, confirmClass, onConfirm)
   document.getElementById('event-modal').classList.add('active');
 }
 
-function _uiFocusChanged({ cid, pct, totalPct, isOver, previews, preview, focusableIds }) {
-  // Слайдер + инпут изменённого проекта
-  const rangeEl = document.getElementById('focus-range-' + cid);
-  const valEl   = document.getElementById('focus-val-'   + cid);
-  if (rangeEl) { rangeEl.value = pct; rangeEl.style.setProperty('--fill', pct + '%'); }
-  if (valEl)   valEl.value = pct;
-
-  // Хедер фокуса — фиксированная высота, меняется только содержимое (без layout-сдвигов)
-  const headerEl = document.getElementById('focus-header');
-  const infoEl   = document.getElementById('focus-total-info');
-  if (headerEl && infoEl) {
-    // Считаем эффективное использование: регулярные + запланированные разовые
-    const _thr2      = Math.max(1, getTeamThroughput());
-    const _schedPct  = G.activeClients.filter(c=>c.oneTime&&c._scheduled)
-                         .reduce((s,c)=>s+Math.round(getProjectLoad(c)/_thr2*100),0);
-    const _effective = totalPct + _schedPct;
-    const _isOver    = _effective > 100;
-    const _otNote    = _schedPct > 0 ? ` · разовые −${_schedPct}%` : '';
-    const _barColor  = _isOver ? '#F85149' : _effective >= 85 ? '#D29922' : '#3FB950';
-    headerEl.style.background  = _isOver ? 'rgba(248,81,73,.08)'  : 'rgba(45,212,191,.05)';
-    headerEl.style.borderColor = _isOver ? 'rgba(248,81,73,.25)'  : 'rgba(45,212,191,.18)';
-    infoEl.style.color         = _isOver ? 'var(--red)' : _effective >= 85 ? 'var(--amber)' : 'var(--teal)';
-    infoEl.textContent = _isOver
-      ? `⚠️ Перегруз: ${_effective}% — освободи ${_effective - 100}%`
-      : `Фокус: ${_effective}% занято · резерв ${Math.max(0, 100 - _effective)}%${_otNote}`;
-    // Обновляем визуальную шкалу
-    const barEl = headerEl.querySelector('.focus-bar-fill');
-    if (barEl) { barEl.style.width = Math.min(100, _effective) + '%'; barEl.style.background = _barColor; }
-  }
-
-  // Граница focus-row — только для регулярных проектов
-  (focusableIds || []).forEach(fid => {
-    const c = G.activeClients.find(a => a.id === fid);
-    if (c?.oneTime) return;
-    const rowEl = document.getElementById('focus-row-' + fid);
-    if (rowEl) rowEl.style.borderColor = isOver ? 'rgba(248,81,73,.3)' : 'transparent';
-  });
-
-  // Превью для всех проектов в focusableIds
-  const allPreviews = previews || {};
-  const allIds = (focusableIds || [cid]);
-  allIds.forEach(fid => {
-    const prevEl = document.getElementById('focus-prev-' + fid);
-    if (!prevEl) return;
-    const p    = allPreviews[fid] || (fid === cid ? preview : null) || { perMonth:0, perMonthRaw:0, mthsLeft:99 };
-    const fPct = fid === cid ? pct : (G.activeClients.find(a=>a.id===fid)?._focus ?? 50);
-    prevEl.style.color = fPct >= 60 ? 'var(--green)' : fPct >= 30 ? 'var(--teal)' : 'var(--amber)';
-    const delta    = (p.perMonthRaw || p.perMonth) - p.perMonth;
-    const fatLabel = delta > 0 ? ` (−${delta}% усталость)` : '';
-    const spd      = getSpeed();
-    const spdLabel = spd > 1.05 ? ` ⚡×${spd.toFixed(2)}` : '';
-    prevEl.textContent = `+${p.perMonth}%/мес${spdLabel}${fatLabel} · ~${p.mthsLeft} мес. до завершения`;
-  });
-
-  // btn-advance: блокировать только при превышении фокуса регулярных проектов
-  const advBtn = document.getElementById('btn-advance');
-  if (advBtn) {
-    advBtn.disabled = isOver;
-    advBtn.title    = isOver ? 'Суммарный фокус превышает 100% — скорректируй распределение' : '';
-  }
-}
+// _uiFocusChanged удалён (v2.7) — система фокуса упразднена,
+// распределение мощности делает назначение команды (WU-система)
 
 // ── EventBus → DOM биндинги (Godot: вызовы connect в _ready) ─
 function initEventBus() {
@@ -181,7 +122,6 @@ function initEventBus() {
   EventBus.on('close_scout',  ()                                           => _uiCloseScout());
   EventBus.on('show_confirm', ({ icon, title, body, confirmText, confirmClass, onConfirm }) =>
     _uiShowConfirm(icon, title, body, confirmText, confirmClass, onConfirm));
-  EventBus.on('focus_changed', data => _uiFocusChanged(data));
   // AI-сигналы — перерисовываем вкладку если она открыта
   const _refreshAI = () => {
     if (document.getElementById('tab-panel-ai')?.classList.contains('active')) renderAITab();
@@ -285,44 +225,29 @@ function renderGame() {
     </div>`;
   }
 
-  // Фокус: все регулярные проекты участвуют в бюджете — включая те, что в периоде ожидания
-  // (фикс: иначе их _focus не считался в totalFocusW и не блокировал btn-advance)
-  const allRegular   = G.activeClients.filter(c => !c.oneTime);
-  const totalFocusW  = allRegular.reduce((s,c) => s + (c._focus??50), 0);
-  // Для отображения слайдеров — только активно прогрессирующие (не в периоде ожидания)
-  const focusable    = G.activeClients.filter(c =>
-    !c.oneTime && !(c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val)
-  );
-  const showFocusBar = focusable.length >= 1;
-  // Разовые запланированные — резервируют % из общего пула фокуса
-  const _thrForPct     = Math.max(1, getTeamThroughput());
-  const schedOTPct     = G.activeClients.filter(c=>c.oneTime&&c._scheduled)
-                           .reduce((s,c)=>s+Math.round(getProjectLoad(c)/_thrForPct*100),0);
-  const effectiveUsed  = totalFocusW + schedOTPct;   // регулярные + разовые вместе
-  const focusReserve   = 100 - effectiveUsed;
-  const focusIsOver    = effectiveUsed > 100;
-  const hasScheduledOT = schedOTPct > 0;
-  // Хедер фокуса — при наличии хотя бы одного регулярного проекта
-  if (showFocusBar) {
-    const otNote   = hasScheduledOT ? ` · разовые −${schedOTPct}%` : '';
-    const barUsed  = Math.min(100, effectiveUsed);
-    const barColor = focusIsOver ? '#F85149' : effectiveUsed >= 85 ? '#D29922' : '#3FB950';
-    const hBg      = focusIsOver ? 'rgba(248,81,73,.08)'  : 'rgba(45,212,191,.05)';
-    const hBrd     = focusIsOver ? 'rgba(248,81,73,.25)'  : 'rgba(45,212,191,.18)';
-    const hClr     = focusIsOver ? 'var(--red)' : effectiveUsed >= 85 ? 'var(--amber)' : 'var(--teal)';
-    const hTxt     = focusIsOver
-      ? `⚠️ Перегруз: ${effectiveUsed}% — освободи ${effectiveUsed - 100}%`
-      : `Фокус: ${effectiveUsed}% занято · резерв ${Math.max(0, focusReserve)}%${otNote}`;
-    chtml += `<div id="focus-header" style="background:${hBg};border:1px solid ${hBrd};border-radius:7px;padding:6px 10px;margin-bottom:8px">
+  // Сводка мощности (v2.7, фокус упразднён): нагрузка всех проектов vs мощность
+  // команды. Распределение мощности — через назначение сотрудников (WU-система).
+  const _thrForPct    = Math.max(1, getTeamThroughput());
+  const schedOTLoadUI = getScheduledOneTimeLoad();
+  const usedLoad      = getTotalLoad() + schedOTLoadUI;
+  const capOver       = usedLoad > _thrForPct;
+  if (G.activeClients.length > 0) {
+    const pctUsed  = Math.round(usedLoad / _thrForPct * 100);
+    const barUsed  = Math.min(100, pctUsed);
+    const barColor = capOver ? '#F85149' : pctUsed >= 85 ? '#D29922' : '#3FB950';
+    const hBg      = capOver ? 'rgba(248,81,73,.08)'  : 'rgba(45,212,191,.05)';
+    const hBrd     = capOver ? 'rgba(248,81,73,.25)'  : 'rgba(45,212,191,.18)';
+    const hClr     = capOver ? 'var(--red)' : pctUsed >= 85 ? 'var(--amber)' : 'var(--teal)';
+    const otNote   = schedOTLoadUI > 0 ? ` · разовые ${Math.round(schedOTLoadUI)} ед.` : '';
+    const hTxt     = capOver
+      ? `⚠️ Перегруз: проектам нужно ${Math.round(usedLoad)} ед., у команды ${_thrForPct} — прогресс замедлится`
+      : `Мощность: занято ${Math.round(usedLoad)} из ${_thrForPct} ед.${otNote}`;
+    chtml += `<div id="capacity-header" style="background:${hBg};border:1px solid ${hBrd};border-radius:7px;padding:6px 10px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-        <span id="focus-total-info" style="font-size:11px;color:${hClr};font-weight:600">${hTxt}</span>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="equalFocus()">↔ Равномерно</button>
-          <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px" onclick="clearFocus()">✕ Сбросить</button>
-        </div>
+        <span id="capacity-total-info" style="font-size:11px;color:${hClr};font-weight:600">${hTxt}</span>
       </div>
       <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
-        <div class="focus-bar-fill" style="height:100%;width:${barUsed}%;background:${barColor};border-radius:2px;transition:width .3s"></div>
+        <div style="height:100%;width:${barUsed}%;background:${barColor};border-radius:2px;transition:width .3s"></div>
       </div>
     </div>`;
   }
@@ -416,74 +341,52 @@ function renderGame() {
         ${milestoneSummary}
       </div>`;
 
-    // Контролы фокуса — для всех не-разовых при наличии хотя бы одного;
-    //                    для разовых — отдельный упрощённый контрол
-    const myFocus = c._focus != null ? c._focus : (c.oneTime ? 100 : Math.floor(100 / Math.max(1, focusable.length)));
-
-    // Вспомогательная функция расчёта превью (используется для regular и oneTime)
-    const _calcPreview = (focusPct) => {
-      const thr    = getTeamThroughput();
-      const _schedOT = G.activeClients.filter(x => x.oneTime && x._scheduled).reduce((s,x)=>s+getProjectLoad(x),0);
-      const _avail   = Math.max(0, thr - _schedOT);
-      const fMult  = focusPct / 100;
-      const spd    = getSpeed();
-      const fat    = getFatigueMult();
+    // Темп проекта (v2.7, фокус упразднён): превью от назначенной команды —
+    // та же формула, что в advanceMonth (efficiency = projThr / pLoad, кэп 1.5)
+    const _pace = (() => {
+      const spd  = getSpeed();
+      const fat  = getFatigueMult();
       let raw;
       if (c.oneTime) {
-        raw = 100 * fMult * spd;
+        raw = c._scheduled ? 100 : 0;
       } else {
-        // Синхронно с advanceMonth: efficiency без кэпа min=1 — избыток ускоряет
-        const allocThr  = fMult * _avail;
-        const pLoad     = getProjectLoad(c);
-        const efficiency = pLoad > 0 ? (allocThr / pLoad) : 1;
-        raw = (100 / (c._duration||3)) * efficiency * spd;
+        const pLoad   = getProjectLoad(c);
+        const projThr = getProjectThroughput(c);
+        const eff     = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+        const workCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
+        const phaseDur = (c._duration || 3) / Math.max(1, workCnt);
+        raw = (100 / phaseDur) * eff * spd;
       }
-      const base   = Math.round(raw);
-      const withF  = Math.round(raw * fat);
-      const rem    = Math.max(0, 100 - (c._progress||0));
-      return { base, withF, rem, mthsLeft: withF > 0 ? Math.ceil(rem / withF) : 99 };
-    };
-    const { base: basePerMonth, withF: perMonth, mthsLeft } = _calcPreview(myFocus);
-    const fatigueDelta = basePerMonth - perMonth;
+      const base  = Math.round(raw);
+      const withF = Math.round(raw * fat);
+      const rem   = Math.max(0, 100 - (c._progress||0));
+      return { base, withF, mthsLeft: withF > 0 ? Math.ceil(rem / withF) : 99 };
+    })();
+    const fatigueDelta = _pace.base - _pace.withF;
     const fatigueLabel = fatigueDelta > 0 ? ` <span style="color:var(--red);font-size:9px">(−${fatigueDelta}% усталость)</span>` : '';
     const _spd = getSpeed();
     const speedLabel = _spd > 1.05 ? ` <span style="color:var(--teal);font-size:9px">⚡×${_spd.toFixed(2)}</span>` : '';
-    const previewColor = myFocus >= 60 ? 'var(--green)' : myFocus >= 30 ? 'var(--teal)' : 'var(--amber)';
-    const rowBorder    = (!c.oneTime && focusIsOver) ? 'rgba(248,81,73,.3)' : 'transparent';
 
-    // Третий ряд — «Завершить за X мес.» (только для регулярных незавершённых)
-    const targetRow = (!c.oneTime && (c._progress||0) < 95) ? `
-      <div style="display:flex;align-items:center;gap:4px;margin-top:3px">
-        <span style="font-size:10px;color:var(--sub)">За</span>
-        <input type="number" min="1" max="24" step="1"
-          id="focus-target-${c.id}" class="focus-val" style="width:40px"
-          placeholder="мес"
-          onchange="setFocusForMonths('${c.id}',+this.value);this.value=''"
-          onclick="this.select()">
-        <span style="font-size:10px;color:var(--sub)">мес.</span>
-      </div>` : '';
-
-    // Блок управления ресурсом — разные UI для oneTime и регулярных
-    let focusBar = '';
+    // Блок ресурса: разовые — бронирование мощности; регулярные — строка темпа
+    let resourceRow = '';
     if (c.oneTime) {
-      // Разовый проект: резервирует % из общего пула фокуса
+      // Разовый проект: резервирует единицы мощности из общего пула
       const cLoad      = getProjectLoad(c);
       const thr        = Math.max(1, getTeamThroughput());
-      const cPct       = Math.round(cLoad / thr * 100);       // % который нужен этому проекту
-      // Сколько % уже занято остальными (регулярные + другие запланированные разовые)
-      const otherSchedPct = G.activeClients.filter(x=>x.oneTime&&x._scheduled&&x.id!==c.id)
-                              .reduce((s,x)=>s+Math.round(getProjectLoad(x)/thr*100),0);
-      const availablePct = Math.max(0, 100 - totalFocusW - otherSchedPct);
-      const overload     = availablePct < cPct;
+      const otherLoad  = getTotalLoad() + G.activeClients
+        .filter(x=>x.oneTime&&x._scheduled&&x.id!==c.id)
+        .reduce((s,x)=>s+getProjectLoad(x),0);
+      const availUnits = Math.max(0, thr - otherLoad);
+      const overload   = availUnits < cLoad;
 
       if (c._scheduled) {
-        focusBar = `
-        <div id="focus-row-${c.id}" style="margin-top:7px">
+        resourceRow = `
+        <div style="margin-top:7px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;
                       background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.25);
                       border-radius:6px;padding:5px 10px">
             <span style="font-size:10px;color:var(--teal);font-weight:600">
-              ✓ Выполнить в этом месяце &nbsp;·&nbsp; −${cPct}% фокуса
+              ✓ Выполнить в этом месяце &nbsp;·&nbsp; −${Math.round(cLoad)} ед. мощности
             </span>
             <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 7px;flex-shrink:0;color:var(--sub)"
                     onclick="toggleOneTimeSchedule('${c.id}')">Отложить</button>
@@ -491,44 +394,29 @@ function renderGame() {
         </div>`;
       } else {
         const infoColor    = overload ? 'var(--amber)' : 'var(--sub)';
-        const overloadHint = overload ? ` <span style="color:var(--amber)">⚠ регулярные замедлятся</span>` : '';
-        focusBar = `
-        <div id="focus-row-${c.id}" style="margin-top:7px">
+        const overloadHint = overload ? ` <span style="color:var(--amber)">⚠ остальные замедлятся</span>` : '';
+        resourceRow = `
+        <div style="margin-top:7px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <span style="font-size:10px;color:${infoColor}">
-              Требует ${cPct}% фокуса · Доступно ${availablePct}%${overloadHint}
+              Нужно ${Math.round(cLoad)} ед. · Свободно ${Math.round(availUnits)} из ${thr}${overloadHint}
             </span>
             <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 7px;flex-shrink:0"
                     onclick="toggleOneTimeSchedule('${c.id}')">📋 Выполнить в этом месяце</button>
           </div>
         </div>`;
       }
-    } else if (showFocusBar) {
-      // Регулярный проект: слайдер фокуса
-      focusBar = `
-      <div id="focus-row-${c.id}" style="margin-top:7px;border:1px solid ${rowBorder};border-radius:6px;padding:0;transition:border-color .15s">
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
-          <span style="font-size:10px;color:var(--sub);flex-shrink:0">Фокус</span>
-          <input type="range" min="0" max="100" value="${myFocus}"
-            id="focus-range-${c.id}" class="focus-range" style="--fill:${myFocus}%"
-            oninput="liveUpdateFocus('${c.id}',this.value)"
-            onchange="renderGame()">
-          <input type="number" min="0" max="100" step="1" value="${myFocus}"
-            id="focus-val-${c.id}" class="focus-val"
-            onchange="setFocus('${c.id}',this.value)"
-            onclick="this.select()">
-          <span style="font-size:10px;color:var(--sub);flex-shrink:0">%</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:3px">
-          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;color:var(--sub)" onclick="setFocus('${c.id}',0)">0</button>
-          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',-10)">−10</button>
-          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',-1)">−1</button>
-          <span style="flex:1;text-align:center;font-size:10px;color:${previewColor}" id="focus-prev-${c.id}">+${perMonth}%/мес${speedLabel}${fatigueLabel} · ~${mthsLeft} мес. до завершения</span>
-          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px" onclick="adjustFocusBy('${c.id}',+1)">+1</button>
-          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;letter-spacing:-.5px" onclick="adjustFocusBy('${c.id}',+10)">+10</button>
-          <button class="btn btn-xs btn-ghost" style="padding:1px 5px;font-size:10px;color:var(--sub)" onclick="setFocus('${c.id}',100)">100</button>
-        </div>
-        ${targetRow}
+    } else {
+      // Регулярный проект: строка темпа от назначенной команды
+      const _assignedCnt = (c._assignedStaff||[]).length;
+      const _projThr     = getProjectThroughput(c);
+      const _pLoad       = getProjectLoad(c);
+      const _under       = _projThr < _pLoad;
+      const paceColor    = _pace.withF <= 0 ? 'var(--red)' : _under ? 'var(--amber)' : 'var(--green)';
+      resourceRow = `
+      <div style="margin-top:7px;display:flex;align-items:center;gap:8px;font-size:10px">
+        <span style="color:var(--sub)">⚙️ Команда: ${_assignedCnt ? _assignedCnt + ' чел.' : 'не назначена'} · ${_projThr}/${_pLoad} ед.</span>
+        <span style="flex:1;text-align:right;color:${paceColor}">+${_pace.withF}%/мес${speedLabel}${fatigueLabel} · ~${_pace.mthsLeft} мес. до завершения</span>
       </div>`;
     }
 
@@ -629,7 +517,7 @@ function renderGame() {
           </div>
           ${_isLCEvent ? _lcPhaseBadge : (_isLC ? _lcWorkBar : progressBar) + (_isLC ? _lcPhaseBadge : '')}
           ${staffAssignRow}
-          ${_isLCEvent ? '' : focusBar}
+          ${_isLCEvent ? '' : resourceRow}
         </div>
         <div class="client-rev">
           ${budgetStr}
@@ -671,12 +559,8 @@ function renderGame() {
 
   document.getElementById('g-clients-list').innerHTML=chtml;
 
-  // П.8 — блокировка «Завершить месяц» при суммарном фокусе >100%
-  const advBtn = document.getElementById('btn-advance');
-  if (advBtn) {
-    advBtn.disabled = focusIsOver;
-    advBtn.title = focusIsOver ? 'Суммарный фокус превышает 100% — скорректируй распределение' : '';
-  }
+  // Кнопка «Завершить месяц» не блокируется (v2.7): перегруз мощности —
+  // легитимное состояние, прогресс замедляется честно через efficiency
 
   // ── P&L ──
   const staffCost = getTotalStaffCost();
@@ -995,10 +879,8 @@ function renderGame() {
   const ft = G.teamFatigue || 0;
   const ftCol = ft>=85?'var(--red)':ft>=60?'var(--amber)':ft>=30?'#e8a838':'var(--green)';
   const ftLabel = ft>=85?'Кризис':ft>=60?'Выгорание':ft>=30?'Напряжение':'Норма';
-  const _focusableLen = G.activeClients.filter(c=>!c.oneTime).length;
-  const _totalFocusW  = G.activeClients.filter(c=>!c.oneTime).reduce((s,c)=>s+(c._focus??50),0);
-  const _activeFocusPct = _focusableLen>0?Math.min(1,_totalFocusW/100):1;
-  const _effectiveLoad = getTotalLoad()*_activeFocusPct;
+  // v2.7: эффективная нагрузка — реальная (фокус-взвешивание удалено), зеркалит advanceMonth
+  const _effectiveLoad = getTotalLoad() + getScheduledOneTimeLoad();
   const _loadPct2 = getTeamThroughput()>0?_effectiveLoad/getTeamThroughput():0;
   let _fd = _loadPct2>=1.0?10:_loadPct2>=0.85?4:_loadPct2>=0.70?1:-8;
   const _hrSr=G.staff.some(s=>s.id==='hr_sr'),_hrMd=G.staff.some(s=>s.id==='hr'),_hrJr=G.staff.some(s=>s.id==='hr_jr');
