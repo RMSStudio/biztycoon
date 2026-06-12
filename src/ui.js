@@ -264,12 +264,13 @@ function renderGame() {
   // Actions pips
   const pipsDiv=document.getElementById('g-action-pips');
   pipsDiv.innerHTML='';
-  for (let i=0;i<ACTIONS_PER_MONTH;i++){
+  const _wdMax = getWorkdays(G.month % 12);
+  for (let i=0;i<_wdMax;i++){
     const d=document.createElement('div');
     d.className='pip'+(i>=G.actions?' used':'');
     pipsDiv.appendChild(d);
   }
-  document.getElementById('g-action-val').textContent=`${G.actions} / ${ACTIONS_PER_MONTH}`;
+  document.getElementById('g-action-val').textContent=`${G.actions} / ${_wdMax}`;
   const hasPool=G.scoutPool && G.scoutPool.length>0;
   const scoutBtn=document.getElementById('btn-scout');
   scoutBtn.disabled=!hasPool && G.actions<SCOUT_COST;
@@ -1243,9 +1244,9 @@ function renderPortfolioTab() {
   } else {
     buildHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Потрать рабочие дни на сборку. Больше дней + выше Q + лучший NPS → выше грейд.</div>`;
     buildHtml+=available.map(p=>{
-      const g1=CASE_GRADES[calcCaseGrade(p,1)];
-      const g2=CASE_GRADES[calcCaseGrade(p,2)];
-      const g3=CASE_GRADES[calcCaseGrade(p,3)];
+      const g1=CASE_GRADES[calcCaseGrade(p,2)];
+      const g2=CASE_GRADES[calcCaseGrade(p,4)];
+      const g3=CASE_GRADES[calcCaseGrade(p,6)];
       const statusBadge=p.failed
         ?`<span style="font-size:10px;color:var(--red);font-weight:600">💔 Клиент ушёл</span>`
         :p.terminated
@@ -1269,17 +1270,17 @@ function renderPortfolioTab() {
         <div style="margin-top:10px">
           <div style="font-size:10px;color:var(--muted);margin-bottom:6px">Выбери время на сборку кейса:</div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-sm ${btnStyle(g1)}" onclick="buildCase('${p.id}',1)" ${G.actions<1?'disabled':''}
+            <button class="btn btn-sm ${btnStyle(g1)}" onclick="buildCase('${p.id}',2)" ${G.actions<2?'disabled':''}
               style="flex:1;flex-direction:column;gap:2px;align-items:center;padding:8px 6px;text-align:center">
-              <span>1 день</span><span style="font-size:9px;opacity:.75">${g1.icon} ${g1.label}</span>
+              <span>2 дня</span><span style="font-size:9px;opacity:.75">${g1.icon} ${g1.label}</span>
             </button>
-            <button class="btn btn-sm ${btnStyle(g2)}" onclick="buildCase('${p.id}',2)" ${G.actions<2?'disabled':''}
+            <button class="btn btn-sm ${btnStyle(g2)}" onclick="buildCase('${p.id}',4)" ${G.actions<4?'disabled':''}
               style="flex:1;flex-direction:column;gap:2px;align-items:center;padding:8px 6px;text-align:center">
-              <span>2 дня</span><span style="font-size:9px;opacity:.75">${g2.icon} ${g2.label}</span>
+              <span>4 дня</span><span style="font-size:9px;opacity:.75">${g2.icon} ${g2.label}</span>
             </button>
-            <button class="btn btn-sm ${btnStyle(g3)}" onclick="buildCase('${p.id}',3)" ${G.actions<3?'disabled':''}
+            <button class="btn btn-sm ${btnStyle(g3)}" onclick="buildCase('${p.id}',6)" ${G.actions<6?'disabled':''}
               style="flex:1;flex-direction:column;gap:2px;align-items:center;padding:8px 6px;text-align:center">
-              <span>3 дня</span><span style="font-size:9px;opacity:.75">${g3.icon} ${g3.label}</span>
+              <span>6 дней</span><span style="font-size:9px;opacity:.75">${g3.icon} ${g3.label}</span>
             </button>
           </div>
         </div>

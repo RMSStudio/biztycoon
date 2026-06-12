@@ -18,6 +18,15 @@ const EVENTS            = SCENARIO.events;
 // let (не const) — чтобы initState() ресинкал их после SE.applyActiveScenario()
 let OVERHEAD          = SCENARIO.settings.overhead;
 let ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
+
+// Рабочие дни месяца (v3.3): производственный календарь из сценария
+// (settings.workdays[12]); фолбэк — плоский actionsPerMonth
+function getWorkdays(monthIdx) {
+  const cal = SCENARIO.settings.workdays;
+  return (Array.isArray(cal) && cal[monthIdx % 12] != null)
+    ? cal[monthIdx % 12]
+    : ACTIONS_PER_MONTH;
+}
 let SCOUT_COST        = SCENARIO.settings.scoutCost;
 let HIRE_COST         = SCENARIO.settings.hireCost;
 
@@ -76,7 +85,7 @@ function initState() {
     spec:null, money:500000, month:0,
     staff:[], activeClients:[], log:[],
     tempDiscount:0, monthsPlayed:0,
-    actions: ACTIONS_PER_MONTH,
+    actions: getWorkdays(0),
     reputation: SCENARIO.settings.startReputation ?? 100,
     clientNPS: {},
     clientEarnings: {},
@@ -130,7 +139,7 @@ function startGame() {
   if (typeof startRun === 'function') startRun(); // saves.js: открыть новый ран
   G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[]; G.candidatePool=[];
   G.tempDiscount=0; G.monthsPlayed=0;
-  G.actions=ACTIONS_PER_MONTH; G.reputation=SCENARIO.settings.startReputation ?? 100;
+  G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
   G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
@@ -955,8 +964,8 @@ function calcCaseGrade(project, daysSpent) {
   else if (q>=20) score+=2;
   else if (q>=10) score+=1;
 
-  // Time factor (1–3)
-  score+=Math.min(3, daysSpent);
+  // Time factor (1–3) — дни в шкале произв. календаря (2/4/6)
+  score+=Math.min(3, Math.round(daysSpent/2));
 
   // NPS factor (0–3)
   if      (nps>=70) score+=3;
@@ -1424,7 +1433,7 @@ function advanceMonth() {
   G.month++;
 
   // ⑪ Сброс действий, временных бонусов, пула
-  G.actions   = ACTIONS_PER_MONTH;
+  G.actions   = getWorkdays(G.month % 12);   // календарь нового месяца
   G.scoutPool = null;
   G.tempQBonus = 0;
 
