@@ -213,7 +213,7 @@
       <div class="panel">
         <div class="panel-title">Действия</div>
         <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
-          🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>
+          🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label"></span>
         </button>
         <!-- [DEV] Тестовые кнопки — всегда видны.
              Кнопка LC-теста удалена (v3.0): весь пул работает через lifecycle-флоу -->
@@ -233,7 +233,7 @@
           <button onclick="toggleAcc('hire')"
             style="width:100%;background:none;border:none;color:var(--sub);display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 2px;font-size:12px;font-weight:600;text-align:left">
             <span>Нанять</span>
-            <span style="color:var(--muted);font-weight:400;font-size:10px">−2 дня</span>
+            <span style="color:var(--muted);font-weight:400;font-size:10px" id="hire-cost-label"></span>
             <span style="margin-left:auto;font-size:11px;transition:transform .2s" id="acc-arrow-hire">▸</span>
           </button>
           <div id="acc-hire" style="display:none;margin-top:6px">
@@ -392,7 +392,7 @@
     <div class="scout-grid" id="scout-grid"></div>
     <div style="display:flex;gap:8px;margin-top:4px;flex-shrink:0;">
       <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="refreshScoutPool()">
-        🔄 Обновить пул <span style="color:rgba(255,255,255,.4);font-size:11px">−3 дня</span>
+        🔄 Обновить пул <span style="color:rgba(255,255,255,.4);font-size:11px" id="refresh-cost-label"></span>
       </button>
       <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="closeScout()">
         Закрыть — вернуться позже

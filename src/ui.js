@@ -272,11 +272,15 @@ function renderGame() {
   }
   document.getElementById('g-action-val').textContent=`${G.actions} / ${_wdMax}`;
   const hasPool=G.scoutPool && G.scoutPool.length>0;
+  // Подписи стоимостей действий — из данных сценария (фикс хвостов v3.3)
+  { const h=document.getElementById('hire-cost-label');    if (h) h.textContent = `−${HIRE_COST} дн.`;
+    const r=document.getElementById('refresh-cost-label'); if (r) r.textContent = `−${SCOUT_COST} дн.`;
+    const sc=document.getElementById('scout-cost-label');  if (sc) sc.textContent = `−${SCOUT_COST} дн.`; }
   const scoutBtn=document.getElementById('btn-scout');
   scoutBtn.disabled=!hasPool && G.actions<SCOUT_COST;
   scoutBtn.innerHTML=hasPool
     ? `📋 Открыть пул <span style="color:rgba(255,255,255,.6);font-size:11px">${G.scoutPool.length} ${G.scoutPool.length===1?'проект':'проекта'}</span>`
-    : `🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−3 дня</span>`;
+    : `🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−${SCOUT_COST} дн.</span>`;
 
   // ── Active clients ──
   document.getElementById('g-client-count').textContent=G.activeClients.length+'/'+getCapacity();
@@ -1769,7 +1773,7 @@ function _renderPerkTree() {
     if (!bought && !tempActive) {
       if (onCd)   subLine = `<div style="font-size:7px;color:var(--muted)">⏳ ${(G.fatigueActionCooldowns||{})[p.id]} мес.</div>`;
       else if (ftGate) subLine = `<div style="font-size:7px;color:var(--amber)">уст. ≥${p.minFatigue}</div>`;
-      else        subLine = `<div style="font-size:7.5px;color:var(--muted)">${fmtK(p.cost)}</div>`;
+      else        subLine = `<div style="font-size:7.5px;color:var(--muted)">${fmtK(p.cost)} · ${p.days||1} дн.</div>`;
     }
 
     // Иконка состояния (верхний правый угол)
