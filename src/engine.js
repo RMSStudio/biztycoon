@@ -142,7 +142,7 @@ function startGame() {
   G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
-  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
+  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.calendarEvents=[]; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
   // ИИ-нейросеть
   G.ai = {
     purchased:         false,   // куплен доступ
@@ -1213,6 +1213,16 @@ function takeLoanById(tierId) {
 // Бронирование разовых удалено (v3.0): разовые работают через назначение
 // команды, как все проекты — выполняются за месяц при мощности >= нагрузки
 
+// ── Календарь (v3.5): отложенные события с эффектом в будущем месяце ──
+function scheduleCalendarEvent({ inMonths, label, money = 0, icon = '📌' }) {
+  G.calendarEvents = G.calendarEvents || [];
+  G.calendarEvents.push({
+    month: G.month + Math.max(1, inMonths | 0),
+    label, money, icon, done: false,
+  });
+  addLog(`${icon} Запланировано: ${label}${money ? ` (${money > 0 ? '+' : ''}${fmtK(money)})` : ''} — ${monthLabel(Math.max(1, inMonths | 0))}`, 'muted');
+}
+
 // ══════════════════════════════════════════════════════
 //  ADVANCE MONTH
 // ══════════════════════════════════════════════════════
@@ -1452,6 +1462,15 @@ function advanceMonth() {
   if (typeof processStaffMonth === 'function') processStaffMonth();
 
   G.month++;
+
+  // ⑪-а Календарь: применяем наступившие отложенные события
+  (G.calendarEvents || []).forEach(ev => {
+    if (ev.done || ev.month > G.month) return;
+    ev.done = true;
+    if (ev.money) G.money += ev.money;
+    addLog(`${ev.icon} ${ev.label}${ev.money ? `: ${ev.money > 0 ? '+' : ''}${fmtK(ev.money)}` : ''}`, ev.money < 0 ? 'red' : 'green');
+    notify(`${ev.icon} ${ev.label}`, ev.money < 0 ? 'warning' : 'info');
+  });
 
   // ⑪ Сброс действий, временных бонусов, пула
   G.actions   = getWorkdays(G.month % 12);   // календарь нового месяца

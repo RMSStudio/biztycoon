@@ -174,6 +174,109 @@ function renderSpecGrid() {
     </div>`).join('');
 }
 
+// ══════════════════════════════════════════════════════
+//  КАЛЕНДАРЬ-ПЛАНИРОВЩИК (v3.5)
+//  Горизонт 8 месяцев: рабочие дни, прогнозы сдач/выплат по
+//  текущему темпу, дедлайны (с буфером движка), отложенные события
+// ══════════════════════════════════════════════════════
+function _projectPaceMonths(c) {
+  // Та же математика, что в advanceMonth: прогноз месяцев до 100% текущей фазы
+  const pLoad   = getProjectLoad(c);
+  const projThr = getProjectThroughput(c);
+  const eff     = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+  const workCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
+  const phaseDur = (c._duration || 3) / Math.max(1, workCnt);
+  const perMonth = (100 / phaseDur) * eff * getSpeed() * getFatigueMult();
+  if (perMonth <= 0) return null;
+  // оставшиеся фазы: текущая (до 100%) + целые следующие work-фазы + ревью/сдача мгновенны
+  const wPhases = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')) : ['work_0'];
+  const wIdx    = Math.max(0, wPhases.indexOf(c._lcPhase));
+  const restCur = Math.max(0, 100 - (c._progress || 0)) / perMonth;
+  const restFut = (wPhases.length - wIdx - 1) * (100 / perMonth);
+  return Math.max(1, Math.ceil(restCur + restFut));
+}
+
+function openCalendar() {
+  const body = document.getElementById('calendar-body');
+  if (!body) return;
+  const HORIZON = 8;
+  const byMonth = {};   // absMonth → [{icon,text,color}]
+  const add = (m, icon, text, color) => {
+    if (m < G.month || m >= G.month + HORIZON) return;
+    (byMonth[m] = byMonth[m] || []).push({ icon, text, color });
+  };
+
+  (G.activeClients || []).forEach(c => {
+    // Отложенный старт работ (транши/бюрократия)
+    if (c.modifier?.type === 'payment_delay_fixed' && (c._monthsSigned || 0) <= c.modifier.val) {
+      add(G.month + (c.modifier.val - (c._monthsSigned || 0)) + 1, '▶', `${c.name}: старт работ`, 'var(--teal)');
+    }
+    const inWork = c._lcPhase && c._lcPhase.startsWith('work_');
+    if (inWork) {
+      const mths = _projectPaceMonths(c);
+      if (mths != null) {
+        add(G.month + mths, '🏁', `${c.name}: прогноз сдачи · +${fmtK(c._totalBudget || 0)}`, 'var(--green)');
+        // Поэтапная оплата: следующая треть — в конце текущей work-фазы
+        if (c._lcTags && c._lcTags.payment_staged && (c._stagedPaid || 0) < 3) {
+          const pLoad = getProjectLoad(c), projThr = getProjectThroughput(c);
+          const eff = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+          const workCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
+          const perMonth = (100 / ((c._duration || 3) / Math.max(1, workCnt))) * eff * getSpeed() * getFatigueMult();
+          if (perMonth > 0) {
+            const phaseEnd = Math.max(1, Math.ceil(Math.max(0, 100 - (c._progress || 0)) / perMonth));
+            const third = Math.round((c._originalBudget || 0) / 3 / 5000) * 5000;
+            add(G.month + phaseEnd, '💵', `${c.name}: этап ${(c._stagedPaid || 0) + 1}/3 · +${fmtK(third)}`, 'var(--green)');
+          }
+        }
+        // Milestone-прогноз (tier-схема)
+        (c._milestones || []).forEach((thr, i) => {
+          if ((c._milestonesPaid || []).includes(i)) return;
+          const wPhases = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')) : ['work_0'];
+          const wIdx = Math.max(0, wPhases.indexOf(c._lcPhase));
+          const globalProg = ((wIdx * 100) + (c._progress || 0)) / wPhases.length;
+          if (globalProg >= thr) return;
+          const pLoad = getProjectLoad(c), projThr = getProjectThroughput(c);
+          const eff = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+          const perMonthGlobal = ((100 / (c._duration || 3)) * eff * getSpeed() * getFatigueMult());
+          if (perMonthGlobal <= 0) return;
+          const m = Math.max(1, Math.ceil((thr - globalProg) / perMonthGlobal));
+          const pay = Math.round((c._originalBudget || 0) * (c._milestonePcts || [])[i] / 5000) * 5000;
+          add(G.month + m, '💵', `${c.name}: milestone ${thr}% · +${fmtK(pay)}`, 'var(--green)');
+        });
+      }
+      // Дедлайн (с буфером движка ×1.6+2)
+      const dl = Math.round((c._duration || 3) * 1.6) + 2;
+      const effMon = c._workStartMonth != null ? (c._monthsSigned || 0) - c._workStartMonth : (c._monthsSigned || 0);
+      add(G.month + Math.max(0, dl - effMon), '⏰', `${c.name}: дедлайн (буфер учтён)`, 'var(--amber)');
+    }
+  });
+
+  // Отложенные события (schedule / scheduleCalendarEvent)
+  (G.calendarEvents || []).forEach(ev => {
+    if (!ev.done) add(ev.month, ev.icon || '📌', `${ev.label}${ev.money ? ` · ${ev.money > 0 ? '+' : ''}${fmtK(ev.money)}` : ''}`, ev.money < 0 ? 'var(--red)' : 'var(--teal)');
+  });
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
+  for (let i = 0; i < HORIZON; i++) {
+    const m = G.month + i;
+    const wd = getWorkdays(m % 12);
+    const wdCol = wd <= 18 ? 'var(--amber)' : wd >= 22 ? 'var(--teal)' : 'var(--sub)';
+    const items = byMonth[m] || [];
+    html += `<div style="background:var(--bg);border:1px solid ${i === 0 ? 'rgba(45,212,191,.35)' : 'var(--border)'};border-radius:8px;padding:8px;min-height:92px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+        <b style="font-size:11px">${MONTHS[m % 12]} ${2026 + Math.floor(m / 12)}${i === 0 ? ' · сейчас' : ''}</b>
+        <span style="font-size:10px;color:${wdCol};font-weight:700">${wd} р.дн.</span>
+      </div>
+      ${items.length ? items.map(it => `<div style="font-size:9.5px;color:${it.color};margin-bottom:3px;line-height:1.3">${it.icon} ${it.text}</div>`).join('')
+        : '<div style="font-size:9px;color:var(--muted)">—</div>'}
+    </div>`;
+  }
+  html += '</div><div style="font-size:9px;color:var(--muted);margin-top:8px">Прогнозы — по текущему темпу команды (назначения, скорость, усталость); меняется состав — меняются и даты. Короткие месяцы (≤18 дн.) подсвечены янтарным.</div>';
+  body.innerHTML = html;
+  document.getElementById('calendar-modal').style.display = 'flex';
+}
+function closeCalendar() { const m = document.getElementById('calendar-modal'); if (m) m.style.display = 'none'; }
+
 // ── EventBus → DOM биндинги (Godot: вызовы connect в _ready) ─
 function initEventBus() {
   EventBus.on('notify',       ({ msg, type })                              => _uiNotify(msg, type));

@@ -131,9 +131,9 @@
     <button onclick="openSaveModal()" title="Сохранения (Ctrl+S)" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:14px;padding:5px 9px;transition:color .15s,border-color .15s" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">💾</button>
   </div>
 
-  <!-- Actions bar -->
-  <div class="actions-bar">
-    <div class="actions-label">📅 Рабочие дни</div>
+  <!-- Actions bar — клик открывает календарь-планировщик (v3.5) -->
+  <div class="actions-bar" onclick="openCalendar()" style="cursor:pointer" title="Открыть календарь-планировщик">
+    <div class="actions-label">📅 Рабочие дни <span style="color:var(--muted);font-weight:400;font-size:9px">· календарь ▸</span></div>
     <div class="actions-pips" id="g-action-pips"></div>
     <div class="actions-val" id="g-action-val">10 / 10</div>
   </div>
@@ -482,6 +482,18 @@
     </div>
     <div id="save-list"></div>
     <button class="btn btn-ghost" onclick="closeSaveModal()" style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
+  </div>
+</div>
+
+<!-- Календарь-планировщик (v3.5) -->
+<div id="calendar-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:280;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:860px;width:94%;max-height:86vh;overflow:auto;padding:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <b style="font-size:15px">📅 Календарь-планировщик</b>
+      <button class="btn btn-xs btn-ghost" onclick="closeCalendar()">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--sub);margin-bottom:10px">Производственный календарь, прогнозы сдач и выплат по текущему темпу команды, дедлайны и отложенные события</div>
+    <div id="calendar-body"></div>
   </div>
 </div>
 

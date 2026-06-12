@@ -22,6 +22,7 @@
 //                "success":[ops], "fail":[ops] } }
 //  { "ifRole": { "role":"developer", "then":[ops], "else":[ops] } }
 //  { "scoutInject": { ...дефиниция проекта... } }
+//  { "schedule": { "inMonths":2, "label":"...", "money":-40000, "icon":"💳" } } — отложенный эффект (календарь)
 // ══════════════════════════════════════════════════════
 
 const ScenarioLoader = (() => {
@@ -113,6 +114,10 @@ const ScenarioLoader = (() => {
 
     if (op.ifRole) {
       applyOps(hasRole(op.ifRole.role) ? op.ifRole.then : op.ifRole.else, g);
+    }
+
+    if (op.schedule) {
+      if (typeof scheduleCalendarEvent === 'function') scheduleCalendarEvent(op.schedule);
     }
 
     if (op.scoutInject) {
