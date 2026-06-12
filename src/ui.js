@@ -643,7 +643,7 @@ function renderGame() {
       resourceRow = `
       <div style="margin-top:7px;display:flex;align-items:center;gap:8px;font-size:10px">
         <span style="color:var(--sub)">⚙️ Команда: ${_assignedCnt ? _assignedCnt + ' чел.' : 'не назначена'} · ${_projThr}/${_pLoad} ед.</span>
-        <span style="flex:1;text-align:right;color:${paceColor}">+${_pace.withF}%/мес${speedLabel}${fatigueLabel} · ~${_pace.mthsLeft} мес. до завершения</span>
+        <span style="flex:1;text-align:right;color:${paceColor}">+${_pace.withF}%/мес${(_pLoad > 0 && _projThr / _pLoad >= 1.5) ? ' <span style=\'color:var(--muted)\'>(кэп ×1.5)</span>' : ''}${speedLabel}${fatigueLabel} · ~${_pace.mthsLeft} мес. до завершения</span>
       </div>`;
     }
 
@@ -727,9 +727,11 @@ function renderGame() {
           ? `<span style="font-size:10px;color:var(--amber)">⚠ не хватает ${Math.round(pLoad - pThr)} ед. — кликни по свободным чипам</span>`
           : '';
 
+      const capped = pLoad > 0 && pThr / pLoad >= 1.5;
+      const wasteUnits = capped ? Math.round(pThr - pLoad * 1.5) : 0;
       return `<div style="margin-top:6px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px">
-          <span style="font-size:10px;color:var(--sub)">👥 Команда на проекте · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · <b style="color:${barCol}">${effPct}%</b></span>
+          <span style="font-size:10px;color:var(--sub)">👥 Команда на проекте · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · <b style="color:${barCol}">${effPct}%${capped ? ' <span style=\'color:var(--muted);font-weight:400\'>макс</span>' : ''}</b></span>
           <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px;flex-shrink:0;white-space:nowrap"
             onclick="openAssignModal('${c.id}')">Подробнее</button>
         </div>
@@ -737,6 +739,7 @@ function renderGame() {
           <div style="height:100%;width:${barW}%;background:${barCol};border-radius:2px;transition:width .4s"></div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center">${chips.join('')}</div>
+        ${wasteUnits > 0 ? `<div style="margin-top:3px"><span style="font-size:10px;color:var(--amber)">⚠ Избыток ${wasteUnits} ед. сверх кэпа ×1.5 — без эффекта. Переведи людей на другие проекты</span></div>` : ''}
         ${hintRow ? `<div style="margin-top:3px">${hintRow}</div>` : ''}
       </div>`;
     })();
@@ -1774,6 +1777,7 @@ function _renderAssignModal() {
     <div style="font-size:10px;color:var(--sub);margin-top:4px">
       выделено ${Math.round(pThr)} из ${pLoad} мощн. (тир ${client.tier})
       ${effPct < 60 ? ' · <span style="color:var(--red)">⚠ мало — проект идёт очень медленно</span>' :
+        effPct >= 150 ? ' · <span style="color:var(--amber)">кэп ×1.5 достигнут — лишняя мощность не ускоряет</span>' :
         effPct >= 100 ? ' · <span style="color:var(--green)">✓ достаточно</span>' : ''}
     </div>
   </div>
