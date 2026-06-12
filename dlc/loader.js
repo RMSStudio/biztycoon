@@ -26,6 +26,16 @@ const DLC = (() => {
       scripts: ['dlc/roguelite/roguelite.js'],
       styles:  [],
     },
+    {
+      id:      'strategy',
+      name:    'Стратегическая сессия',
+      icon:    '🧭',
+      version: '0.1',
+      desc:    'B2B-режим: симулятор бизнес-гипотез — детерминированный seed, цифровой двойник компании, ветки гипотез со сравнением.',
+      status:  'wip',
+      scripts: ['dlc/strategy/strategy.js'],
+      styles:  [],
+    },
     // Место для будущих DLC:
     // { id:'hardcore', name:'Hardcore', icon:'💀', status:'locked', ... },
   ];

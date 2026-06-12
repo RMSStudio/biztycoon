@@ -1,0 +1,20 @@
+{
+  "company": "IT-аутсорс студия (пример)",
+  "money": 850000,
+  "overhead": 60000,
+  "startReputation": 65,
+
+  "staff": [
+    { "name": "Сооснователь-техлид", "role": "developer", "grade": "senior", "salary": 120000, "qStat": 8, "loyalty": 95, "monthsWithAgency": 30 },
+    { "name": "Лид дизайна",         "role": "designer",  "grade": "middle", "salary": 75000,  "qStat": 7, "loyalty": 85, "monthsWithAgency": 24 },
+    { "name": "Лид СММ",             "role": "smm",       "grade": "middle", "salary": 60000,  "qStat": 6, "volume": 8, "loyalty": 80, "monthsWithAgency": 18 },
+    { "name": "Разработчик 1",       "role": "developer", "grade": "middle", "salary": 85000,  "qStat": 6, "loyalty": 70, "monthsWithAgency": 12 },
+    { "name": "Разработчик 2",       "role": "developer", "grade": "junior", "salary": 50000,  "qStat": 4, "loyalty": 75, "monthsWithAgency": 6 }
+  ],
+
+  "contracts": [
+    { "name": "Лендинг для застройщика",      "tier": 1, "budgetLeft": 180000,  "paidAlready": 90000,  "progressPct": 55, "monthsLeft": 1, "clientMood": 75, "note": "Финальная вёрстка" },
+    { "name": "Чат-бот для клиники",          "tier": 2, "budgetLeft": 640000,  "paidAlready": 160000, "progressPct": 30, "monthsLeft": 3, "clientMood": 68, "note": "Интеграции в работе" },
+    { "name": "Dev-архитектура трансляций",   "tier": 2, "budgetLeft": 1100000, "paidAlready": 0,      "progressPct": 10, "monthsLeft": 5, "clientMood": 72, "note": "Стартовали в этом месяце" }
+  ]
+}

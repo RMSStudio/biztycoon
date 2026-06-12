@@ -1,0 +1,12 @@
+{
+  "id": "strategy",
+  "name": "Стратегическая сессия",
+  "icon": "🧭",
+  "version": "0.1",
+  "status": "wip",
+  "description": "B2B-режим: симулятор проверки бизнес-гипотез. Сидируемый RNG, импорт цифрового двойника компании, ветки гипотез со сравнением.",
+  "author": "BizTycoon B2B",
+  "scripts": ["strategy.js"],
+  "styles": [],
+  "notes": "Ядро игры не модифицируется: модуль цепляется через EventBus и обёртки. См. backlog/design_b2b_edition.md"
+}
