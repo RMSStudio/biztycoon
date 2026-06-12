@@ -446,8 +446,21 @@ function renderGame() {
   // Забота о команде: повторяемые акции (recovery вне дерева, v3.4)
   { const host=document.getElementById('recovery-actions');
     if (host) {
+      // Индикатор усталости — там же, где её лечат (фикс: была видна только в метриках)
+      const _ft = Math.round(G.teamFatigue || 0);
+      const _ftCol = _ft >= 85 ? 'var(--red)' : _ft >= 60 ? 'var(--amber)' : _ft >= 30 ? '#e8a838' : 'var(--green)';
+      const _ftLbl = _ft >= 85 ? 'Кризис' : _ft >= 60 ? 'Выгорание' : _ft >= 30 ? 'Напряжение' : 'Норма';
+      const _ftHead = `<div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+          <span style="color:var(--sub)">😴 Усталость команды</span>
+          <span style="color:${_ftCol};font-weight:700">${_ft} · ${_ftLbl}</span>
+        </div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${_ft}%;background:${_ftCol};border-radius:2px;transition:width .3s"></div>
+        </div>
+      </div>`;
       const acts=(UPGRADES||[]).filter(u=>!u.treePos && (u.fatigueReduce || !u.oneTime));
-      host.innerHTML = acts.map(u=>{
+      host.innerHTML = _ftHead + acts.map(u=>{
         const cd=(G.fatigueActionCooldowns||{})[u.id]||0;
         const ftGate=u.minFatigue && (G.teamFatigue||0)<u.minFatigue;
         const dis=cd>0||ftGate||G.money<u.cost||G.actions<u.days;
