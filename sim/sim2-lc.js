@@ -276,7 +276,7 @@ function runGame(runIdx) {
     });
 
     // 2г) Прокачка качества: Q-перки открывают T3-проекты (minQ 20–35)
-    for (const uid of ['tools_q','training_q','standards_q','consultant_q']) {
+    for (const uid of ['tools_q','training_q','consultant_q','standards_q']) {
       const def = UPGRADES.find(u => u.id === uid);
       if (!def || G.upgrades[uid]) continue;
       if (G.money > def.cost + 400000 && G.actions >= def.days + 3) buyUpgrade(uid);

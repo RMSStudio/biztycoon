@@ -276,6 +276,24 @@ function renderGame() {
   { const h=document.getElementById('hire-cost-label');    if (h) h.textContent = `−${HIRE_COST} дн.`;
     const r=document.getElementById('refresh-cost-label'); if (r) r.textContent = `−${SCOUT_COST} дн.`;
     const sc=document.getElementById('scout-cost-label');  if (sc) sc.textContent = `−${SCOUT_COST} дн.`; }
+  // Забота о команде: повторяемые акции (recovery вне дерева, v3.4)
+  { const host=document.getElementById('recovery-actions');
+    if (host) {
+      const acts=(UPGRADES||[]).filter(u=>!u.treePos && (u.fatigueReduce || !u.oneTime));
+      host.innerHTML = acts.map(u=>{
+        const cd=(G.fatigueActionCooldowns||{})[u.id]||0;
+        const ftGate=u.minFatigue && (G.teamFatigue||0)<u.minFatigue;
+        const dis=cd>0||ftGate||G.money<u.cost||G.actions<u.days;
+        const eff=u.fatigueReduce?`😴 −${u.fatigueReduce}`:`Q +${u.qBonus} (мес)`;
+        const note=cd>0?`⏳ ${cd} мес.`:ftGate?`уст. ≥${u.minFatigue}`:`${fmtK(u.cost)} · ${u.days} дн.`;
+        return `<button class="btn btn-xs btn-ghost" ${dis?'disabled':''} onclick="buyUpgrade('${u.id}')"
+          style="display:flex;justify-content:space-between;gap:6px;width:100%;text-align:left">
+          <span>${u.icon} ${u.name}</span>
+          <span style="color:var(--teal)">${eff}</span>
+          <span style="color:var(--muted);font-size:10px;flex-shrink:0">${note}</span>
+        </button>`;
+      }).join('');
+    } }
   const scoutBtn=document.getElementById('btn-scout');
   scoutBtn.disabled=!hasPool && G.actions<SCOUT_COST;
   scoutBtn.innerHTML=hasPool
@@ -1667,7 +1685,10 @@ function unassignAndRefresh(staffId, projectId) {
 // ══════════════════════════════════════════════════════
 function _renderPerkTree() {
   const NODE_W = 68, NODE_H = 66, GAP_X = 12, GAP_Y = 20, HDR_H = 15;
-  const COLS = 4, ROWS = 4;
+  // Дерево 2.0: размер сетки и ветки — из данных сценария
+  const _treeNodes = (UPGRADES || []).filter(p => p.treePos);
+  const COLS = Math.max(...(_treeNodes.map(p => p.treePos.col)), 3) + 1;
+  const ROWS = Math.max(...(_treeNodes.map(p => p.treePos.row)), 3) + 1;
   const W = COLS * NODE_W + (COLS - 1) * GAP_X; // 308px
   const H = HDR_H + ROWS * NODE_H + (ROWS - 1) * GAP_Y; // 339px
 
@@ -1676,11 +1697,11 @@ function _renderPerkTree() {
   const ncx = col => nx(col) + NODE_W / 2;
   const ncy = row => ny(row) + NODE_H / 2;
 
-  const COL_LABELS = ['Качество', 'Скорость', 'Команда', 'Репутация'];
-  const COL_COLORS = [
-    'rgba(45,212,191,.6)', 'rgba(99,102,241,.6)',
-    'rgba(249,115,22,.6)', 'rgba(139,92,246,.6)',
-  ];
+  const _branches  = SCENARIO.upgradeBranches || [];
+  const COL_LABELS = _branches.length ? _branches.map(b => b.label)
+    : ['Качество', 'Скорость', 'Команда', 'Репутация', 'Сделки'];
+  const COL_COLORS = _branches.length ? _branches.map(b => b.color)
+    : ['rgba(45,212,191,.6)', 'rgba(99,102,241,.6)', 'rgba(249,115,22,.6)', 'rgba(139,92,246,.6)', 'rgba(210,153,34,.7)'];
 
   // Lookup: "col,row" → perk
   const treeMap = {};
@@ -1690,6 +1711,8 @@ function _renderPerkTree() {
   // Row-0 и repeatables всегда доступны; остальные — если есть смежный купленный oneTime перк
   function isUnlocked(p) {
     if (!p.oneTime) return true;
+    // Дерево 2.0: явные связи (включая кросс-веточные) приоритетнее соседства
+    if (p.requires && p.requires.length) return p.requires.every(id => !!G.upgrades[id]);
     if (p.treePos.row === 0) return true;
     const { col, row } = p.treePos;
     const nbrs = [gn(col, row-1), gn(col, row+1), gn(col-1, row), gn(col+1, row)]
@@ -1697,8 +1720,31 @@ function _renderPerkTree() {
     return nbrs.some(n => !!G.upgrades[n.id]);
   }
 
-  // SVG-линии между соседними узлами
+  // Узел закрыт выбором взаимоисключающей ветки?
+  const _byId = {};
+  (UPGRADES || []).forEach(u => { _byId[u.id] = u; });
+  function isMutexLocked(p) {
+    return (p.excludes || []).some(id => !!G.upgrades[id]);
+  }
+
+  // SVG-линии между соседними узлами + кросс-связи requires
   let lines = '';
+  _treeNodes.forEach(p => {
+    (p.requires || []).forEach(rid => {
+      const r = _byId[rid];
+      if (!r || !r.treePos) return;
+      if (r.treePos.col === p.treePos.col) return; // вертикаль рисуется обычной сеткой
+      const done = !!G.upgrades[rid];
+      lines += `<line x1="${ncx(r.treePos.col)}" y1="${ncy(r.treePos.row)}" x2="${ncx(p.treePos.col)}" y2="${ncy(p.treePos.row)}"
+        stroke="${done ? 'rgba(45,212,191,.45)' : 'rgba(255,255,255,.10)'}" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+    });
+    (p.excludes || []).forEach(xid => {
+      const r = _byId[xid];
+      if (!r || !r.treePos || xid < p.id) return; // одна линия на пару
+      lines += `<line x1="${ncx(r.treePos.col)}" y1="${ncy(r.treePos.row)}" x2="${ncx(p.treePos.col)}" y2="${ncy(p.treePos.row)}"
+        stroke="rgba(248,81,73,.30)" stroke-width="1.5" stroke-dasharray="2,4"/>`;
+    });
+  });
   for (let col = 0; col < COLS; col++) {
     for (let row = 0; row < ROWS; row++) {
       const p = gn(col, row);  if (!p) continue;
@@ -1736,6 +1782,7 @@ function _renderPerkTree() {
     const bought     = p.oneTime && !!G.upgrades[p.id];
     const tempActive = !p.oneTime && !p.fatigueReduce && G.tempQBonus >= p.qBonus;
     const unlocked   = isUnlocked(p);
+    const mutexLock  = isMutexLocked(p);
     const draft      = !!p.draft;
     const onCd       = p.fatigueReduce ? ((G.fatigueActionCooldowns || {})[p.id] || 0) > 0 : false;
     const ftGate     = !!(p.minFatigue && (G.teamFatigue || 0) < p.minFatigue);
@@ -1743,7 +1790,9 @@ function _renderPerkTree() {
 
     // Визуальное состояние узла
     let border, bg, op, cur;
-    if (bought || tempActive) {
+    if (mutexLock && !bought) {
+      border = '1.5px solid rgba(248,81,73,.35)'; bg = 'rgba(248,81,73,.05)'; op = .45; cur = 'not-allowed';
+    } else if (bought || tempActive) {
       border = '1.5px solid rgba(63,185,80,.65)'; bg = 'rgba(63,185,80,.11)'; op = 1; cur = 'default';
     } else if (draft) {
       border = '1.5px dashed rgba(210,153,34,.45)'; bg = 'rgba(210,153,34,.04)'; op = .88; cur = 'pointer';
@@ -1773,6 +1822,7 @@ function _renderPerkTree() {
     if (!bought && !tempActive) {
       if (onCd)   subLine = `<div style="font-size:7px;color:var(--muted)">⏳ ${(G.fatigueActionCooldowns||{})[p.id]} мес.</div>`;
       else if (ftGate) subLine = `<div style="font-size:7px;color:var(--amber)">уст. ≥${p.minFatigue}</div>`;
+      else if (mutexLock) subLine = `<div style="font-size:7px;color:var(--red)">⛔ выбор сделан</div>`;
       else        subLine = `<div style="font-size:7.5px;color:var(--muted)">${fmtK(p.cost)} · ${p.days||1} дн.</div>`;
     }
 
@@ -1785,7 +1835,7 @@ function _renderPerkTree() {
           ? `<span style="position:absolute;top:3px;right:4px;font-size:10px;opacity:.25">🔒</span>`
           : '';
 
-    const clickable  = !bought && !tempActive && (draft || (unlocked && !onCd && !ftGate));
+    const clickable  = !bought && !tempActive && !mutexLock && (draft || (unlocked && !onCd && !ftGate));
     const onclickStr = clickable ? `onclick="buyUpgrade('${p.id}')"` : '';
     const shortName  = p.name.length > 14 ? p.name.substring(0, 13) + '…' : p.name;
 

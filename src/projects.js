@@ -633,7 +633,7 @@ const Projects = (() => {
         ...(() => {
           const baseChance = client.prepayChance ?? [0, .25, .35, .45, .50, .55, .60, .65][client.tier || 1] ?? 0;
           if (baseChance <= 0) return [];
-          const chance = Math.min(0.95, baseChance + (hasRole('lawyer') ? 0.15 : 0));
+          const chance = Math.min(0.95, baseChance + (hasRole('lawyer') ? 0.15 : 0) + (G.perkPrepayBonus || 0));
           return [{
             text: `Попробовать выбить аванс 30% (шанс ~${Math.round(chance * 100)}%)`,
             desc: hasRole('lawyer')
@@ -1255,7 +1255,7 @@ const Projects = (() => {
     const quality   = client._lcQualityBonus || 0;
     const risk      = client._lcRisk || 0;
     const revisions = client._lcRevisionCount || 0;
-    const payout    = client._totalBudget || 0;
+    const payout    = Math.round((client._totalBudget || 0) * (1 + (G.perkPayoutMult || 0)));
 
     G.money += payout;
     G.clientEarnings = G.clientEarnings || {};

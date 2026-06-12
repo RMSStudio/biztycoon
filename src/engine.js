@@ -142,7 +142,7 @@ function startGame() {
   G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
-  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
+  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
   // ИИ-нейросеть
   G.ai = {
     purchased:         false,   // куплен доступ
@@ -784,6 +784,13 @@ function buyUpgrade(id) {
   const def = UPGRADES.find(u => u.id === id);
   if (!def) return;
   if (def.draft) { notify('⚗ Этот перк в разработке — появится в следующем обновлении', 'info'); return; }
+  // Дерево 2.0: связи и взаимоисключения
+  if (def.requires && def.requires.some(id => !G.upgrades[id])) {
+    notify('🔗 Сначала изучи связанные узлы дерева', 'error'); return;
+  }
+  if (def.excludes && def.excludes.some(id => G.upgrades[id])) {
+    notify('⛔ Закрыто выбором другой ветки', 'error'); return;
+  }
   if (def.oneTime && G.upgrades[id]) { notify('Уже куплено ✓','error'); return; }
   if (!def.oneTime && !def.fatigueReduce && G.tempQBonus >= def.qBonus) { notify('Фриланс уже активен этот месяц','error'); return; }
   if (G.actions < def.days) { notify(`Нужно ≥${def.days} дн.`,'error'); return; }
@@ -819,10 +826,21 @@ function buyUpgrade(id) {
     if (def.qBonus)    G.qualityBonus += def.qBonus;
     if (def.speedBonus) G.speedUpgrades = Math.round(((G.speedUpgrades||0) + def.speedBonus) * 1000) / 1000;
     if (def.repBonus)  G.reputation = clamp(G.reputation + def.repBonus, 0, 100);
+    // Пассивные пермы дерева 2.0 (постоянные, в отличие от recovery-акций)
+    if (def.fatigueRateMult) G.perkFatigueMult   = Math.round(((G.perkFatigueMult ?? 1) * def.fatigueRateMult) * 100) / 100;
+    if (def.recoveryBonus)   G.perkRecoveryBonus = (G.perkRecoveryBonus || 0) + def.recoveryBonus;
+    if (def.prepayBonus)     G.perkPrepayBonus   = Math.round(((G.perkPrepayBonus || 0) + def.prepayBonus) * 100) / 100;
+    if (def.payoutMult)      G.perkPayoutMult    = Math.round(((G.perkPayoutMult || 0) + def.payoutMult) * 100) / 100;
+    if (def.penaltyShield)   G.perkPenaltyShield = true;
     const parts = [];
     if (def.qBonus)    parts.push(`Q +${def.qBonus}`);
     if (def.speedBonus) parts.push(`Speed +${Math.round(def.speedBonus*100)}%`);
     if (def.repBonus)  parts.push(`Реп +${def.repBonus}`);
+    if (def.fatigueRateMult) parts.push(`рост усталости ×${def.fatigueRateMult}`);
+    if (def.recoveryBonus)   parts.push(`отдых +${def.recoveryBonus}/мес`);
+    if (def.prepayBonus)     parts.push(`аванс +${Math.round(def.prepayBonus*100)}%`);
+    if (def.payoutMult)      parts.push(`выплаты +${Math.round(def.payoutMult*100)}%`);
+    if (def.penaltyShield)   parts.push(`просрочки −50% репутации`);
     const label = parts.join(', ') || '✓';
     addLog(`${def.icon} ${def.name}: ${label}`, 'teal');
     notify(`${def.icon} ${def.name} — ${label}!`, 'success');
@@ -1231,6 +1249,9 @@ function advanceMonth() {
     if (fd > 0 && hrGrade === 'sr') fd = Math.round(fd * 0.55);
     // HR Sr дополнительно даёт пассивное восстановление −2/мес всегда
     if (hrGrade === 'sr') fd -= 2;
+    // Пассивки дерева 2.0: перманентное замедление роста и ускорение отдыха
+    if (fd > 0) fd = Math.round(fd * (G.perkFatigueMult ?? 1));
+    if (fd < 0) fd -= (G.perkRecoveryBonus || 0);
     G.teamFatigue = clamp((G.teamFatigue||0) + fd, 0, 100);
   }
   const fatigueMult = getFatigueMult();
@@ -1411,7 +1432,7 @@ function advanceMonth() {
       : (c._monthsSigned||0);
     const _deadline = Math.round((c._duration||3) * 1.6) + 2;
     if (!c.oneTime && c._duration && _effMon > _deadline && (c._progress||0) < 100) {
-      const pen = hasRole('lawyer') ? 1 : 2;
+      const pen = (hasRole('lawyer') || G.perkPenaltyShield) ? 1 : 2;
       G.reputation = clamp(G.reputation - pen, 0, 100);
       addLog(`⏰ ${c.name}: просрочен на ${_effMon - _deadline} мес. — −${pen} репутации${hasRole('lawyer')?' (юрист −50%)':''}`, 'red');
     }

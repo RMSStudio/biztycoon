@@ -876,7 +876,7 @@ window.SCENARIO_DATA = {
       "id": "tools_q",
       "icon": "🧮",
       "name": "Скоринговая модель",
-      "desc": "Автоматическая оценка заёмщиков — меньше плохих долгов.",
+      "desc": "Автоматическая оценка заёмщиков.",
       "cost": 30000,
       "days": 2,
       "qBonus": 4,
@@ -892,7 +892,7 @@ window.SCENARIO_DATA = {
       "id": "training_q",
       "icon": "🎓",
       "name": "Школа андеррайтинга",
-      "desc": "Обучение аналитиков разбору сложных кейсов.",
+      "desc": "Системное обучение специалистов.",
       "cost": 50000,
       "days": 4,
       "qBonus": 7,
@@ -902,7 +902,10 @@ window.SCENARIO_DATA = {
       "treePos": {
         "col": 0,
         "row": 1
-      }
+      },
+      "requires": [
+        "tools_q"
+      ]
     },
     {
       "id": "consultant_q",
@@ -918,16 +921,19 @@ window.SCENARIO_DATA = {
       "treePos": {
         "col": 0,
         "row": 2
-      }
+      },
+      "requires": [
+        "training_q"
+      ]
     },
     {
       "id": "standards_q",
       "icon": "📐",
       "name": "Базель по-домашнему",
-      "desc": "Внутренние нормативы достаточности и резервов.",
+      "desc": "Вершина пути качества. Закрывает «Конвейер».",
       "cost": 100000,
       "days": 4,
-      "qBonus": 5,
+      "qBonus": 6,
       "repBonus": 2,
       "oneTime": true,
       "speedBonus": 0,
@@ -935,13 +941,18 @@ window.SCENARIO_DATA = {
         "col": 0,
         "row": 3
       },
-      "draft": true
+      "requires": [
+        "consultant_q"
+      ],
+      "excludes": [
+        "ai_workflow"
+      ]
     },
     {
       "id": "agile",
       "icon": "⚙️",
       "name": "Цифровой документооборот",
-      "desc": "Заявки без бумаги — конвейер ускоряется.",
+      "desc": "Процессы без лишних согласований.",
       "cost": 45000,
       "days": 4,
       "qBonus": 0,
@@ -957,7 +968,7 @@ window.SCENARIO_DATA = {
       "id": "scrum",
       "icon": "🔁",
       "name": "Кредитный конвейер",
-      "desc": "Типовые сделки идут по выделенной линии.",
+      "desc": "Типовые сделки — по выделенной линии.",
       "cost": 70000,
       "days": 4,
       "qBonus": 0,
@@ -967,13 +978,16 @@ window.SCENARIO_DATA = {
       "treePos": {
         "col": 1,
         "row": 1
-      }
+      },
+      "requires": [
+        "agile"
+      ]
     },
     {
       "id": "automation",
       "icon": "🤖",
       "name": "RPA-роботизация",
-      "desc": "Роботы заполняют формы вместо операционистов.",
+      "desc": "Роботы заполняют формы.",
       "cost": 95000,
       "days": 6,
       "qBonus": 0,
@@ -983,13 +997,16 @@ window.SCENARIO_DATA = {
       "treePos": {
         "col": 1,
         "row": 2
-      }
+      },
+      "requires": [
+        "scrum"
+      ]
     },
     {
       "id": "ai_workflow",
       "icon": "🧠",
       "name": "ИИ-андеррайтинг",
-      "desc": "Модель читает выписки быстрее человека.",
+      "desc": "Вершина пути скорости. Требует инструментарий качества. Закрывает «Стандарты».",
       "cost": 140000,
       "days": 6,
       "qBonus": 3,
@@ -1000,7 +1017,244 @@ window.SCENARIO_DATA = {
         "col": 1,
         "row": 3
       },
-      "draft": true
+      "requires": [
+        "automation",
+        "tools_q"
+      ],
+      "excludes": [
+        "standards_q"
+      ]
+    },
+    {
+      "id": "team_rituals",
+      "icon": "🧘",
+      "name": "Регламенты отделения",
+      "desc": "Здоровый ритм: рост усталости −15% навсегда.",
+      "cost": 25000,
+      "days": 2,
+      "qBonus": 0,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 2,
+        "row": 0
+      },
+      "fatigueRateMult": 0.85
+    },
+    {
+      "id": "team_dms",
+      "icon": "🏥",
+      "name": "ДМС и спорт",
+      "desc": "Команда восстанавливается на +3/мес быстрее.",
+      "cost": 45000,
+      "days": 2,
+      "qBonus": 0,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 2,
+        "row": 1
+      },
+      "recoveryBonus": 3,
+      "requires": [
+        "team_rituals"
+      ]
+    },
+    {
+      "id": "mentorship",
+      "icon": "🌱",
+      "name": "Кадровый резерв",
+      "desc": "Опытные растят молодых: +2 Q, рост усталости ещё −10%.",
+      "cost": 50000,
+      "days": 4,
+      "qBonus": 2,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 2,
+        "row": 2
+      },
+      "fatigueRateMult": 0.9,
+      "requires": [
+        "team_dms"
+      ]
+    },
+    {
+      "id": "team_culture",
+      "icon": "🏛",
+      "name": "Культура банка",
+      "desc": "Люди остаются ради людей: рост усталости −20%, отдых +2/мес.",
+      "cost": 90000,
+      "days": 4,
+      "qBonus": 0,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 2,
+        "row": 3
+      },
+      "fatigueRateMult": 0.8,
+      "recoveryBonus": 2,
+      "requires": [
+        "mentorship"
+      ]
+    },
+    {
+      "id": "portfolio_site",
+      "icon": "🏢",
+      "name": "Флагманское отделение",
+      "desc": "Витрина компании.",
+      "cost": 60000,
+      "days": 2,
+      "qBonus": 0,
+      "repBonus": 4,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 3,
+        "row": 0
+      }
+    },
+    {
+      "id": "case_studies",
+      "icon": "📰",
+      "name": "Публичная отчётность",
+      "desc": "Истории успеха работают на имя.",
+      "cost": 60000,
+      "days": 2,
+      "qBonus": 0,
+      "repBonus": 4,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 3,
+        "row": 1
+      },
+      "requires": [
+        "portfolio_site"
+      ]
+    },
+    {
+      "id": "awards",
+      "icon": "🏆",
+      "name": "Премия «Банк региона»",
+      "desc": "Заявка на премию. Требует экспертный узел качества.",
+      "cost": 90000,
+      "days": 2,
+      "qBonus": 0,
+      "repBonus": 6,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 3,
+        "row": 2
+      },
+      "requires": [
+        "case_studies",
+        "consultant_q"
+      ]
+    },
+    {
+      "id": "pr_team",
+      "icon": "📣",
+      "name": "Пресс-служба",
+      "desc": "Системная работа с инфополем.",
+      "cost": 120000,
+      "days": 4,
+      "qBonus": 0,
+      "repBonus": 8,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 3,
+        "row": 3
+      },
+      "requires": [
+        "awards"
+      ]
+    },
+    {
+      "id": "negotiator",
+      "icon": "🤝",
+      "name": "Переговорщик по ставкам",
+      "desc": "Аванс выбивается на +10% чаще.",
+      "cost": 45000,
+      "days": 2,
+      "qBonus": 0,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 4,
+        "row": 0
+      },
+      "prepayBonus": 0.1
+    },
+    {
+      "id": "contracts",
+      "icon": "📋",
+      "name": "Договорная база",
+      "desc": "Просрочки бьют по репутации вдвое слабее.",
+      "cost": 60000,
+      "days": 4,
+      "qBonus": 0,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 4,
+        "row": 1
+      },
+      "penaltyShield": true,
+      "requires": [
+        "negotiator"
+      ]
+    },
+    {
+      "id": "closer",
+      "icon": "💼",
+      "name": "Синдикатор",
+      "desc": "Финальные выплаты по всем сделкам +5%.",
+      "cost": 110000,
+      "days": 4,
+      "qBonus": 0,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 4,
+        "row": 2
+      },
+      "payoutMult": 0.05,
+      "requires": [
+        "contracts"
+      ]
+    },
+    {
+      "id": "rainmaker",
+      "icon": "🌧",
+      "name": "Голос рынка",
+      "desc": "Вершина сделок: ещё +5% к выплатам и +5% к авансам. Требует награды.",
+      "cost": 160000,
+      "days": 6,
+      "qBonus": 0,
+      "repBonus": 0,
+      "oneTime": true,
+      "speedBonus": 0,
+      "treePos": {
+        "col": 4,
+        "row": 3
+      },
+      "payoutMult": 0.05,
+      "prepayBonus": 0.05,
+      "requires": [
+        "closer",
+        "awards"
+      ]
     },
     {
       "id": "paid_leave",
@@ -1014,11 +1268,7 @@ window.SCENARIO_DATA = {
       "oneTime": false,
       "speedBonus": 0,
       "fatigueReduce": 12,
-      "cooldownMonths": 1,
-      "treePos": {
-        "col": 2,
-        "row": 0
-      }
+      "cooldownMonths": 1
     },
     {
       "id": "teambuilding",
@@ -1032,11 +1282,7 @@ window.SCENARIO_DATA = {
       "oneTime": false,
       "speedBonus": 0,
       "fatigueReduce": 22,
-      "cooldownMonths": 2,
-      "treePos": {
-        "col": 2,
-        "row": 1
-      }
+      "cooldownMonths": 2
     },
     {
       "id": "corp_vacation",
@@ -1051,79 +1297,7 @@ window.SCENARIO_DATA = {
       "speedBonus": 0,
       "fatigueReduce": 38,
       "cooldownMonths": 3,
-      "minFatigue": 40,
-      "treePos": {
-        "col": 2,
-        "row": 2
-      }
-    },
-    {
-      "id": "mentorship",
-      "icon": "🌱",
-      "name": "Кадровый резерв",
-      "desc": "Свои растят своих — junior-ы крепнут.",
-      "cost": 50000,
-      "days": 4,
-      "qBonus": 2,
-      "repBonus": 0,
-      "oneTime": true,
-      "speedBonus": 0,
-      "treePos": {
-        "col": 2,
-        "row": 3
-      },
-      "draft": true
-    },
-    {
-      "id": "portfolio_site",
-      "icon": "🏢",
-      "name": "Флагманское отделение",
-      "desc": "Витрина банка в центре города.",
-      "cost": 120000,
-      "days": 4,
-      "qBonus": 0,
-      "repBonus": 5,
-      "oneTime": true,
-      "speedBonus": 0,
-      "treePos": {
-        "col": 3,
-        "row": 0
-      },
-      "draft": true
-    },
-    {
-      "id": "case_studies",
-      "icon": "📰",
-      "name": "Публичная отчётность",
-      "desc": "Прозрачность, которую замечают и клиенты, и регулятор.",
-      "cost": 60000,
-      "days": 2,
-      "qBonus": 0,
-      "repBonus": 4,
-      "oneTime": true,
-      "speedBonus": 0,
-      "treePos": {
-        "col": 3,
-        "row": 1
-      },
-      "draft": true
-    },
-    {
-      "id": "awards",
-      "icon": "🏆",
-      "name": "Премия «Банк региона»",
-      "desc": "Заявка на отраслевую премию года.",
-      "cost": 90000,
-      "days": 2,
-      "qBonus": 0,
-      "repBonus": 6,
-      "oneTime": true,
-      "speedBonus": 0,
-      "treePos": {
-        "col": 3,
-        "row": 2
-      },
-      "draft": true
+      "minFatigue": 40
     },
     {
       "id": "freelance_q",
@@ -1135,11 +1309,7 @@ window.SCENARIO_DATA = {
       "qBonus": 6,
       "repBonus": 0,
       "oneTime": false,
-      "speedBonus": 0,
-      "treePos": {
-        "col": 3,
-        "row": 3
-      }
+      "speedBonus": 0
     }
   ],
   "events": [
@@ -1600,5 +1770,27 @@ window.SCENARIO_DATA = {
         "passiveV": 5
       }
     ]
-  }
+  },
+  "upgradeBranches": [
+    {
+      "label": "Портфель",
+      "color": "rgba(45,212,191,.65)"
+    },
+    {
+      "label": "Операции",
+      "color": "rgba(99,102,241,.65)"
+    },
+    {
+      "label": "Команда",
+      "color": "rgba(249,115,22,.65)"
+    },
+    {
+      "label": "Репутация",
+      "color": "rgba(139,92,246,.65)"
+    },
+    {
+      "label": "Сделки",
+      "color": "rgba(210,153,34,.7)"
+    }
+  ]
 };
