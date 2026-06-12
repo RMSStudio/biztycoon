@@ -643,7 +643,7 @@ function renderGame() {
       resourceRow = `
       <div style="margin-top:7px;display:flex;align-items:center;gap:8px;font-size:10px">
         <span style="color:var(--sub)">⚙️ Команда: ${_assignedCnt ? _assignedCnt + ' чел.' : 'не назначена'} · ${_projThr}/${_pLoad} ед.</span>
-        <span style="flex:1;text-align:right;color:${paceColor}">+${_pace.withF}%/мес${(_pLoad > 0 && _projThr / _pLoad >= 1.5) ? ' <span style=\'color:var(--muted)\'>(кэп ×1.5)</span>' : ''}${speedLabel}${fatigueLabel} · ~${_pace.mthsLeft} мес. до завершения</span>
+        <span style="flex:1;text-align:right;color:${paceColor}">+${_pace.withF}%/мес${(_pLoad > 0 && _projThr / _pLoad >= 1.5) ? ' <span style=\'color:var(--muted)\'>(кэп ×1.5)</span>' : ''}${speedLabel}${fatigueLabel} · этап ~${_pace.mthsLeft} мес.${(() => { const _full = (typeof _projectPaceMonths === 'function' && c._lcPhase && c._lcPhase.startsWith('work_')) ? _projectPaceMonths(c) : null; return (_full != null && _full !== _pace.mthsLeft) ? ` <span style='color:var(--sub)'>· проект ~${_full} мес.</span>` : ''; })()}</span>
       </div>`;
     }
 

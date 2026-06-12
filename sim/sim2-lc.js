@@ -83,9 +83,20 @@ const FILES = [
   'src/projects.js',
   'src/staff.js',
 ];
-const engineSrc = FILES
+let engineSrc = FILES
   .map(f => `// ===== ${f} =====\n` + fs.readFileSync(path.join(ROOT, f), 'utf8'))
   .join('\n;\n');
+
+// ── A/B/C тест кэпа эффективности: --eff-cap=hard|soft|none ──
+const CAP_MODE = (process.argv.find(a => a.startsWith('--eff-cap=')) || '').split('=')[1] || 'hard';
+const CAP_FORMULAS = {
+  hard: 'Math.min(1.5, projThr / pLoad)',                                        // текущий
+  soft: '(projThr/pLoad <= 1 ? projThr/pLoad : 1 + Math.sqrt(projThr/pLoad - 1) * 0.5)', // убывающая отдача
+  none: '(projThr / pLoad)',                                                      // без потолка
+};
+if (CAP_MODE !== 'hard') {
+  engineSrc = engineSrc.replace('Math.min(1.5, projThr / pLoad)', CAP_FORMULAS[CAP_MODE]);
+}
 
 const BOT_SRC = String.raw`
 // ───────────────────────────────────────────────────────
@@ -360,7 +371,7 @@ const results = sandbox.__RESULTS;
 const fmtK = n => Math.abs(n) >= 1e6 ? (n/1e6).toFixed(2)+'M' : Math.round(n/1000)+'K';
 
 console.log('\n══════════════════════════════════════════════════════════════════════════════');
-console.log(`  BizTycoon v2.4 — LC LIFECYCLE TEST · ${RUNS} прогонов · только _lifecycleTest-проекты${LC_SHIELD ? ' · [LC-SHIELD: старый NPS-канал отключён]' : ''}`);
+console.log(`  [eff-cap: ${CAP_MODE}] LC TEST · ${RUNS} прогонов · только _lifecycleTest-проекты${LC_SHIELD ? ' · [LC-SHIELD: старый NPS-канал отключён]' : ''}`);
 console.log('══════════════════════════════════════════════════════════════════════════════');
 
 results.forEach(r => {
