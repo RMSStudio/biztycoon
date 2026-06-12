@@ -194,6 +194,14 @@ function getFatigueMult(g=G) {
 }
 
 // ── МОЩНОСТЬ ─────────────────────────────────────────────
+// Эффективность от перевыполнения мощности (v3.7, по A/B/C-тесту):
+// до 100% нагрузки — линейно; сверх — убывающая отдача √(избытка)×0.5.
+// ×2 мощности → 1.5, ×4 → 1.87, ×7 → 2.22. Единая точка правды для
+// движка, превью и прогнозов (в Godot переносится 1-в-1)
+function effFromRatio(r) {
+  return r <= 1 ? r : 1 + Math.sqrt(r - 1) * 0.5;
+}
+
 // Мощность одного сотрудника (целое число мощн.): grade × качество × настроение
 function calcStaffWorkUnit(s) {
   if (!s || s.status === 'fired') return 0;
@@ -1275,11 +1283,11 @@ function advanceMonth() {
     if (c.modifier?.type==='payment_delay_fixed' && (c._monthsSigned||0) <= c.modifier.val) return;
     // Per-project throughput: 2 (фаундер) + WU назначенных сотрудников
     // Нет сотрудников → efficiency ≈ 0.28 (очень медленно), Sr-разраб → ~1.0+
-    // Кэп 1.5 (было 2.5): избыток мощности ускоряет, но не схлопывает длительности —
-    // иначе сильная команда сжимала T2 с 9 мес. до ~3.5 и ломала темп партии (SIM2-3)
+    // v3.7: прогрессивная отдача вместо жёсткого кэпа 1.5 (A/B/C: 42% побед
+    // против 25%, темп сохранён) — перевыполнение ускоряет, но убывающе
     const pLoad        = getProjectLoad(c);
     const projThr      = getProjectThroughput(c);
-    const efficiency   = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+    const efficiency   = pLoad > 0 ? effFromRatio(projThr / pLoad) : 1;
     const speedMult    = getSpeed();
     // LC-проекты: _duration — суммарное время всех work-фаз; делим на их количество
     // Обычные проекты: _lcChain отсутствует → workPhaseCnt=1 → поведение прежнее

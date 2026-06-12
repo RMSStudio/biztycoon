@@ -88,14 +88,15 @@ let engineSrc = FILES
   .join('\n;\n');
 
 // ── A/B/C тест кэпа эффективности: --eff-cap=hard|soft|none ──
-const CAP_MODE = (process.argv.find(a => a.startsWith('--eff-cap=')) || '').split('=')[1] || 'hard';
-const CAP_FORMULAS = {
-  hard: 'Math.min(1.5, projThr / pLoad)',                                        // текущий
-  soft: '(projThr/pLoad <= 1 ? projThr/pLoad : 1 + Math.sqrt(projThr/pLoad - 1) * 0.5)', // убывающая отдача
-  none: '(projThr / pLoad)',                                                      // без потолка
+const CAP_MODE = (process.argv.find(a => a.startsWith('--eff-cap=')) || '').split('=')[1] || 'soft';
+// v3.7: дефолт движка — soft; режимы подменяют тело effFromRatio
+const CAP_BODIES = {
+  soft: 'return r <= 1 ? r : 1 + Math.sqrt(r - 1) * 0.5;',   // текущий движок
+  hard: 'return Math.min(1.5, r);',
+  none: 'return r;',
 };
-if (CAP_MODE !== 'hard') {
-  engineSrc = engineSrc.replace('Math.min(1.5, projThr / pLoad)', CAP_FORMULAS[CAP_MODE]);
+if (CAP_MODE !== 'soft') {
+  engineSrc = engineSrc.replace('return r <= 1 ? r : 1 + Math.sqrt(r - 1) * 0.5;', CAP_BODIES[CAP_MODE]);
 }
 
 const BOT_SRC = String.raw`

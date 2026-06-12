@@ -183,7 +183,7 @@ function _projectPaceMonths(c) {
   // Та же математика, что в advanceMonth: прогноз месяцев до 100% текущей фазы
   const pLoad   = getProjectLoad(c);
   const projThr = getProjectThroughput(c);
-  const eff     = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+  const eff     = pLoad > 0 ? effFromRatio(projThr / pLoad) : 1;
   const workCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
   const phaseDur = (c._duration || 3) / Math.max(1, workCnt);
   const perMonth = (100 / phaseDur) * eff * getSpeed() * getFatigueMult();
@@ -202,7 +202,7 @@ function forecastInflows(horizon = 6) {
   (G.activeClients || []).forEach(c => {
     if (!c._lcPhase || !c._lcPhase.startsWith('work_')) return;
     const pLoad = getProjectLoad(c), projThr = getProjectThroughput(c);
-    const eff = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+    const eff = pLoad > 0 ? effFromRatio(projThr / pLoad) : 1;
     const wPhases = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')) : ['work_0'];
     const perPhase = (100 / ((c._duration || 3) / Math.max(1, wPhases.length))) * eff * getSpeed() * getFatigueMult();
     if (perPhase <= 0) return;
@@ -251,7 +251,7 @@ function openCalendar() {
         // Поэтапная оплата: следующая треть — в конце текущей work-фазы
         if (c._lcTags && c._lcTags.payment_staged && (c._stagedPaid || 0) < 3) {
           const pLoad = getProjectLoad(c), projThr = getProjectThroughput(c);
-          const eff = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+          const eff = pLoad > 0 ? effFromRatio(projThr / pLoad) : 1;
           const workCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
           const perMonth = (100 / ((c._duration || 3) / Math.max(1, workCnt))) * eff * getSpeed() * getFatigueMult();
           if (perMonth > 0) {
@@ -268,7 +268,7 @@ function openCalendar() {
           const globalProg = ((wIdx * 100) + (c._progress || 0)) / wPhases.length;
           if (globalProg >= thr) return;
           const pLoad = getProjectLoad(c), projThr = getProjectThroughput(c);
-          const eff = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+          const eff = pLoad > 0 ? effFromRatio(projThr / pLoad) : 1;
           const perMonthGlobal = ((100 / (c._duration || 3)) * eff * getSpeed() * getFatigueMult());
           if (perMonthGlobal <= 0) return;
           const m = Math.max(1, Math.ceil((thr - globalProg) / perMonthGlobal));
@@ -616,7 +616,7 @@ function renderGame() {
       {
         const pLoad   = getProjectLoad(c);
         const projThr = getProjectThroughput(c);
-        const eff     = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+        const eff     = pLoad > 0 ? effFromRatio(projThr / pLoad) : 1;
         const workCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
         const phaseDur = (c._duration || 3) / Math.max(1, workCnt);
         raw = (100 / phaseDur) * eff * spd;
@@ -643,7 +643,7 @@ function renderGame() {
       resourceRow = `
       <div style="margin-top:7px;display:flex;align-items:center;gap:8px;font-size:10px">
         <span style="color:var(--sub)">⚙️ Команда: ${_assignedCnt ? _assignedCnt + ' чел.' : 'не назначена'} · ${_projThr}/${_pLoad} ед.</span>
-        <span style="flex:1;text-align:right;color:${paceColor}">+${_pace.withF}%/мес${(_pLoad > 0 && _projThr / _pLoad >= 1.5) ? ' <span style=\'color:var(--muted)\'>(кэп ×1.5)</span>' : ''}${speedLabel}${fatigueLabel} · этап ~${_pace.mthsLeft} мес.${(() => { const _full = (typeof _projectPaceMonths === 'function' && c._lcPhase && c._lcPhase.startsWith('work_')) ? _projectPaceMonths(c) : null; return (_full != null && _full !== _pace.mthsLeft) ? ` <span style='color:var(--sub)'>· проект ~${_full} мес.</span>` : ''; })()}</span>
+        <span style="flex:1;text-align:right;color:${paceColor}">+${_pace.withF}%/мес${(_pLoad > 0 && _projThr / _pLoad > 1.5) ? ' <span style=\'color:var(--muted)\'>(убыв. отдача)</span>' : ''}${speedLabel}${fatigueLabel} · этап ~${_pace.mthsLeft} мес.${(() => { const _full = (typeof _projectPaceMonths === 'function' && c._lcPhase && c._lcPhase.startsWith('work_')) ? _projectPaceMonths(c) : null; return (_full != null && _full !== _pace.mthsLeft) ? ` <span style='color:var(--sub)'>· проект ~${_full} мес.</span>` : ''; })()}</span>
       </div>`;
     }
 
@@ -690,10 +690,10 @@ function renderGame() {
       const team  = (G.staff || []).filter(s => s.status !== 'fired');
       const pThr  = typeof getProjectThroughput === 'function' ? getProjectThroughput(c) : 2;
       const pLoad = getProjectLoad(c);
-      const eff   = pLoad > 0 ? Math.min(1.5, pThr / pLoad) : 1;   // кэп синхронен с advanceMonth
+      const eff   = pLoad > 0 ? effFromRatio(pThr / pLoad) : 1;   // единая формула (v3.7)
       const effPct = Math.round(eff * 100);
       const barCol = effPct >= 100 ? 'var(--green)' : effPct >= 60 ? 'var(--amber)' : 'var(--red)';
-      const barW   = Math.min(100, (effPct / 150) * 100);
+      const barW   = Math.min(100, (effPct / 220) * 100);
 
       // Фаундер — всегда на каждом проекте (+2 базовых)
       const chips = [`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
@@ -727,11 +727,11 @@ function renderGame() {
           ? `<span style="font-size:10px;color:var(--amber)">⚠ не хватает ${Math.round(pLoad - pThr)} ед. — кликни по свободным чипам</span>`
           : '';
 
-      const capped = pLoad > 0 && pThr / pLoad >= 1.5;
-      const wasteUnits = capped ? Math.round(pThr - pLoad * 1.5) : 0;
+      const ratio  = pLoad > 0 ? pThr / pLoad : 1;
+      const capped = ratio > 1.5;
       return `<div style="margin-top:6px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px">
-          <span style="font-size:10px;color:var(--sub)">👥 Команда на проекте · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · <b style="color:${barCol}">${effPct}%${capped ? ' <span style=\'color:var(--muted);font-weight:400\'>макс</span>' : ''}</b></span>
+          <span style="font-size:10px;color:var(--sub)">👥 Команда на проекте · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · <b style="color:${barCol}">${effPct}%${capped ? ' <span style=\'color:var(--muted);font-weight:400\'>убыв. отдача</span>' : ''}</b></span>
           <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px;flex-shrink:0;white-space:nowrap"
             onclick="openAssignModal('${c.id}')">Подробнее</button>
         </div>
@@ -739,7 +739,7 @@ function renderGame() {
           <div style="height:100%;width:${barW}%;background:${barCol};border-radius:2px;transition:width .4s"></div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center">${chips.join('')}</div>
-        ${wasteUnits > 0 ? `<div style="margin-top:3px"><span style="font-size:10px;color:var(--amber)">⚠ Избыток ${wasteUnits} ед. сверх кэпа ×1.5 — без эффекта. Переведи людей на другие проекты</span></div>` : ''}
+        ${ratio >= 3 ? `<div style="margin-top:3px"><span style="font-size:10px;color:var(--amber)">⚠ Перевыполнение ×${ratio.toFixed(1)} — прирост минимален (√-отдача), людей выгоднее перевести</span></div>` : ''}
         ${hintRow ? `<div style="margin-top:3px">${hintRow}</div>` : ''}
       </div>`;
     })();
@@ -1753,10 +1753,10 @@ function _renderAssignModal() {
 
   const pThr  = typeof getProjectThroughput === 'function' ? getProjectThroughput(client) : 2;
   const pLoad = getProjectLoad(client);
-  const eff   = pLoad > 0 ? Math.min(1.5, pThr / pLoad) : 1;   // кэп синхронен с advanceMonth (v2.4)
+  const eff   = pLoad > 0 ? effFromRatio(pThr / pLoad) : 1;   // единая формула (v3.7)
   const effPct = Math.round(eff * 100);
   const barCol = effPct >= 100 ? 'var(--green)' : effPct >= 60 ? 'var(--amber)' : 'var(--red)';
-  const barW   = Math.min(100, (effPct / 150) * 100);
+  const barW   = Math.min(100, (effPct / 220) * 100);
 
   const sub = document.getElementById('staff-assign-subtitle');
   if (sub) sub.textContent = `${client.name} · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · ${effPct}%`;
@@ -1777,7 +1777,7 @@ function _renderAssignModal() {
     <div style="font-size:10px;color:var(--sub);margin-top:4px">
       выделено ${Math.round(pThr)} из ${pLoad} мощн. (тир ${client.tier})
       ${effPct < 60 ? ' · <span style="color:var(--red)">⚠ мало — проект идёт очень медленно</span>' :
-        effPct >= 150 ? ' · <span style="color:var(--amber)">кэп ×1.5 достигнут — лишняя мощность не ускоряет</span>' :
+        effPct >= 150 ? ' · <span style="color:var(--amber)">отдача сверх 100% убывает — каждый следующий даёт меньше</span>' :
         effPct >= 100 ? ' · <span style="color:var(--green)">✓ достаточно</span>' : ''}
     </div>
   </div>
