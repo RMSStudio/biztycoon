@@ -108,8 +108,8 @@ if (!markerRe.test(out)) {
 out = out.replace(markerRe, inlined);
 
 // ── Пишем результат ───────────────────────────────────
-const outPath = path.join(DIST, 'BizTycoon.html');
+const outPath = path.join(DIST, SCENARIO_ID === 'agency' ? 'BizTycoon.html' : `BizTycoon-${SCENARIO_ID}.html`);
 fs.writeFileSync(outPath, out, 'utf8');
 
 const kb = (fs.statSync(outPath).size / 1024).toFixed(1);
-console.log(`✅  Build OK → dist/BizTycoon.html (${kb} KB)  [scenario: ${SCENARIO_ID}]`);
+console.log(`✅  Build OK → dist/${require('path').basename(outPath)} (${kb} KB)  [scenario: ${SCENARIO_ID}]`);

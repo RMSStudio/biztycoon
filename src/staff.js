@@ -33,7 +33,11 @@ const _LF = ['Иванова','Петрова','Сидорова','Козлов�
 // ── Role Meta ─────────────────────────────────────────
 // id — English (engine compat), label — русский (UI)
 
-const ROLE_META = {
+// Data-хук сценария (v3.1): сценарий может переопределить мету ролей
+// (scenarios/bank.js → roleMeta) — генерация кандидатов получает
+// тематические лейблы/иконки без правок этого модуля
+const _SCEN_ROLE_META = (typeof SCENARIO !== 'undefined' && SCENARIO.roleMeta) || null;
+const ROLE_META = _SCEN_ROLE_META || {
   designer:   { id:'designer',   label:'Дизайнер',   emoji:'🎨', color:'#ec4899' },
   copywriter: { id:'copywriter', label:'Копирайтер', emoji:'✍️', color:'#f59e0b' },
   manager:    { id:'manager',    label:'Менеджер',   emoji:'📋', color:'#6366f1' },
@@ -45,7 +49,7 @@ const ROLE_META = {
 const ROLE_IDS = Object.keys(ROLE_META);
 
 // ── Role Categories (для найма-фильтра) ───────────────
-const ROLE_CATEGORIES = [
+const ROLE_CATEGORIES = (typeof SCENARIO !== 'undefined' && SCENARIO.roleCategories) || [
   { id: 'creative',   label: 'Дизайн',    emoji: '🎨', roles: ['designer','copywriter','smm'] },
   { id: 'tech',       label: 'Разработка', emoji: '💻', roles: ['developer'] },
   { id: 'management', label: 'Управление', emoji: '📋', roles: ['manager','hr'] },

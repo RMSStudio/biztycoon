@@ -73,10 +73,11 @@ sandbox.REGISTRY = REGISTRY;   // нужен боту для сброса мод
 vm.createContext(sandbox);
 
 // ── Загрузка движка + projects.js (lifecycle) ─────────
+const SCEN_ARG = (process.argv.find(a => a.startsWith('--scenario=')) || '').split('=')[1] || 'agency';
 const FILES = [
   'src/constants.js',
   'src/events.js',
-  'scenarios/agency.js',
+  `scenarios/${SCEN_ARG}.js`,
   'src/engine.js',
   'src/projects.js',
   'src/staff.js',
