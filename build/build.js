@@ -61,8 +61,7 @@ function read(relPath) {
 // строками + выбор по localStorage (new Function изолирует const SCENARIO)
 function scenarioBlock() {
   if (SCENARIO_ID !== 'multi') return read(`scenarios/${SCENARIO_ID}.js`);
-  const files = fs.readdirSync(path.join(ROOT, 'scenarios'))
-    .filter(f => f.endsWith('.js'));
+  const files = fs.readdirSync(path.join(ROOT, 'scenarios')).filter(f => f.endsWith('.js'));
   const map = {};
   files.forEach(f => { map[f.replace('.js', '')] = read('scenarios/' + f); });
   return [
@@ -71,9 +70,9 @@ function scenarioBlock() {
     'var SCENARIO = (function () {',
     "  var id = localStorage.getItem('bt_scenario_v1') || 'agency';",
     "  if (!__SCEN_SRC[id]) id = 'agency';",
-    "  return (new Function(__SCEN_SRC[id] + ';\nreturn SCENARIO;'))();",
+    "  return (new Function(__SCEN_SRC[id] + ';return SCENARIO;'))();",
     '})();',
-  ].join('\n');
+  ].join(String.fromCharCode(10));
 }
 
 const preEngineBlocks = [
@@ -110,6 +109,9 @@ const inlined = [
   `<script>`,
   `  initState();`,
   `  initEventBus();`,
+  `  initScenarioSelect();`,
+  `  renderSpecGrid();`,
+  `  applyScenarioChrome();`,
   `  SE.syncIntroStats();`,
   `  (function() {`,
   `    const btn = document.getElementById('btn-load-save');`,
