@@ -262,6 +262,325 @@ const STRAT = (() => {
   }
 
   // ════════════════════════════════════════════════════
+  //  MONTE-CARLO — N прогонов от текущего состояния
+  //  Синхронный цикл: браузер не перерисовывается, мерцания нет.
+  //  Рендер глушится временной подменой EventBus.emit (ядро не трогаем).
+  // ════════════════════════════════════════════════════
+  const MC_RUNS_DEFAULT = 60;
+
+  // Автопилот «консервативный»: ведёт текущие контракты, добирает проекты
+  // в свободные слоты (T1–T3, проходные по Q/V), НЕ нанимает — моделирует
+  // «продолжаем текущую линию без новых управленческих решений»
+  function _mcBotMonth() {
+    // решения work-событий: первый безопасный вариант
+    (G.activeClients || []).filter(c => c._lcPendingDecision).forEach(c => {
+      Projects.resolveWorkEvent(c.id);
+      _pumpLC();
+    });
+    // завершённые → сдаём (LC сам через advanceMonth), добор проектов
+    if ((G.activeClients || []).length < Math.min(2, getCapacity()) && G.actions >= SCOUT_COST) {
+      doScouting(); _pumpLC();
+      const Q = getQuality(), V = getVolume();
+      const pool = (G.scoutPool || []).filter(p =>
+        (p.minQ || 0) <= Q && (p.minV || 0) <= V && (p.tier || 1) <= 3 &&
+        !(G.activeClients || []).find(c => c.id.startsWith(p.id)));
+      if (pool.length) {
+        pool.sort((a, b) => ((b.oneTime?1:0)-(a.oneTime?1:0)) || ((b.tier||1)-(a.tier||1)));
+        signProject(pool[0].id); _pumpLC();
+      }
+    }
+    // расстановка: жадно по дефициту
+    const regular = (G.activeClients || []).filter(c => c._lcPhase && c._lcPhase.startsWith('work_'));
+    if (regular.length) {
+      G.staff.filter(s => s.status !== 'fired').forEach(s => unassignStaff(s._iid || s.id));
+      G.staff.filter(s => s.status !== 'fired')
+        .sort((a, b) => calcStaffWorkUnit(b) - calcStaffWorkUnit(a))
+        .forEach(s => {
+          let best = null, gap = -Infinity;
+          regular.forEach(c => { const g = getProjectLoad(c) - getProjectThroughput(c); if (g > gap) { gap = g; best = c; } });
+          if (best && gap > 0) assignStaffToProject(s._iid || s.id, best.id);
+        });
+    }
+  }
+
+  // Насос LC-модалки для автопилота (политика: команда → highlight → первый)
+  function _pumpLC() {
+    const modal = _el('lc-modal'), box = _el('lc-modal-choices');
+    if (!modal || !box) return;
+    let guard = 30;
+    while (modal.classList.contains('active') && guard-- > 0) {
+      const btns = [...box.children].filter(b => b.onclick && !b.disabled &&
+        !(b.innerHTML || '').includes('Отказаться от проекта'));
+      if (!btns.length) { modal.classList.remove('active'); break; }
+      const btn = btns.find(b => (b.innerHTML || '').includes('Назначить всю команду'))
+        || btns.find(b => (b.style.cssText || '').includes('45,212,191'))
+        || btns[0];
+      try { btn.onclick(); } catch (e) { modal.classList.remove('active'); break; }
+    }
+    if (guard <= 0) modal.classList.remove('active');
+  }
+
+  function runMonteCarlo(runs) {
+    runs = runs || MC_RUNS_DEFAULT;
+    if (typeof _snap !== 'function') { notify('Сейвы недоступны', 'error'); return; }
+    const base    = _snap();
+    const horizon = (G._strategyMode?.months || 6);
+    const fromM   = G.monthsPlayed || 0;
+    const left    = Math.max(1, horizon - fromM) ;
+
+    const origEmit = EventBus.emit;
+    const results = [];
+    let ended = false, won = false;
+    EventBus.emit = (sig, data) => {
+      if (sig === 'end_game') { ended = true; won = !!(data && data.won); return; }
+      if (sig === 'show_event' && data && data.ev && data.ev.choices) {
+        try { data.ev.choices[0].fn(G); } catch (e) {}
+      }
+      // остальные сигналы глушим: ни рендера, ни модалок
+    };
+
+    try {
+      for (let i = 0; i < runs; i++) {
+        _restore(base);
+        G._rngState = ((G._strategyMode?.seed || 42) + i * 7919) | 0;
+        ended = false; won = false;
+        let minCash = G.money, minCashM = G.month;
+        for (let m = 0; m < left && !ended; m++) {
+          _mcBotMonth();
+          advanceMonth();
+          _pumpLC();
+          if (G.money < minCash) { minCash = G.money; minCashM = G.month; }
+          if (G.money <= 0) { ended = true; }
+        }
+        results.push({
+          money: Math.round(G.money), rep: Math.round(G.reputation),
+          bankrupt: ended && !won && G.money <= 0,
+          done: (G.completedProjects || []).filter(p => !p.failed).length,
+          minCash: Math.round(minCash), minCashM,
+        });
+      }
+    } finally {
+      EventBus.emit = origEmit;
+      _restore(base);
+      Math.random = _seededRandom;
+      EventBus.emit('render');
+    }
+
+    G._strategyMode.lastMC = _mcStats(results, left);
+    _openModal(`🎲 Monte-Carlo · ${runs} прогонов · ${left} мес. вперёд`, _mcHtml(G._strategyMode.lastMC));
+  }
+
+  function _mcStats(rs, horizon) {
+    const money = rs.map(r => r.money).sort((a, b) => a - b);
+    const q = p => money[Math.min(money.length - 1, Math.floor(money.length * p))];
+    const bankrupts = rs.filter(r => r.bankrupt).length;
+    // месяц максимального кассового напряжения (мода минимумов)
+    const mFreq = {};
+    rs.forEach(r => { mFreq[r.minCashM] = (mFreq[r.minCashM] || 0) + 1; });
+    const stressM = Object.entries(mFreq).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return {
+      runs: rs.length, horizon,
+      bankruptPct: Math.round(bankrupts / rs.length * 100),
+      median: q(0.5), p25: q(0.25), p75: q(0.75), min: money[0], max: money[money.length - 1],
+      negCashPct: Math.round(rs.filter(r => r.minCash < 0).length / rs.length * 100),
+      stressMonth: stressM != null ? +stressM + 1 : null,
+      avgRep: Math.round(rs.reduce((s, r) => s + r.rep, 0) / rs.length),
+      avgDone: (rs.reduce((s, r) => s + r.done, 0) / rs.length).toFixed(1),
+      raw: money,
+    };
+  }
+
+  function _mcHtml(s) {
+    const fmtM = n => Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.round(n / 1000) + 'K';
+    const risk = s.bankruptPct >= 25 ? ['var(--red)', 'ВЫСОКИЙ РИСК'] :
+                 s.bankruptPct >= 10 ? ['var(--amber)', 'УМЕРЕННЫЙ РИСК'] : ['var(--green)', 'УСТОЙЧИВО'];
+    // гистограмма 10 корзин
+    const lo = s.min, hi = Math.max(s.max, lo + 1), buckets = new Array(10).fill(0);
+    s.raw.forEach(v => buckets[Math.min(9, Math.floor((v - lo) / (hi - lo) * 10))]++);
+    const bMax = Math.max(...buckets, 1);
+    const hist = buckets.map((b, i) => `<div title="${fmtM(lo + (hi - lo) * i / 10)}…" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end">
+      <div style="height:${Math.round(b / bMax * 48)}px;background:${(lo + (hi - lo) * (i + .5) / 10) < 0 ? 'var(--red)' : 'var(--teal)'};border-radius:2px 2px 0 0;opacity:.85"></div></div>`).join('');
+
+    return `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg);border:1px solid ${risk[0]};border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:${risk[0]}">${s.bankruptPct}%</div>
+          <div style="font-size:9px;color:var(--sub)">банкротство<br><b style="color:${risk[0]}">${risk[1]}</b></div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--teal)">${fmtM(s.median)}</div>
+          <div style="font-size:9px;color:var(--sub)">медианный финал<br>(P25 ${fmtM(s.p25)} · P75 ${fmtM(s.p75)})</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:${s.negCashPct > 20 ? 'var(--amber)' : 'var(--text)'}">${s.negCashPct}%</div>
+          <div style="font-size:9px;color:var(--sub)">кассовый разрыв<br>(минимум ниже нуля)</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--amber)">${s.stressMonth ? 'M' + s.stressMonth : '—'}</div>
+          <div style="font-size:9px;color:var(--sub)">месяц пикового<br>напряжения кассы</div></div>
+      </div>
+      <div style="display:flex;gap:2px;height:52px;align-items:flex-end;margin-bottom:4px">${hist}</div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--sub);margin-bottom:10px">
+        <span>${fmtM(s.min)}</span><span>распределение финального баланса (${s.runs} прогонов · автопилот без новых решений)</span><span>${fmtM(s.max)}</span></div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.7">
+        Детализация: диапазон ${fmtM(s.min)} … ${fmtM(s.max)} · средняя репутация ${s.avgRep} ·
+        сдано в среднем ${s.avgDone} проектов за горизонт ${s.horizon} мес.<br>
+        <span style="color:var(--muted)">Автопилот ведёт текущие контракты и добирает проекты в свободные слоты, но не нанимает —
+        прогноз отвечает на вопрос «что будет, если продолжать как есть».</span>
+      </div>`;
+  }
+
+  // ════════════════════════════════════════════════════
+  //  СКРИПТОВАННЫЕ СОБЫТИЯ ФАСИЛИТАТОРА
+  //  Обёртка advanceMonth (ядро не редактируется) — работают и в MC
+  // ════════════════════════════════════════════════════
+  const SHOCK_LIB = {
+    budget_cut:   { label: 'Клиент урезает бюджет', params: 'pct',
+      apply: p => { const c = _biggestClient(); if (!c) return 'нет активных';
+        const cut = Math.round((c._totalBudget || 0) * (p.pct || 30) / 100);
+        c._totalBudget = Math.max(0, c._totalBudget - cut);
+        return `«${c.name}»: бюджет −${Math.round(cut / 1000)}K`; } },
+    client_leaves: { label: 'Ключевой клиент уходит', params: null,
+      apply: () => { const c = _biggestClient(); if (!c) return 'нет активных';
+        G.activeClients = G.activeClients.filter(x => x.id !== c.id);
+        delete G.clientNPS[c.id];
+        return `«${c.name}» расторг контракт`; } },
+    staff_offer:  { label: 'Сотруднику делают оффер (уходит)', params: null,
+      apply: () => { const ss = G.staff.filter(s => s.status !== 'fired');
+        if (!ss.length) return 'нет штата';
+        const s = ss.sort((a, b) => calcStaffWorkUnit(b) - calcStaffWorkUnit(a))[0];
+        G.staff = G.staff.filter(x => x !== s);
+        return `${s.name} ушёл к конкуренту`; } },
+    pay_delay:    { label: 'Задержка оплаты (milestone → след. мес)', params: null,
+      apply: () => { G.delayedIncome = (G.delayedIncome || 0) + 0; // мягкий вариант: −20% mood всем
+        nudgeAllNPS(G, -8); return 'клиенты нервничают: настроение −8 у всех'; } },
+    market_dip:   { label: 'Рынок просел (бюджеты новых −20%, 3 мес)', params: null,
+      apply: () => { G._strategyMarketDip = (G.month || 0) + 3; return 'демпинг-период до M' + ((G.month || 0) + 4); } },
+    hot_lead:     { label: 'Горячий лид (жирный T2 в пуле)', params: null,
+      apply: () => { G.scoutPool = G.scoutPool || [];
+        G.scoutPool.push({ id: 'hot_lead_' + G.month, tier: 2, icon: '🔥', name: 'Горячий лид',
+          desc: 'Входящий клиент по рекомендации.', revenue: 0, minQ: 0, minV: 0, type: 'corp',
+          npsStart: 80, oneTime: false, rarity: 'rare', prepayChance: 0.8,
+          modifier: { type: 'none', val: 0, label: 'Входящий' }, modBadge: 'mb-green', prob: 1,
+          fixedBudget: [2500000, 3000000] });
+        return 'в пуле скаутинга появился «Горячий лид»'; } },
+  };
+
+  function _biggestClient() {
+    return [...(G.activeClients || [])].sort((a, b) => (b._totalBudget || 0) - (a._totalBudget || 0))[0];
+  }
+
+  const _origAdvanceMonth = (typeof advanceMonth === 'function') ? advanceMonth : null;
+  if (_origAdvanceMonth) {
+    advanceMonth = function () {
+      _origAdvanceMonth();
+      // после хода: применяем запланированные на наступивший месяц шоки
+      const evs = G._strategyMode && G._strategyMode.events;
+      if (evs) evs.forEach(ev => {
+        if (ev.fired || ev.month !== G.month) return;
+        const def = SHOCK_LIB[ev.type];
+        if (!def) { ev.fired = true; return; }
+        const res = def.apply(ev.params || {});
+        ev.fired = true;
+        addLog(`⚡ [Сценарий] ${def.label}: ${res}`, 'red');
+        notify(`⚡ ${def.label}`, 'warning');
+      });
+    };
+  }
+
+  function openEventEditor() {
+    if (!G._strategyMode) return;
+    G._strategyMode.events = G._strategyMode.events || [];
+    const opts = Object.entries(SHOCK_LIB).map(([id, d]) => `<option value="${id}">${d.label}</option>`).join('');
+    const rows = G._strategyMode.events.map((e, i) => `
+      <div style="display:flex;gap:6px;align-items:center;font-size:11px;padding:3px 0">
+        <span style="color:${e.fired ? 'var(--muted)' : 'var(--amber)'}">M${e.month + 1} · ${SHOCK_LIB[e.type]?.label || e.type}${e.params?.pct ? ' (' + e.params.pct + '%)' : ''}${e.fired ? ' · ✓ сработало' : ''}</span>
+        ${!e.fired ? `<button class="btn btn-xs btn-ghost" onclick="STRAT.removeEvent(${i})">✕</button>` : ''}
+      </div>`).join('') || '<div style="font-size:11px;color:var(--sub)">Пока пусто — добавь шок ниже.</div>';
+
+    _openModal('⚡ События сценария (фасилитатор)', `
+      ${rows}
+      <div style="display:flex;gap:6px;margin-top:12px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--sub)">Месяц</span>
+        <input id="strat-ev-month" type="number" min="${G.month + 2}" value="${G.month + 2}"
+          style="width:52px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 6px">
+        <select id="strat-ev-type" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 6px">${opts}</select>
+        <input id="strat-ev-pct" type="number" placeholder="%" value="30"
+          style="width:48px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 6px">
+        <button class="btn btn-xs" style="background:rgba(168,85,247,.15);color:rgba(168,85,247,.95);border:1px solid rgba(168,85,247,.4)"
+          onclick="STRAT.addEvent()">+ Добавить</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px">События применяются в конце указанного месяца. Действуют и в Monte-Carlo — стресс-тест стратегии с учётом запланированных шоков.</div>`);
+  }
+
+  function addEvent() {
+    const month = Math.max(G.month + 1, (parseInt(_el('strat-ev-month')?.value, 10) || G.month + 2) - 1);
+    const type  = _el('strat-ev-type')?.value;
+    const pct   = parseInt(_el('strat-ev-pct')?.value, 10) || 30;
+    if (!SHOCK_LIB[type]) return;
+    G._strategyMode.events.push({ month, type, params: { pct }, fired: false });
+    openEventEditor();
+  }
+  function removeEvent(i) { G._strategyMode.events.splice(i, 1); openEventEditor(); }
+
+  // ════════════════════════════════════════════════════
+  //  ОТЧЁТ-АРТЕФАКТ СЕССИИ (markdown, скачивается файлом)
+  // ════════════════════════════════════════════════════
+  function exportReport() {
+    const sm = G._strategyMode || {};
+    const m  = _metrics();
+    const fmtM = n => Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(2) + 'M₽' : Math.round(n / 1000) + 'K₽';
+    const lines = [];
+    lines.push(`# Отчёт стратегической сессии — ${sm.twin && sm.twin !== true ? sm.twin : 'BizTycoon'}`);
+    lines.push(`Дата: ${new Date().toLocaleDateString('ru-RU')} · seed ${sm.seed} · горизонт ${sm.months} мес. · сыграно ${G.monthsPlayed} мес.\n`);
+    lines.push(`## Текущая линия\n`);
+    lines.push(`| Показатель | Значение |\n|---|---|`);
+    lines.push(`| Баланс | **${fmtM(m.money)}** |`);
+    lines.push(`| Репутация | ${m.rep} |`);
+    lines.push(`| Штат / ФОТ | ${m.staff} чел. · ${fmtM(m.payroll)}/мес |`);
+    lines.push(`| Активные контракты | ${m.active} |`);
+    lines.push(`| Сдано / провалено | ${m.done} / ${m.failed} |\n`);
+
+    const brs = _branches();
+    if (brs.length) {
+      lines.push(`## Ветки гипотез\n`);
+      brs.forEach(b => {
+        lines.push(`### ⑂ ${b.name} (развилка на M${b.month + 1})`);
+        (b.results || []).forEach(r => {
+          lines.push(`- **${r.label}** → финал ${fmtM(r.money)} · реп ${r.rep} · штат ${r.staff} · сдано ${r.done}/пров. ${r.failed} (M${r.month + 1})`);
+        });
+        if (!(b.results || []).length) lines.push(`- (исходы не зафиксированы)`);
+        lines.push('');
+      });
+    }
+
+    if (sm.lastMC) {
+      const s = sm.lastMC;
+      lines.push(`## Monte-Carlo (${s.runs} прогонов · ${s.horizon} мес. вперёд)\n`);
+      lines.push(`- **Вероятность банкротства: ${s.bankruptPct}%**`);
+      lines.push(`- **Медианный финал: ${fmtM(s.median)}** (P25 ${fmtM(s.p25)} · P75 ${fmtM(s.p75)} · диапазон ${fmtM(s.min)}…${fmtM(s.max)})`);
+      lines.push(`- Кассовый разрыв (минимум ниже нуля): ${s.negCashPct}% прогонов`);
+      lines.push(`- Месяц пикового напряжения: ${s.stressMonth ? 'M' + s.stressMonth : '—'} · средняя репутация ${s.avgRep} · сдано в среднем ${s.avgDone}\n`);
+    }
+
+    const evs = (sm.events || []);
+    if (evs.length) {
+      lines.push(`## Заложенные события сценария\n`);
+      evs.forEach(e => lines.push(`- M${e.month + 1}: ${SHOCK_LIB[e.type]?.label || e.type}${e.fired ? ' ✓' : ''}`));
+      lines.push('');
+    }
+
+    if (typeof DECISIONS !== 'undefined' && DECISIONS.length) {
+      lines.push(`## Журнал решений (последние 30)\n`);
+      DECISIONS.slice(-30).forEach(d => lines.push(`- ${d.label}: ${d.text}`));
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `strategy-report-${Date.now()}.md`;
+    document.body.appendChild(a); a.click(); a.remove();
+    notify('📄 Отчёт сессии скачан (.md)', 'success');
+  }
+
+  // ════════════════════════════════════════════════════
   //  UI — панель режима и модалка (DOM-инжект, ядро не трогаем)
   // ════════════════════════════════════════════════════
   function _el(id) { return document.getElementById(id); }
@@ -313,7 +632,10 @@ const STRAT = (() => {
         🧭 Сессия · seed ${G._strategyMode.seed} · горизонт ${G._strategyMode.months} мес.</div>
       <div style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-xs btn-ghost" onclick="STRAT.branchPrompt()">⑂ Развилка</button>
-        <button class="btn btn-xs btn-ghost" onclick="STRAT.stampCurrentLine()">📌 Зафиксировать исход</button>
+        <button class="btn btn-xs btn-ghost" onclick="STRAT.stampCurrentLine()">📌 Исход</button>
+        <button class="btn btn-xs btn-ghost" onclick="STRAT.runMonteCarlo()">🎲 Monte-Carlo</button>
+        <button class="btn btn-xs btn-ghost" onclick="STRAT.openEventEditor()">⚡ События</button>
+        <button class="btn btn-xs btn-ghost" onclick="STRAT.exportReport()">📄 Отчёт</button>
       </div>
       ${brs.length ? `<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">` +
         brs.map(b => `<div style="display:flex;gap:4px;align-items:center;font-size:10px">
@@ -431,6 +753,7 @@ const STRAT = (() => {
   return {
     startSession, loadTwinFile,
     branchPrompt, createBranch, openBranch, openCompare, stampCurrentLine,
+    runMonteCarlo, openEventEditor, addEvent, removeEvent, exportReport,
     closeModal: _closeModal,
     _seededRandom, // для тестов
   };

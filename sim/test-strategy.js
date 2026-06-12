@@ -19,6 +19,8 @@ const sandbox={ console,Math,Date,JSON,Intl,setTimeout,clearTimeout,
 };
 sandbox.window=sandbox; sandbox.globalThis=sandbox;
 sandbox.FileReader=function(){ this.readAsText=f=>{ this.result=f._content; this.onload&&this.onload(); }; };
+sandbox.Blob=function(parts){ this._text=parts.join(''); };
+sandbox.URL={ createObjectURL:b=>{ sandbox.__REPORT=b._text; return 'blob:x'; } };
 vm.createContext(sandbox);
 
 const FILES=['src/constants.js','src/events.js','scenarios/agency.js','src/engine.js','src/projects.js','src/staff.js','src/saves.js','dlc/strategy/strategy.js'];
@@ -71,6 +73,27 @@ ok('возврат: баланс на развилке',     G.money === moneyAt
 ok('возврат: месяц на развилке',      G.month === 1);
 ok('исход прошлой линии зафиксирован', (JSON.parse(localStorage.getItem('bt_strategy_branches_v1'))[0].results||[]).length === 1);
 ok('RNG жив после рестора',           typeof Math.random() === 'number' && G._rngState != null);
+
+// ── 5. Скриптованное событие фасилитатора ──
+G._strategyMode.events = [{ month: G.month + 1, type: 'budget_cut', params: { pct: 50 }, fired: false }];
+const targetC = [...G.activeClients].sort((a,b)=>(b._totalBudget||0)-(a._totalBudget||0))[0];
+const budBefore = targetC._totalBudget;
+advanceMonth();
+ok('шок сработал в нужный месяц',     G._strategyMode.events[0].fired === true);
+ok('бюджет клиента урезан ~50%',      targetC._totalBudget <= Math.ceil(budBefore * 0.55));
+
+// ── 6. Monte-Carlo: статистика есть, реальное состояние не тронуто ──
+const stateBefore = { money: G.money, month: G.month, staff: G.staff.length };
+STRAT.runMonteCarlo(8);
+const mc = G._strategyMode.lastMC;
+ok('MC: 8 прогонов посчитаны',        mc && mc.runs === 8 && typeof mc.median === 'number');
+ok('MC: метрики риска валидны',       mc.bankruptPct >= 0 && mc.bankruptPct <= 100 && mc.min <= mc.median && mc.median <= mc.max);
+ok('MC: реальное состояние не тронуто', G.money === stateBefore.money && G.month === stateBefore.month && G.staff.length === stateBefore.staff);
+
+// ── 7. Отчёт-артефакт ──
+STRAT.exportReport();
+ok('отчёт сгенерирован',              typeof __REPORT === 'string' && __REPORT.includes('# Отчёт стратегической сессии'));
+ok('отчёт: есть Monte-Carlo и ветки', __REPORT.includes('Monte-Carlo') && __REPORT.includes('Ветки гипотез'));
 
 __OUT.push(...out);
 `;
