@@ -23,7 +23,8 @@ sandbox.Blob=function(parts){ this._text=parts.join(''); };
 sandbox.URL={ createObjectURL:b=>{ sandbox.__REPORT=b._text; return 'blob:x'; } };
 vm.createContext(sandbox);
 
-const FILES=['src/constants.js','src/events.js','scenarios/agency.js','src/engine.js','src/projects.js','src/staff.js','src/saves.js','dlc/strategy/strategy.js'];
+const FILES=['src/constants.js','src/events.js','scenarios/agency.data.js',
+  'src/scenario-loader.js','src/engine.js','src/projects.js','src/staff.js','src/saves.js','dlc/strategy/strategy.js'];
 const src=FILES.map(f=>fs.readFileSync(path.join(ROOT,f),'utf8')).join('\n;\n');
 
 const TWIN = fs.readFileSync(path.join(ROOT,'dlc/strategy/twin_example.json'),'utf8');

@@ -488,7 +488,8 @@
   (function () {
     var id = localStorage.getItem('bt_scenario_v1') || 'agency';
     if (!/^[a-z0-9_]+$/.test(id)) id = 'agency';
-    document.write('<scr' + 'ipt src="scenarios/' + id + '.js"><\/scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="scenarios/' + id + '.data.js"><\/scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="src/scenario-loader.js"><\/scr' + 'ipt>');
   })();
 </script>
 <script src="scenarios/presets/index.js"></script>

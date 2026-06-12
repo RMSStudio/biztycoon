@@ -28,7 +28,7 @@ const DIST = path.join(ROOT, 'dist');
 if (!fs.existsSync(DIST)) fs.mkdirSync(DIST);
 
 // ── Проверяем сценарий ─────────────────────────────────
-const scenarioPath = path.join(ROOT, 'scenarios', `${SCENARIO_ID}.js`);
+const scenarioPath = path.join(ROOT, 'scenarios', `${SCENARIO_ID}.data.js`);
 if (SCENARIO_ID !== 'multi' && !fs.existsSync(scenarioPath)) {
   console.error(`❌  Сценарий не найден: scenarios/${SCENARIO_ID}.js`);
   process.exit(1);
@@ -60,18 +60,21 @@ function read(relPath) {
 // Сценарный блок: одиночный — исходник как есть; мульти — все сценарии
 // строками + выбор по localStorage (new Function изолирует const SCENARIO)
 function scenarioBlock() {
-  if (SCENARIO_ID !== 'multi') return read(`scenarios/${SCENARIO_ID}.js`);
-  const files = fs.readdirSync(path.join(ROOT, 'scenarios')).filter(f => f.endsWith('.js'));
+  if (SCENARIO_ID !== 'multi')
+    return read(`scenarios/${SCENARIO_ID}.data.js`) + String.fromCharCode(10) + read('src/scenario-loader.js');
+  const files = fs.readdirSync(path.join(ROOT, 'scenarios')).filter(f => f.endsWith('.data.js'));
   const map = {};
-  files.forEach(f => { map[f.replace('.js', '')] = read('scenarios/' + f); });
+  files.forEach(f => { map[f.replace('.data.js', '')] = read('scenarios/' + f); });
   return [
     '// ── Мульти-сценарный блок (v3.1): выбор из меню, см. ui.js SCENARIO_REGISTRY ──',
     'var __SCEN_SRC = ' + JSON.stringify(map) + ';',
-    'var SCENARIO = (function () {',
+    'window.SCENARIO_DATA = (function () {',
     "  var id = localStorage.getItem('bt_scenario_v1') || 'agency';",
     "  if (!__SCEN_SRC[id]) id = 'agency';",
-    "  return (new Function(__SCEN_SRC[id] + ';return SCENARIO;'))();",
+    "  (new Function(__SCEN_SRC[id]))();",
+    "  return window.SCENARIO_DATA;",
     '})();',
+    read('src/scenario-loader.js'),
   ].join(String.fromCharCode(10));
 }
 

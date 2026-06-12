@@ -22,7 +22,8 @@ const sandbox = { console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
 sandbox.window = sandbox; sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
-const FILES = ['src/constants.js','src/events.js','scenarios/agency.js','src/engine.js','src/projects.js','src/staff.js'];
+const FILES = ['src/constants.js','src/events.js','scenarios/agency.data.js',
+  'src/scenario-loader.js','src/engine.js','src/projects.js','src/staff.js'];
 const src = FILES.map(f=>fs.readFileSync(path.join(ROOT,f),'utf8')).join('\n;\n');
 
 const DBG = String.raw`

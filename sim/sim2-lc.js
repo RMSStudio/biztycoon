@@ -77,7 +77,8 @@ const SCEN_ARG = (process.argv.find(a => a.startsWith('--scenario=')) || '').spl
 const FILES = [
   'src/constants.js',
   'src/events.js',
-  `scenarios/${SCEN_ARG}.js`,
+  `scenarios/${SCEN_ARG}.data.js`,
+  'src/scenario-loader.js',
   'src/engine.js',
   'src/projects.js',
   'src/staff.js',
