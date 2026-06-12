@@ -274,11 +274,16 @@ function _recomputeWU(s) {
 function scoutCandidates(tier) {
   const costs  = { free:0, paid:25000, premium:60000 };
   const cost   = costs[tier] ?? 0;
+  // v3.6: время поиска зависит от тира — дешёвый быстрый, дорогой дольше
+  const SCOUT_DAYS = { free:2, paid:4, premium:6 };
+  const days = SCOUT_DAYS[tier] ?? 2;
+  if (G.actions < days) { notify(`Нужно ≥${days} рабочих дн. — осталось ${G.actions}`, 'error'); return; }
+  G.actions -= days;
 
   if (cost > 0) {
     if (G.money < cost) { notify(`Недостаточно средств (нужно ${_fs(cost)})`, 'error'); return; }
     G.money -= cost;
-    addLog(`🔍 Скаутинг специалистов (${tier}): −${_fs(cost)}`, 'amber');
+    addLog(`🔍 Скаутинг специалистов (${tier}): −${_fs(cost)} · −${days} дн.`, 'amber');
     EventBus.emit('render');
   }
 

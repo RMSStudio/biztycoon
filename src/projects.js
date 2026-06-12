@@ -1056,10 +1056,10 @@ const Projects = (() => {
           fn: () => {
             const bonus = shownTeam ? 10 : 5;
             client._lcQualityBonus = (client._lcQualityBonus || 0) + bonus;
-            // Используем _iid || id — совместимо с getProjectThroughput (матчит по _iid)
-            client._assignedStaff = staff.map(s => s._iid || s.id);
-            // Синхронизируем _assignedProjectId на сотруднике для отображения бейджа
-            staff.forEach(s => { s._assignedProjectId = client.id; });
+            // Фикс дабл-назначения (v3.6): через assignStaffToProject — он снимает
+            // сотрудника с прежнего проекта. Прямая запись массива оставляла людей
+            // в _assignedStaff ОБОИХ проектов → мощность считалась дважды (абуз)
+            staff.forEach(s => assignStaffToProject(s._iid || s.id, client.id));
             applyTag(client, 'team_assigned');
             logDecision(client, 'planning', 'team: full', `+${bonus}% качество`);
             _closeLCModal();

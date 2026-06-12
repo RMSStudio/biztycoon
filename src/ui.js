@@ -196,6 +196,38 @@ function _projectPaceMonths(c) {
   return Math.max(1, Math.ceil(restCur + restFut));
 }
 
+// Ближайшие денежные поступления по текущему темпу (для P&L и сводок)
+function forecastInflows(horizon = 6) {
+  const out = [];
+  (G.activeClients || []).forEach(c => {
+    if (!c._lcPhase || !c._lcPhase.startsWith('work_')) return;
+    const pLoad = getProjectLoad(c), projThr = getProjectThroughput(c);
+    const eff = pLoad > 0 ? Math.min(1.5, projThr / pLoad) : 1;
+    const wPhases = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')) : ['work_0'];
+    const perPhase = (100 / ((c._duration || 3) / Math.max(1, wPhases.length))) * eff * getSpeed() * getFatigueMult();
+    if (perPhase <= 0) return;
+    const mDone = _projectPaceMonths(c);
+    if (mDone != null && mDone <= horizon) out.push({ m: mDone, icon: '🏁', label: c.name, sum: c._totalBudget || 0 });
+    // следующая выплата по ходу (milestone или этапная треть)
+    if (c._lcTags && c._lcTags.payment_staged && (c._stagedPaid || 0) < 3) {
+      const mPay = Math.max(1, Math.ceil(Math.max(0, 100 - (c._progress || 0)) / perPhase));
+      if (mPay <= horizon && mPay < (mDone || 99)) out.push({ m: mPay, icon: '💵', label: `${c.name} · этап ${(c._stagedPaid||0)+1}/3`, sum: Math.round((c._originalBudget||0)/3/5000)*5000 });
+    } else (c._milestones || []).forEach((thr, i) => {
+      if ((c._milestonesPaid || []).includes(i)) return;
+      const wIdx = Math.max(0, wPhases.indexOf(c._lcPhase));
+      const gp = ((wIdx * 100) + (c._progress || 0)) / wPhases.length;
+      if (gp >= thr) return;
+      const perGlobal = (100 / (c._duration || 3)) * eff * getSpeed() * getFatigueMult();
+      const mPay = Math.max(1, Math.ceil((thr - gp) / perGlobal));
+      if (mPay <= horizon) out.push({ m: mPay, icon: '💵', label: `${c.name} · ${thr}%`, sum: Math.round((c._originalBudget||0)*(c._milestonePcts||[])[i]/5000)*5000 });
+    });
+  });
+  (G.calendarEvents || []).forEach(ev => {
+    if (!ev.done && ev.money > 0 && ev.month - G.month <= horizon) out.push({ m: ev.month - G.month, icon: ev.icon || '📌', label: ev.label, sum: ev.money });
+  });
+  return out.sort((a, b) => a.m - b.m);
+}
+
 function openCalendar() {
   const body = document.getElementById('calendar-body');
   if (!body) return;
@@ -375,6 +407,38 @@ function renderGame() {
   }
   document.getElementById('g-action-val').textContent=`${G.actions} / ${_wdMax}`;
   const hasPool=G.scoutPool && G.scoutPool.length>0;
+  // Кредитные линии — собственный блок (v3.6, вынесены из P&L)
+  { const host = document.getElementById('loans-host');
+    if (host) {
+      if (G.loan) {
+        host.innerHTML = `<div style="border:1px solid rgba(210,153,34,.3);border-radius:8px;padding:7px 10px;background:rgba(210,153,34,.05)">
+          <div style="font-size:11px;color:var(--amber);font-weight:700">${G.loan.icon||'🏦'} Кредит «${G.loan.label}»</div>
+          <div style="font-size:10px;color:var(--sub);margin-top:2px">−${fmtK(G.loan.monthlyPayment)}/мес · ещё ${G.loan.monthsRemaining} мес. · остаток ${fmtK(G.loan.monthlyPayment * G.loan.monthsRemaining)}</div>
+          ${G.loan.debuff ? `<div style="font-size:9px;color:var(--red);margin-top:2px">⚡ ${G.loan.debuff.label}</div>` : ''}
+        </div>`;
+      } else {
+        const loans = getLoansInfo(G.reputation);
+        const availCount = loans.filter(t => t.available).length;
+        const rows = loans.map(t => {
+          const locked = !t.available;
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);opacity:${locked ? '0.45' : '1'}">
+            <div style="min-width:0;flex:1">
+              <div style="font-size:11px;font-weight:600;color:${locked ? 'var(--muted)' : 'var(--text)'}">${t.icon} ${t.label}${locked ? ` <span style="font-size:9px;color:var(--muted)">🔒 реп ≥${t.minRep}</span>` : ''}</div>
+              <div style="font-size:10px;color:var(--sub);margin-top:1px">${fmtK(t.principal)} · ${fmtK(t.monthlyPayment)}/мес × ${t.months} мес.</div>
+              ${t.debuff ? `<div style="font-size:9px;color:var(--red);margin-top:2px">⚠ ${t.debuff.label}</div>` : ''}
+            </div>
+            <button class="btn btn-xs btn-ghost" style="font-size:9px;padding:2px 7px;flex-shrink:0" ${locked ? 'disabled style="opacity:.35"' : ''} onclick="takeLoanById('${t.id}')">Взять</button>
+          </div>`;
+        }).join('');
+        host.innerHTML = `<div style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;border:1px solid var(--border);border-radius:8px;padding:7px 10px"
+            onclick="(()=>{const el=document.getElementById('loan-list');const arr=document.getElementById('loan-arr');el.style.display=el.style.display==='none'?'block':'none';arr.textContent=el.style.display==='none'?'▸':'▾';})()">
+          <span style="font-size:11px;color:var(--sub);font-weight:600">🏦 Кредитные линии <span style="font-weight:400;color:var(--muted)">(${availCount} доступно)</span></span>
+          <span id="loan-arr" style="font-size:10px;color:var(--muted)">▸</span>
+        </div>
+        <div id="loan-list" style="display:none;margin-top:4px;padding:0 4px">${rows}</div>`;
+      }
+    } }
+
   // Подписи стоимостей действий — из данных сценария (фикс хвостов v3.3)
   { const h=document.getElementById('hire-cost-label');    if (h) h.textContent = `−${HIRE_COST} дн.`;
     const r=document.getElementById('refresh-cost-label'); if (r) r.textContent = `−${SCOUT_COST} дн.`;
@@ -760,39 +824,20 @@ function renderGame() {
       ${G.loan.debuff?.type === 'speed_debuff' ? `<div style="font-size:10px;color:var(--red);padding-left:2px;margin-bottom:3px">⚡ ${G.loan.debuff.label}</div>` : ''}` : ''}
     <div class="divider"></div>
     <div class="pnl-row total"><span>Расход/мес</span><span class="neg">−${fmt(burnRate)}</span></div>
-    <div style="font-size:10px;color:var(--muted);margin-top:5px">Выручка — при завершении проектов</div>
     ${(()=>{
-      if (G.loan) return '';
-      const loans = getLoansInfo(G.reputation);
-      const availCount = loans.filter(t => t.available).length;
-      const rows = loans.map(t => {
-        const locked    = !t.available;
-        const debuffTag = t.debuff
-          ? `<div style="font-size:9px;color:var(--red);margin-top:2px">⚠ ${t.debuff.label}</div>`
-          : '';
-        const lockTag   = locked
-          ? `<span style="font-size:9px;color:var(--muted);margin-left:4px">🔒 реп ≥${t.minRep}</span>`
-          : '';
-        const btn = locked
-          ? `<button class="btn btn-xs btn-ghost" style="font-size:9px;padding:2px 7px;opacity:.35;flex-shrink:0" disabled>Взять</button>`
-          : `<button class="btn btn-xs btn-ghost" style="font-size:9px;padding:2px 7px;flex-shrink:0" onclick="takeLoanById('${t.id}')">Взять</button>`;
-        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);opacity:${locked?'0.45':'1'}">
-          <div style="min-width:0;flex:1">
-            <div style="font-size:11px;font-weight:600;color:${locked?'var(--muted)':'var(--text)'}">${t.icon} ${t.label}${lockTag}</div>
-            <div style="font-size:10px;color:var(--sub);margin-top:1px">${fmtK(t.principal)} · ${fmtK(t.monthlyPayment)}/мес × ${t.months} мес.</div>
-            ${debuffTag}
-          </div>
-          ${btn}
-        </div>`;
-      }).join('');
-      return `<div class="divider" style="margin:8px 0"></div>
-        <div style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none"
-             onclick="(()=>{const el=document.getElementById('loan-list');const arr=document.getElementById('loan-arr');el.style.display=el.style.display==='none'?'block':'none';arr.textContent=el.style.display==='none'?'▸':'▾';})()">
-          <span style="font-size:11px;color:var(--sub);font-weight:600">🏦 Кредитные линии <span style="font-weight:400;color:var(--muted)">(${availCount} доступно)</span></span>
-          <span id="loan-arr" style="font-size:10px;color:var(--muted)">▸</span>
-        </div>
-        <div id="loan-list" style="display:none;margin-top:4px">${rows}</div>`;
-    })()}`;
+      // Ближайшие поступления по текущей загрузке (v3.6)
+      const inflows = forecastInflows(6);
+      if (!inflows.length) return `<div style="font-size:10px;color:var(--muted);margin-top:5px">Поступлений на горизонте 6 мес. не видно — возьми проекты в работу</div>`;
+      const next3 = inflows.filter(f => f.m <= 3).reduce((s2, f) => s2 + f.sum, 0);
+      const rows = inflows.slice(0, 4).map(f =>
+        `<div class="pnl-row" style="font-size:11px"><span style="color:var(--sub)">${f.icon} ${f.label}</span>
+         <span style="color:var(--green)">+${fmtK(f.sum)} <span style="color:var(--muted);font-weight:400">через ${f.m} мес.</span></span></div>`).join('');
+      return `<div class="divider"></div>
+        <div style="font-size:10px;color:var(--sub);font-weight:700;margin-bottom:3px">БЛИЖАЙШИЕ ПОСТУПЛЕНИЯ <span style="font-weight:400;color:var(--muted)">(по текущей загрузке)</span></div>
+        ${rows}
+        <div class="pnl-row" style="font-size:11px"><span style="color:var(--sub)">Σ за 3 мес.</span><span style="color:${next3 >= burnRate*3 ? 'var(--green)' : 'var(--amber)'};font-weight:700">+${fmtK(next3)} <span style="color:var(--muted);font-weight:400">vs −${fmtK(burnRate*3)} расходов</span></span></div>`;
+    })()}
+`;
 
   // Legacy progress bar (hidden DOM compat)
   const pct=Math.min(100,Math.round(G.money/SCENARIO.settings.winCondition*100));
@@ -853,17 +898,17 @@ function renderGame() {
         <button class="btn btn-ghost" style="font-size:11px;padding:7px 4px;justify-content:center;flex-direction:column;gap:2px;line-height:1.3;text-align:center"
                 onclick="scoutCandidates('free')">
           <span>Бесплатный</span>
-          <span style="color:var(--muted);font-size:10px">Junior–Middle</span>
+          <span style="color:var(--muted);font-size:10px">Junior–Middle · 2 дн.</span>
         </button>
         <button class="btn btn-ghost" style="font-size:11px;padding:7px 4px;justify-content:center;flex-direction:column;gap:2px;line-height:1.3;text-align:center"
                 onclick="scoutCandidates('paid')">
           <span>Платный</span>
-          <span style="color:var(--teal);font-size:10px">25 000 ₽</span>
+          <span style="color:var(--teal);font-size:10px">25 000 ₽ · 4 дн.</span>
         </button>
         <button class="btn btn-ghost" style="font-size:11px;padding:7px 4px;justify-content:center;flex-direction:column;gap:2px;line-height:1.3;text-align:center"
                 onclick="scoutCandidates('premium')">
           <span>Премиум</span>
-          <span style="color:var(--purple);font-size:10px">60 000 ₽</span>
+          <span style="color:var(--purple);font-size:10px">60 000 ₽ · 6 дн.</span>
         </button>
       </div>
       ${poolCount > 0
@@ -1793,12 +1838,22 @@ function _renderPerkTree() {
   const COLS = Math.max(...(_treeNodes.map(p => p.treePos.col)), 3) + 1;
   const ROWS = Math.max(...(_treeNodes.map(p => p.treePos.row)), 3) + 1;
   const W = COLS * NODE_W + (COLS - 1) * GAP_X; // 308px
-  const H = HDR_H + ROWS * NODE_H + (ROWS - 1) * GAP_Y; // 339px
+  const H = HDR_H + ROWS * NODE_H + (ROWS - 1) * GAP_Y + 34; // + стаггер/джиттер (v3.6)
 
+  // Органичная сеть (v3.6, по референсам): колонки со стаггером,
+  // детерминированный джиттер от id — узлы «дышат», а не стоят сеткой
+  const _hash = id => { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0; return h; };
+  const _jx = p => ((_hash(p.id) % 17) - 8);
+  const _jy = p => (((_hash(p.id) >> 4) % 11) - 5);
+  const _stag = col => (col % 2 ? 22 : 0);
   const nx  = col => col * (NODE_W + GAP_X);
   const ny  = row => HDR_H + row * (NODE_H + GAP_Y);
-  const ncx = col => nx(col) + NODE_W / 2;
-  const ncy = row => ny(row) + NODE_H / 2;
+  const nodeX = p => nx(p.treePos.col) + _jx(p);
+  const nodeY = p => ny(p.treePos.row) + _stag(p.treePos.col) + _jy(p);
+  const ncx = col => nx(col) + NODE_W / 2;             // legacy (заголовки)
+  const ncy = row => HDR_H + row * (NODE_H + GAP_Y) + NODE_H / 2;
+  const nodeCX = p => nodeX(p) + NODE_W / 2;
+  const nodeCY = p => nodeY(p) + NODE_H / 2;
 
   const _branches  = SCENARIO.upgradeBranches || [];
   const COL_LABELS = _branches.length ? _branches.map(b => b.label)
@@ -1830,43 +1885,35 @@ function _renderPerkTree() {
     return (p.excludes || []).some(id => !!G.upgrades[id]);
   }
 
-  // SVG-линии между соседними узлами + кросс-связи requires
+  // Связи (v3.6): только граф requires/excludes — кривые Безье,
+  // цвет ветки-получателя, купленный путь светится
   let lines = '';
+  const _curve = (a, b, color, width, dash, glow) => {
+    const x1 = nodeCX(a), y1 = nodeCY(a), x2 = nodeCX(b), y2 = nodeCY(b);
+    const dx = (x2 - x1) * 0.5;
+    const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+    return (glow ? `<path d="${d}" stroke="${color}" stroke-width="${width + 3}" fill="none" opacity=".18" stroke-linecap="round"/>` : '') +
+      `<path d="${d}" stroke="${color}" stroke-width="${width}" fill="none" ${dash ? `stroke-dasharray="${dash}"` : ''} stroke-linecap="round"/>`;
+  };
   _treeNodes.forEach(p => {
+    const branchCol = COL_COLORS[p.treePos.col] || 'rgba(255,255,255,.2)';
     (p.requires || []).forEach(rid => {
       const r = _byId[rid];
       if (!r || !r.treePos) return;
-      if (r.treePos.col === p.treePos.col) return; // вертикаль рисуется обычной сеткой
-      const done = !!G.upgrades[rid];
-      lines += `<line x1="${ncx(r.treePos.col)}" y1="${ncy(r.treePos.row)}" x2="${ncx(p.treePos.col)}" y2="${ncy(p.treePos.row)}"
-        stroke="${done ? 'rgba(45,212,191,.45)' : 'rgba(255,255,255,.10)'}" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+      const done = !!G.upgrades[rid] && !!G.upgrades[p.id];
+      const open = !!G.upgrades[rid];
+      const cross = r.treePos.col !== p.treePos.col;
+      lines += _curve(r, p,
+        done ? branchCol : open ? branchCol.replace('.65', '.45').replace('.7', '.45') : 'rgba(255,255,255,.08)',
+        done ? 2.5 : 1.5, (!done && cross) ? '5,4' : (done ? '' : ''), done);
     });
+    // row-0 без requires: лёгкий «корень» снизу вверх не рисуем — вершины свободны
     (p.excludes || []).forEach(xid => {
       const r = _byId[xid];
-      if (!r || !r.treePos || xid < p.id) return; // одна линия на пару
-      lines += `<line x1="${ncx(r.treePos.col)}" y1="${ncy(r.treePos.row)}" x2="${ncx(p.treePos.col)}" y2="${ncy(p.treePos.row)}"
-        stroke="rgba(248,81,73,.30)" stroke-width="1.5" stroke-dasharray="2,4"/>`;
+      if (!r || !r.treePos || xid < p.id) return;
+      lines += _curve(r, p, 'rgba(248,81,73,.35)', 1.5, '2,5', false);
     });
   });
-  for (let col = 0; col < COLS; col++) {
-    for (let row = 0; row < ROWS; row++) {
-      const p = gn(col, row);  if (!p) continue;
-      const pr = gn(col+1, row);
-      if (pr) {
-        const lit = (p.oneTime ? !!G.upgrades[p.id] : true) && (pr.oneTime ? !!G.upgrades[pr.id] : true);
-        lines += `<line x1="${ncx(col)}" y1="${ncy(row)}" x2="${ncx(col+1)}" y2="${ncy(row)}"
-          stroke="${lit ? 'rgba(45,212,191,.3)' : 'rgba(255,255,255,.06)'}"
-          stroke-width="${lit ? 1.5 : 1}" ${lit ? '' : 'stroke-dasharray="3,5"'}/>`;
-      }
-      const pb = gn(col, row+1);
-      if (pb) {
-        const lit = (p.oneTime ? !!G.upgrades[p.id] : true) && (pb.oneTime ? !!G.upgrades[pb.id] : true);
-        lines += `<line x1="${ncx(col)}" y1="${ncy(row)}" x2="${ncx(col)}" y2="${ncy(row+1)}"
-          stroke="${lit ? 'rgba(45,212,191,.3)' : 'rgba(255,255,255,.06)'}"
-          stroke-width="${lit ? 1.5 : 1}" ${lit ? '' : 'stroke-dasharray="3,5"'}/>`;
-      }
-    }
-  }
 
   // Заголовки колонок
   let headers = '';
@@ -1891,12 +1938,15 @@ function _renderPerkTree() {
     const ftGate     = !!(p.minFatigue && (G.teamFatigue || 0) < p.minFatigue);
     const canAfford  = G.money >= p.cost;
 
-    // Визуальное состояние узла
-    let border, bg, op, cur;
+    // Визуальное состояние узла — ветка светится своим цветом (v3.6)
+    const bCol     = COL_COLORS[p.treePos.col] || 'rgba(255,255,255,.3)';
+    const bColSoft = bCol.replace(/\.\d+\)/, '.16)');
+    let border, bg, op, cur, glow = '';
     if (mutexLock && !bought) {
       border = '1.5px solid rgba(248,81,73,.35)'; bg = 'rgba(248,81,73,.05)'; op = .45; cur = 'not-allowed';
     } else if (bought || tempActive) {
-      border = '1.5px solid rgba(63,185,80,.65)'; bg = 'rgba(63,185,80,.11)'; op = 1; cur = 'default';
+      border = `2px solid ${bCol}`; bg = bColSoft; op = 1; cur = 'default';
+      glow = `box-shadow:0 0 16px ${bColSoft}, 0 0 4px ${bColSoft};`;
     } else if (draft) {
       border = '1.5px dashed rgba(210,153,34,.45)'; bg = 'rgba(210,153,34,.04)'; op = .88; cur = 'pointer';
     } else if (!unlocked) {
@@ -1904,7 +1954,8 @@ function _renderPerkTree() {
     } else if (onCd || ftGate) {
       border = '1.5px solid rgba(255,255,255,.10)'; bg = 'transparent'; op = .60; cur = 'not-allowed';
     } else if (canAfford) {
-      border = '1.5px solid rgba(45,212,191,.42)'; bg = 'rgba(45,212,191,.06)'; op = 1; cur = 'pointer';
+      border = `1.5px solid ${bCol}`; bg = 'rgba(255,255,255,.02)'; op = 1; cur = 'pointer';
+      glow = `box-shadow:0 0 8px ${bColSoft};`;
     } else {
       border = '1.5px solid rgba(255,255,255,.09)'; bg = 'transparent'; op = .70; cur = 'pointer';
     }
@@ -1943,9 +1994,9 @@ function _renderPerkTree() {
     const shortName  = p.name.length > 14 ? p.name.substring(0, 13) + '…' : p.name;
 
     nodes += `<div ${onclickStr} title="${p.name}: ${p.desc}"
-      style="position:absolute;left:${nx(col)}px;top:${ny(row)}px;
+      style="position:absolute;left:${nodeX(p)}px;top:${nodeY(p)}px;
              width:${NODE_W}px;height:${NODE_H}px;box-sizing:border-box;
-             border-radius:9px;border:${border};background:${bg};
+             border-radius:14px;border:${border};background:${bg};${glow}
              opacity:${op};cursor:${cur};
              display:flex;flex-direction:column;align-items:center;
              justify-content:center;gap:1px;padding:4px 3px;
