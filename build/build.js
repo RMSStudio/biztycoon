@@ -18,7 +18,9 @@ const path = require('path');
 
 // ── Выбор сценария ────────────────────────────────────
 const scenarioArg = process.argv.find(a => a.startsWith('--scenario='));
-const SCENARIO_ID = scenarioArg ? scenarioArg.split('=')[1] : 'agency';
+// Без флага — мульти-дист: ВСЕ сценарии встроены, выбор в меню (v3.1).
+// С флагом --scenario=<id> — одиночный дист (B2B-поставки).
+const SCENARIO_ID = scenarioArg ? scenarioArg.split('=')[1] : 'multi';
 
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
@@ -27,7 +29,7 @@ if (!fs.existsSync(DIST)) fs.mkdirSync(DIST);
 
 // ── Проверяем сценарий ─────────────────────────────────
 const scenarioPath = path.join(ROOT, 'scenarios', `${SCENARIO_ID}.js`);
-if (!fs.existsSync(scenarioPath)) {
+if (SCENARIO_ID !== 'multi' && !fs.existsSync(scenarioPath)) {
   console.error(`❌  Сценарий не найден: scenarios/${SCENARIO_ID}.js`);
   process.exit(1);
 }
@@ -55,10 +57,29 @@ function read(relPath) {
 // Порядок важен: SE.applyActiveScenario() вызывается ПОСЛЕ scenario-editor.js
 // но ДО engine.js, т.к. он модифицирует SCENARIO in-place, который engine читает при загрузке.
 // Реализуем через два отдельных <script>-тега.
+// Сценарный блок: одиночный — исходник как есть; мульти — все сценарии
+// строками + выбор по localStorage (new Function изолирует const SCENARIO)
+function scenarioBlock() {
+  if (SCENARIO_ID !== 'multi') return read(`scenarios/${SCENARIO_ID}.js`);
+  const files = fs.readdirSync(path.join(ROOT, 'scenarios'))
+    .filter(f => f.endsWith('.js'));
+  const map = {};
+  files.forEach(f => { map[f.replace('.js', '')] = read('scenarios/' + f); });
+  return [
+    '// ── Мульти-сценарный блок (v3.1): выбор из меню, см. ui.js SCENARIO_REGISTRY ──',
+    'var __SCEN_SRC = ' + JSON.stringify(map) + ';',
+    'var SCENARIO = (function () {',
+    "  var id = localStorage.getItem('bt_scenario_v1') || 'agency';",
+    "  if (!__SCEN_SRC[id]) id = 'agency';",
+    "  return (new Function(__SCEN_SRC[id] + ';\nreturn SCENARIO;'))();",
+    '})();',
+  ].join('\n');
+}
+
 const preEngineBlocks = [
   read('src/constants.js'),
   read('src/events.js'),
-  read(`scenarios/${SCENARIO_ID}.js`),
+  scenarioBlock(),
   read('scenarios/presets/index.js'),
   read('src/staff.js'),
   read('src/scenario-editor.js'),
@@ -108,7 +129,7 @@ if (!markerRe.test(out)) {
 out = out.replace(markerRe, inlined);
 
 // ── Пишем результат ───────────────────────────────────
-const outPath = path.join(DIST, SCENARIO_ID === 'agency' ? 'BizTycoon.html' : `BizTycoon-${SCENARIO_ID}.html`);
+const outPath = path.join(DIST, SCENARIO_ID === 'multi' ? 'BizTycoon.html' : `BizTycoon-${SCENARIO_ID}.html`);
 fs.writeFileSync(outPath, out, 'utf8');
 
 const kb = (fs.statSync(outPath).size / 1024).toFixed(1);

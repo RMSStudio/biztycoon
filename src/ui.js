@@ -110,6 +110,70 @@ function _uiShowConfirm(icon, title, body, confirmText, confirmClass, onConfirm)
 // _uiFocusChanged удалён (v2.7) — система фокуса упразднена,
 // распределение мощности делает назначение команды (WU-система)
 
+// ══════════════════════════════════════════════════════
+//  СЦЕНАРИИ (v3.1): выбор из меню до старта игры
+//  Реестр — мета для карточек; сам контент грузится лоадером
+//  в index.html (dev) или embed-блоком (dist) по localStorage
+// ══════════════════════════════════════════════════════
+const SCENARIO_REGISTRY = [
+  { id:'agency', icon:'🏢', name:'Диджитал-агентство', desc:'Клиенты, проекты, репутация студии' },
+  { id:'bank',   icon:'🏦', name:'Региональный банк',  desc:'Сделки, кредитный портфель, регулятор' },
+];
+const LS_SCENARIO_KEY = 'bt_scenario_v1';
+
+function initScenarioSelect() {
+  const host = document.getElementById('scenario-select');
+  if (!host) return;
+  const cur = localStorage.getItem(LS_SCENARIO_KEY) || 'agency';
+  host.innerHTML = SCENARIO_REGISTRY.map(s => {
+    const active = s.id === cur;
+    return `<div onclick="switchScenario('${s.id}')" style="flex:1;min-width:200px;cursor:${active ? 'default' : 'pointer'};
+        display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;
+        border:1px solid ${active ? 'rgba(45,212,191,.45)' : 'var(--border)'};
+        background:${active ? 'rgba(45,212,191,.08)' : 'var(--bg2)'}">
+      <span style="font-size:22px">${s.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${s.name}</div>
+        <div style="font-size:11px;color:var(--sub)">${s.desc}</div>
+      </div>
+      ${active ? '<span class="dlc-pill" style="background:rgba(45,212,191,.14);color:var(--teal)">Выбран</span>'
+               : '<span class="dlc-pill" style="background:rgba(255,255,255,.06);color:var(--sub)">Играть</span>'}
+    </div>`;
+  }).join('');
+}
+
+function switchScenario(id) {
+  const cur = localStorage.getItem(LS_SCENARIO_KEY) || 'agency';
+  if (id === cur || !SCENARIO_REGISTRY.find(s => s.id === id)) return;
+  localStorage.setItem(LS_SCENARIO_KEY, id);
+  location.reload();   // const-биндинги движка читают SCENARIO при загрузке
+}
+
+// Сценарный «хром»: интро-текст, иконки лого, title — из SCENARIO
+function applyScenarioChrome() {
+  if (typeof SCENARIO === 'undefined') return;
+  const intro = document.querySelector('.intro-desc');
+  if (intro && SCENARIO.settings?.introText) intro.innerHTML = SCENARIO.settings.introText;
+  document.querySelectorAll('.logo-icon').forEach(el => { el.textContent = SCENARIO.icon || '🏢'; });
+  document.title = `BizTycoon — ${SCENARIO.name || ''}`;
+}
+
+// Spec-карточки из SCENARIO.specs — статический HTML ломал не-агентские сценарии
+function renderSpecGrid() {
+  const grid = document.querySelector('.spec-grid');
+  if (!grid || typeof SPECS === 'undefined') return;
+  const TAGS = ['green', 'amber', 'purple', ''];
+  grid.innerHTML = Object.entries(SPECS).map(([id, s], i) => `
+    <div class="spec-card" onclick="selectSpec('${id}')" id="spec-${id}">
+      <div class="spec-icon">${s.icon}</div><div class="spec-name">${s.name}</div>
+      <div class="spec-desc">${s.desc}</div>
+      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+        <span class="tag ${TAGS[i % TAGS.length]}">${s.bonusLabel}</span>
+        <span class="tag teal" style="font-size:10px">${s.passiveLabel}</span>
+      </div>
+    </div>`).join('');
+}
+
 // ── EventBus → DOM биндинги (Godot: вызовы connect в _ready) ─
 function initEventBus() {
   EventBus.on('notify',       ({ msg, type })                              => _uiNotify(msg, type));
@@ -987,7 +1051,7 @@ function endGame(won) { buildDashboard(won); _uiNavigate('screen-results'); }
 function buildDashboard(won) {
   const spec=SPECS[G.spec];
   document.getElementById('r-icon').textContent=won?'🏆':'💸';
-  document.getElementById('r-title').textContent=won?'Агентство вышло на 7.5M!':'Деньги кончились';
+  document.getElementById('r-title').textContent=won?`Цель ${fmtK(SCENARIO.settings.winCondition)} достигнута!`:'Деньги кончились';
   document.getElementById('r-title').style.color=won?'var(--green)':'var(--red)';
   document.getElementById('r-sub').textContent=won
     ?`${spec.name} — ${G.monthsPlayed} мес. Инвесторы уже звонят.`
@@ -1067,7 +1131,7 @@ function buildChart() {
     <line x1="${PL}" y1="${PT+cH/2}" x2="${W-PR}" y2="${PT+cH/2}" stroke="#1C2330" stroke-width="1"/>
     <line x1="${PL}" y1="${PT+cH}" x2="${W-PR}" y2="${PT+cH}" stroke="#30363D" stroke-width="1"/>
     ${minM<0?`<line x1="${PL}" y1="${py(0).toFixed(1)}" x2="${W-PR}" y2="${py(0).toFixed(1)}" stroke="#F85149" stroke-width=".8" stroke-dasharray="3,3" opacity=".5"/>`:''}
-    ${showGoal?`<line x1="${PL}" y1="${goalY.toFixed(1)}" x2="${W-PR}" y2="${goalY.toFixed(1)}" stroke="#3FB950" stroke-width="1" stroke-dasharray="4,3" opacity=".6"/><text x="${W-PR-2}" y="${goalY-4}" fill="#3FB950" font-size="9" text-anchor="end" opacity=".8">Цель 7.5M</text>`:''}
+    ${showGoal?`<line x1="${PL}" y1="${goalY.toFixed(1)}" x2="${W-PR}" y2="${goalY.toFixed(1)}" stroke="#3FB950" stroke-width="1" stroke-dasharray="4,3" opacity=".6"/><text x="${W-PR-2}" y="${goalY-4}" fill="#3FB950" font-size="9" text-anchor="end" opacity=".8">Цель ${fmtK(SCENARIO.settings.winCondition)}</text>`:''}
     <path d="${area}" fill="url(#cg)"/>
     <polyline points="${pts}" fill="none" stroke="#4F6EF7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${ticks}${xlbls}

@@ -14,7 +14,7 @@
   <div class="logo-wrap">
     <div class="logo-icon">🏢</div>
     <div class="logo-title">BizTycoon</div>
-    <div class="logo-sub">Digital Agency — Prototype v0.4</div>
+    <div class="logo-sub">Business Simulator — Prototype v3.1</div>
   </div>
 
   <!-- Базовый режим — всегда доступен -->
@@ -23,10 +23,16 @@
       <span style="font-size:22px">🎮</span>
       <div>
         <div class="mode-base-name">Классический режим</div>
-        <div class="mode-base-desc">Управляй агентством, масштабируй команду, достигни финансовой цели.</div>
+        <div class="mode-base-desc">Управляй компанией, масштабируй команду, достигни финансовой цели.</div>
       </div>
     </div>
     <span class="dlc-pill" style="background:rgba(45,212,191,.14);color:var(--teal)">Базовый</span>
+  </div>
+
+  <!-- Сценарий — выбирается до старта, перезагружает страницу (v3.1) -->
+  <div class="dlc-section-label">Сценарий</div>
+  <div id="scenario-select" style="display:flex;gap:8px;flex-wrap:wrap">
+    <!-- заполняется initScenarioSelect() из SCENARIO_REGISTRY (ui.js) -->
   </div>
 
   <!-- Расширения — рендерятся из DLC.getAll() -->
@@ -62,7 +68,7 @@
   <div class="logo-wrap">
     <div class="logo-icon">🏢</div>
     <div class="logo-title">BizTycoon</div>
-    <div class="logo-sub">Digital Agency — Prototype v0.4</div>
+    <div class="logo-sub">Business Simulator — Prototype v3.1</div>
   </div>
   <div class="intro-desc">
     Ты открываешь <strong>собственное диджитал-агентство</strong>. Клиенты не приходят сами — их нужно искать: каждый <strong>скаутинг</strong> стоит рабочих дней и не гарантирует результат. Каждый найденный проект — свой риск: кто-то задерживает оплату, кто-то платит хорошо, но портит репутацию. Доведи баланс до <strong>7 500 000 ₽</strong>, пока деньги не кончились.
@@ -85,42 +91,12 @@
   <h2>Выбери специализацию</h2>
   <p>Каждая специализация даёт уникальный бонус к выплатам и пассивный эффект на весь ран</p>
   <div class="spec-grid">
-    <div class="spec-card" onclick="selectSpec('smm')" id="spec-smm">
-      <div class="spec-icon">📱</div><div class="spec-name">SMM-агентство</div>
-      <div class="spec-desc">Соцсети, контент, таргет. Много небольших клиентов, быстрый оборот.</div>
-      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
-        <span class="tag green">+20% к выплате малых клиентов</span>
-        <span class="tag teal" style="font-size:10px">+1 оффер при каждом скаутинге</span>
-      </div>
-    </div>
-    <div class="spec-card" onclick="selectSpec('seo')" id="spec-seo">
-      <div class="spec-icon">🔍</div><div class="spec-name">SEO-агентство</div>
-      <div class="spec-desc">Продвижение в поиске. Долгосрочный подход и стабильные клиенты.</div>
-      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
-        <span class="tag amber">−10% расходов на команду</span>
-        <span class="tag teal" style="font-size:10px">+5 NPS каждому клиенту при подписании</span>
-      </div>
-    </div>
-    <div class="spec-card" onclick="selectSpec('web')" id="spec-web">
-      <div class="spec-icon">💻</div><div class="spec-name">Web-разработка</div>
-      <div class="spec-desc">Сайты и приложения. Технически эффективная команда.</div>
-      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
-        <span class="tag purple">+25% к выплате корп. клиентов</span>
-        <span class="tag teal" style="font-size:10px">+10% скорость команды</span>
-      </div>
-    </div>
-    <div class="spec-card" onclick="selectSpec('brand')" id="spec-brand">
-      <div class="spec-icon">✨</div><div class="spec-name">Брендинг</div>
-      <div class="spec-desc">Айдентика, упаковка, стратегия. От малых бутиков до крупных ритейлеров.</div>
-      <div class="spec-bonus" style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
-        <span class="tag">+40% к выплате брендинг-клиентов</span>
-        <span class="tag teal" style="font-size:10px">+10 NPS брендинг-клиентам при подписании</span>
-      </div>
-    </div>
+    <!-- v3.1: карточки рендерятся из SCENARIO.specs (renderSpecGrid в ui.js) —
+         статический HTML ломал не-агентские сценарии (SPECS другие) -->
   </div>
   <div style="display:flex;justify-content:space-between;align-items:center;">
     <button class="btn btn-ghost" onclick="goTo('screen-intro')">← Назад</button>
-    <button class="btn btn-primary" id="btn-start-game" onclick="startGame()" disabled>Открыть агентство →</button>
+    <button class="btn btn-primary" id="btn-start-game" onclick="startGame()" disabled>Начать дело →</button>
   </div>
 </div>
 
@@ -139,10 +115,10 @@
         <div class="v" id="g-cashflow" style="font-size:12px">+0 ₽</div>
         <div class="l">Cashflow</div>
       </div>
-      <!-- Прогресс к цели 7.5M — главный индикатор -->
+      <!-- Прогресс к цели сценария — главный индикатор -->
       <div class="hstat hstat-goal" style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;margin-bottom:3px">
-          <span style="font-size:10px;color:var(--muted)">Цель 7.5M</span>
+          <span style="font-size:10px;color:var(--muted)" id="g-goal-label">Цель</span>
           <span id="g-goal-pct" style="font-size:11px;font-weight:700;color:var(--accent)">0%</span>
         </div>
         <div style="height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
@@ -506,7 +482,15 @@
 <!-- BUILD:START -->
 <script src="src/constants.js"></script>
 <script src="src/events.js"></script>
-<script src="scenarios/agency.js"></script>
+<script>
+  // Runtime-выбор сценария (v3.1): какой файл грузить — решает localStorage.
+  // В dist-сборке этот лоадер заменяется embed-блоком со всеми сценариями.
+  (function () {
+    var id = localStorage.getItem('bt_scenario_v1') || 'agency';
+    if (!/^[a-z0-9_]+$/.test(id)) id = 'agency';
+    document.write('<scr' + 'ipt src="scenarios/' + id + '.js"><\/scr' + 'ipt>');
+  })();
+</script>
 <script src="scenarios/presets/index.js"></script>
 <!-- scenario-editor до engine.js: applyActiveScenario модифицирует SCENARIO in-place,
      после чего engine.js биндит свои const из уже изменённого объекта -->
@@ -523,6 +507,9 @@
 <script>
   initState();
   initEventBus();
+  initScenarioSelect();   // v3.1: карточки выбора сценария на экране режима
+  renderSpecGrid();       // v3.1: spec-карточки из SCENARIO.specs
+  applyScenarioChrome();  // v3.1: интро/лого/title из SCENARIO
   SE.syncIntroStats();
 
   // Кнопка загрузки: активна только при наличии сохранений
