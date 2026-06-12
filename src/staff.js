@@ -155,8 +155,16 @@ function _legacyFields(roleId, grade, qStat, speedStat) {
   const cfg = GRADE_CFG[grade] || GRADE_CFG.middle;
   // quality: direct stat (engine sums these as Q bonus)
   const quality = qStat;
-  // volume: derived from speed (needed by NPS engine)
-  const volume = Math.max(0, speedStat - 5);
+  // volume (фикс v3.1): ролевой стат, а не speedStat−5 (давал 0–3 всем подряд —
+  // V-капы проектов «Наймите копирайтера» были невыполнимы в принципе).
+  // Шкала от легаси-staff: копирайтер jr8/md15/sr25, SMM jr5/md10/sr18
+  const _volByGrade = {
+    copywriter: { junior:8, middle:15, senior:22, lead:28, star:35 },
+    smm:        { junior:5, middle:10, senior:16, lead:22, star:28 },
+  };
+  const volume = _volByGrade[roleId]
+    ? (_volByGrade[roleId][grade] ?? 10) + Math.max(0, speedStat - 6)
+    : Math.max(0, speedStat - 5);
   // capacity: only managers give project slots
   const capacity = roleId === 'manager'
     ? (grade === 'senior' || grade === 'lead' || grade === 'star' ? 2 : 1)
@@ -270,7 +278,6 @@ function scoutCandidates(tier) {
     EventBus.emit('render');
   }
 
-  const roles   = ROLE_IDS;
   const configs = {
     free:    { count:4, grades:['junior','junior','middle','middle'] },
     paid:    { count:5, grades:['middle','middle','senior','senior','middle'] },
@@ -278,7 +285,19 @@ function scoutCandidates(tier) {
   };
   const cfg = configs[tier] || configs.free;
 
-  const pool = cfg.grades.map(g => generateCandidate(_pick(roles), g));
+  // Подбор ролей (фикс v3.1): раньше — чистый рандом из всех 7 ролей,
+  // ключевые специальности тонули среди юристов/HR (жалоба: «копирайтеров
+  // в пуле нет»). Теперь: первый кандидат — недостающая команде core-роль,
+  // остальные — взвешенный рандом (core ×3, сервисные ×1)
+  const CORE_ROLES = ['designer', 'copywriter', 'developer', 'manager', 'smm'];
+  const _teamRoles = new Set((G.staff || []).filter(s => s.status !== 'fired').map(s => s.role));
+  const _missing   = CORE_ROLES.filter(r => !_teamRoles.has(r));
+  const _weighted  = [...CORE_ROLES, ...CORE_ROLES, ...CORE_ROLES, ...ROLE_IDS];
+  const _pickRole  = i => (i === 0 && _missing.length)
+    ? _pick(_missing)
+    : _pick(_weighted);
+
+  const pool = cfg.grades.map((g, i) => generateCandidate(_pickRole(i), g));
   G.candidatePool = [...(G.candidatePool || []), ...pool];
 
   _renderCandidatePool();
