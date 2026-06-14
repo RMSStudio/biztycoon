@@ -365,8 +365,18 @@
     _modalOpen = false;
   }
 
+  // v3.21: лимит перебросов с учётом мета-перка extra_reroll
+  function _maxRerolls() {
+    try {
+      const bonus = (typeof window !== 'undefined' && window.RogueMeta && typeof window.RogueMeta.getBonusRerolls === 'function')
+        ? window.RogueMeta.getBonusRerolls() : 0;
+      return 2 + (bonus || 0);
+    } catch (e) { return 2; }
+  }
+
   function _renderModalHtml(runes, rerolls) {
-    const canReroll = rerolls < 2;
+    const max = _maxRerolls();
+    const canReroll = rerolls < max;
     const cards = runes.map(r => {
       const fx = r.effects || {};
       const tags = [];
@@ -412,7 +422,7 @@
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">${cards}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)">
-        <span style="font-size:10px;color:var(--muted)">Перебросов осталось: ${Math.max(0, 2 - rerolls)} / 2</span>
+        <span style="font-size:10px;color:var(--muted)">Перебросов осталось: ${Math.max(0, max - rerolls)} / ${max}${max > 2 ? ' ✨' : ''}</span>
         <div style="display:flex;gap:8px">
           <button ${canReroll ? '' : 'disabled style="opacity:.4"'} onclick="Runes._reroll()"
             style="background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);color:#c7d2fe;
@@ -428,7 +438,7 @@
     const m = document.getElementById('rune-modal');
     if (!m) return;
     const n = parseInt(m.dataset.rerollCount || '0', 10);
-    if (n >= 2) return;
+    if (n >= _maxRerolls()) return;
     m.dataset.rerollCount = String(n + 1);
     _showRuneModal();   // перерисовка с тем же счётчиком
   }

@@ -77,6 +77,25 @@
     { id: 'portfolio',      shards: 600 },
   ];
 
+  // ── v0.3 (2026-06-15): Мета-перки — накопительные модификаторы ──
+  // Покупаются за shards один раз, действуют во всех будущих ранах.
+  // Эффекты применяются:
+  //   - extra_reroll      → +1 к лимиту перебросов в модале выбора руны
+  //                          (читается из runes.js через RogueMeta.getBonusRerolls)
+  //   - seed_money        → +money к G.money после startGame (через обёртку)
+  //   - brand_starter     → +rep к G.reputation после startGame (через обёртку)
+  const META_PERKS = [
+    { id: 'extra_reroll',  icon: '🎲', name: '+1 переброс руны',
+      desc: 'Лимит перебросов в модале старта рана 2 → 3',
+      cost: 250, effects: { bonusRerolls: 1 } },
+    { id: 'seed_money',    icon: '💰', name: 'Стартовый бонус',
+      desc: '+100 000 ₽ к стартовому капиталу любого рана',
+      cost: 300, effects: { startMoney: 100000 } },
+    { id: 'brand_starter', icon: '⭐', name: 'Уже известны',
+      desc: '+5 стартовой репутации (поверх руны/сложности)',
+      cost: 200, effects: { startRep: 5 } },
+  ];
+
   // ── Ачивки ────────────────────────────────────────────
   // check получает контекст { run, totalRunsAfter, winsAfter,
   //   lastN, meta } и возвращает true, если выдача засчитана.
@@ -116,6 +135,15 @@
       check: ctx => (ctx.run.finalReputation || 0) >= 80 },
     { id: 'win_streak_3',     icon: '🔄', name: 'Серия из трёх',     desc: '3 победы подряд (без банкротств между ними)',     shards: 250,
       check: ctx => ctx.lastN(3).length === 3 && ctx.lastN(3).every(r => r.won) },
+
+    // ── v0.3 (2026-06-15): мастер сложностей ──
+    // Победа на всех 4 пресетах сложности (easy / normal / hard / nightmare).
+    // Записывается в meta.wonDifficulties при каждой победе.
+    { id: 'difficulty_master',icon: '🎖', name: 'Мастер сложностей', desc: 'Победа на всех 4 сложностях (easy/normal/hard/nightmare)', shards: 300,
+      check: ctx => {
+        const won = new Set(ctx.meta.wonDifficulties || []);
+        return ['easy','normal','hard','nightmare'].every(d => won.has(d));
+      } },
   ];
 
   // ── Загрузка/сохранение ──────────────────────────────
@@ -131,7 +159,11 @@
       // рана в history, потому что коллекционер собирает накопительно
       // и история обрезается до 50.
       playedRuneIds:  [],
-      history:        [],   // [{ won, bankrupt, monthsPlayed, stageReached, runeId, finalMoney, peakMoney, lowestMoney, finalReputation, ts }]
+      // v0.3: купленные мета-перки (накопительные модификаторы)
+      metaPerks:      [],
+      // v0.3: сложности, на которых уже была победа (для difficulty_master)
+      wonDifficulties:[],
+      history:        [],   // [{ won, bankrupt, monthsPlayed, stageReached, runeId, finalMoney, peakMoney, lowestMoney, finalReputation, difficulty, ts }]
     };
   }
 
@@ -184,6 +216,61 @@
   function getNextRuneUnlock()  { return _nextLocked(RUNE_UNLOCKS); }
   function getNextBonusUnlock() { return _nextLocked(BONUS_UNLOCKS); }
 
+  // ── v0.3: Мета-перки — публичный API ─────────────────
+  function getMetaPerks()       { return META_PERKS.slice(); }
+  function isMetaPerkUnlocked(id) {
+    const m = _loadMeta();
+    return (m.metaPerks || []).includes(id);
+  }
+  // Возвращает массив id купленных перков.
+  function getUnlockedMetaPerkIds() {
+    const m = _loadMeta();
+    return (m.metaPerks || []).slice();
+  }
+  // Сумма effects.bonusRerolls по всем купленным перкам (для runes.js).
+  function getBonusRerolls() {
+    const owned = new Set(getUnlockedMetaPerkIds());
+    return META_PERKS
+      .filter(p => owned.has(p.id))
+      .reduce((s, p) => s + ((p.effects && p.effects.bonusRerolls) || 0), 0);
+  }
+  // Покупка перка: списывает shards, добавляет id. Возвращает { ok, reason, perk, meta }.
+  function purchaseMetaPerk(id) {
+    const perk = META_PERKS.find(p => p.id === id);
+    if (!perk) return { ok: false, reason: 'unknown_perk' };
+    const meta = _loadMeta();
+    if ((meta.metaPerks || []).includes(id)) return { ok: false, reason: 'already_owned' };
+    if ((meta.shards || 0) < perk.cost)       return { ok: false, reason: 'not_enough_shards' };
+    meta.shards   = (meta.shards || 0) - perk.cost;
+    meta.metaPerks = (meta.metaPerks || []).concat(id);
+    _saveMeta(meta);
+    return { ok: true, perk, meta };
+  }
+  // Применить эффекты перков к стартовому состоянию (вызывается из обёртки startGame).
+  function _applyMetaPerksToG(g) {
+    if (!g) return;
+    const owned = new Set(getUnlockedMetaPerkIds());
+    const totals = META_PERKS
+      .filter(p => owned.has(p.id))
+      .reduce((acc, p) => {
+        const fx = p.effects || {};
+        acc.startMoney += (fx.startMoney || 0);
+        acc.startRep   += (fx.startRep   || 0);
+        return acc;
+      }, { startMoney: 0, startRep: 0 });
+    if (totals.startMoney) g.money      = (g.money || 0) + totals.startMoney;
+    if (totals.startRep)   g.reputation = (g.reputation || 0) + totals.startRep;
+  }
+
+  // ── v0.3: Текущая сложность партии — для трекинга difficulty_master ──
+  function _currentDifficulty() {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      const d = localStorage.getItem('bt_difficulty_v1');
+      return d || 'normal';   // дефолт — normal (если ещё не выбирали)
+    } catch (e) { return null; }
+  }
+
   // ── Начисление по результату рана ────────────────────
   function awardAtEndGame(won, g) {
     const meta = _loadMeta();
@@ -198,6 +285,13 @@
 
     meta.totalRuns++;
     if (won) meta.wins++;
+
+    // v0.3: трекинг победных сложностей (для ачивки difficulty_master)
+    const difficulty = _currentDifficulty();
+    if (won && difficulty) {
+      meta.wonDifficulties = (meta.wonDifficulties || []).slice();
+      if (!meta.wonDifficulties.includes(difficulty)) meta.wonDifficulties.push(difficulty);
+    }
 
     // v0.2: коллекционер рун — копим список всех использованных рун
     if (runeId) {
@@ -216,6 +310,8 @@
       peakMoney:       Math.round(g._runMaxMoney != null ? g._runMaxMoney : (g.money || 0)),
       lowestMoney:     Math.round(g._runMinMoney != null ? g._runMinMoney : (g.money || 0)),
       finalReputation: Math.round(g.reputation || 0),
+      // v0.3: на каком пресете сложности был сыгран ран
+      difficulty:      difficulty || null,
       ts: Date.now(),
     };
 
@@ -279,6 +375,8 @@
       const r = _origStart.apply(this, arguments);
       try {
         if (typeof G !== 'undefined' && G) {
+          // v0.3: применяем мета-перки до фиксации стартового трека
+          _applyMetaPerksToG(G);
           G._runMaxMoney = G.money || 0;
           G._runMinMoney = G.money || 0;
         }
@@ -402,6 +500,12 @@
       </div>
 
       <div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">🎁 Мета-перки — навсегда</div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;line-height:1.45">Покупаются за ✦ один раз и действуют во всех будущих ранах. Расход осколков необратим.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:6px">${_renderMetaPerksHtml(meta)}</div>
+      </div>
+
+      <div>
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">📜 Последние раны</div>
         ${hist}
       </div>
@@ -415,6 +519,49 @@
         </button>
       </div>
     </div>`;
+  }
+
+  // v0.3: рендер мета-перков в модале
+  function _renderMetaPerksHtml(meta) {
+    const owned = new Set(meta.metaPerks || []);
+    return META_PERKS.map(p => {
+      const isOwned = owned.has(p.id);
+      const canBuy  = !isOwned && (meta.shards || 0) >= p.cost;
+      const button = isOwned
+        ? `<span style="font-size:10px;font-weight:700;color:#22d3ee;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);border-radius:6px;padding:4px 9px;white-space:nowrap">✓ Куплен</span>`
+        : `<button onclick="RogueMeta._buyPerk('${p.id}')"
+            ${canBuy ? '' : 'disabled style="opacity:.45;cursor:not-allowed"'}
+            style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fbbf24;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:${canBuy ? 'pointer' : 'not-allowed'};white-space:nowrap">
+            Купить · ${p.cost} ✦
+          </button>`;
+      return `<div style="border:1px solid ${isOwned ? 'rgba(34,211,238,.25)' : 'var(--border)'};background:${isOwned ? 'rgba(34,211,238,.06)' : 'rgba(255,255,255,.02)'};border-radius:8px;padding:9px 11px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px;filter:${isOwned ? 'none' : 'grayscale(.3)'}">${p.icon}</span>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:12px;font-weight:700;color:var(--text)">${p.name}</div>
+          <div style="font-size:10px;color:var(--sub);margin-top:2px;line-height:1.4">${p.desc}</div>
+        </div>
+        ${button}
+      </div>`;
+    }).join('');
+  }
+
+  // v0.3: handler покупки из модала
+  function _buyPerk(id) {
+    const r = purchaseMetaPerk(id);
+    if (!r.ok && r.reason === 'not_enough_shards') {
+      // Тихо — кнопка и так должна быть disabled, но дублируем guard
+      return;
+    }
+    if (r.ok) {
+      try { if (typeof addLog === 'function') addLog(`✨ Мета-перк «${r.perk.name}» куплен за ${r.perk.cost} ✦`, 'amber'); } catch (e) {}
+      // Обновить кнопку на mode-screen + перерисовать модал
+      try {
+        const oldBtn = document.getElementById('meta-mode-btn');
+        if (oldBtn) oldBtn.remove();
+        _injectModeButton();
+      } catch (e) {}
+      showModal();
+    }
   }
 
   function _confirmReset() {
@@ -473,6 +620,9 @@
     getAchievements,
     // v0.2: визуальный прогресс
     getNextRuneUnlock, getNextBonusUnlock,
+    // v0.3: мета-перки
+    getMetaPerks, isMetaPerkUnlocked, getUnlockedMetaPerkIds,
+    purchaseMetaPerk, getBonusRerolls,
     // Запись (через игровой цикл)
     awardAtEndGame,
     reset,
@@ -481,7 +631,8 @@
     closeModal: _closeModal,
     _confirmReset,
     _injectModeButton,
+    _buyPerk,
   };
 
-  console.log('[meta] v0.2 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок · текущие ✦ ' + getShards());
+  console.log('[meta] v0.3 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок, ' + META_PERKS.length + ' мета-перков · текущие ✦ ' + getShards());
 })();

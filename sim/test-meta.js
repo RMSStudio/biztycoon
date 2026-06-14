@@ -411,5 +411,123 @@ _ok(G._runMaxMoney >= peakBefore + 500000 || G._runMaxMoney >= G.money,
     '_runMaxMoney обновлён после роста');
 `, { withRunes: true }));
 
+// ── 23: v0.3 мета-перки — API доступно, дефолт пуст ──
+add(run('Тест 23: v0.3 META_PERKS — API и дефолтное состояние', `
+_ok(typeof RogueMeta.getMetaPerks === 'function',        'API getMetaPerks есть');
+_ok(typeof RogueMeta.purchaseMetaPerk === 'function',    'API purchaseMetaPerk есть');
+_ok(typeof RogueMeta.isMetaPerkUnlocked === 'function',  'API isMetaPerkUnlocked есть');
+_ok(typeof RogueMeta.getBonusRerolls === 'function',     'API getBonusRerolls есть');
+const perks = RogueMeta.getMetaPerks();
+_eq(perks.length, 3, 'в пуле 3 мета-перка');
+_ok(perks.some(p => p.id === 'extra_reroll'),  'есть extra_reroll');
+_ok(perks.some(p => p.id === 'seed_money'),    'есть seed_money');
+_ok(perks.some(p => p.id === 'brand_starter'), 'есть brand_starter');
+_eq(RogueMeta.getBonusRerolls(), 0, 'по дефолту bonusRerolls = 0');
+_eq(RogueMeta.getUnlockedMetaPerkIds().length, 0, 'по дефолту перки не куплены');
+`));
+
+// ── 24: покупка перка — недостаточно ✦ ──
+add(run('Тест 24: покупка при 0 ✦ → not_enough_shards', `
+const r = RogueMeta.purchaseMetaPerk('extra_reroll');
+_ok(!r.ok, 'покупка отклонена');
+_eq(r.reason, 'not_enough_shards', 'причина: not_enough_shards');
+_ok(!RogueMeta.isMetaPerkUnlocked('extra_reroll'), 'extra_reroll НЕ куплен');
+`));
+
+// ── 25: покупка перка — успех после набора ✦ ──
+add(run('Тест 25: покупка перка после набора ✦', `
+// Накопим 400 ✦ (extra_reroll 250 + запас)
+for (let i = 0; i < 14; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const before = RogueMeta.getShards();
+_ok(before >= 250, 'набрали достаточно ✦ (' + before + ')');
+const r = RogueMeta.purchaseMetaPerk('extra_reroll');
+_ok(r.ok, 'покупка успешна');
+_eq(r.perk.id, 'extra_reroll', 'купленный перк = extra_reroll');
+_ok(RogueMeta.isMetaPerkUnlocked('extra_reroll'), 'extra_reroll отмечен куплен');
+_eq(RogueMeta.getShards(), before - 250, '✦ списаны (' + before + ' → ' + RogueMeta.getShards() + ')');
+_eq(RogueMeta.getBonusRerolls(), 1, 'после покупки bonusRerolls = 1');
+`));
+
+// ── 26: повторная покупка отклоняется ──
+add(run('Тест 26: повторная покупка → already_owned', `
+for (let i = 0; i < 14; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+RogueMeta.purchaseMetaPerk('extra_reroll');
+const r2 = RogueMeta.purchaseMetaPerk('extra_reroll');
+_ok(!r2.ok, 'вторая покупка отклонена');
+_eq(r2.reason, 'already_owned', 'причина: already_owned');
+`));
+
+// ── 27: seed_money применяется в startGame ──
+add(run('Тест 27: seed_money перк добавляет +100K к стартовому капиталу', `
+// Базовый старт без перка
+initState(); selectSpec('smm'); startGame();
+const moneyBase = G.money;
+// Покупаем seed_money (300 ✦)
+for (let i = 0; i < 14; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r = RogueMeta.purchaseMetaPerk('seed_money');
+_ok(r.ok, 'seed_money куплен');
+// Новый ран — старт +100K
+initState(); selectSpec('smm'); startGame();
+_eq(G.money, moneyBase + 100000, 'после seed_money: +100K к стартовому капиталу');
+`));
+
+// ── 28: brand_starter применяется в startGame ──
+add(run('Тест 28: brand_starter перк добавляет +5 к стартовой репутации', `
+initState(); selectSpec('smm'); startGame();
+const repBase = G.reputation;
+// Покупаем brand_starter (200 ✦)
+for (let i = 0; i < 10; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r = RogueMeta.purchaseMetaPerk('brand_starter');
+_ok(r.ok, 'brand_starter куплен');
+initState(); selectSpec('smm'); startGame();
+_eq(G.reputation, repBase + 5, 'после brand_starter: +5 к стартовой репутации');
+`));
+
+// ── 29: difficulty_master — без всех 4 сложностей не выдаётся ──
+add(run('Тест 29: difficulty_master — победа на 1 сложности недостаточна', `
+// Симулируем easy в localStorage
+localStorage.setItem('bt_difficulty_v1', 'easy');
+const s = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, runMap: { stageIdx: 4 } });
+_ok(!s.newAchievements.some(a => a.id === 'difficulty_master'), 'после 1 победы на easy difficulty_master НЕ выдан');
+const m = RogueMeta.getMeta();
+_ok((m.wonDifficulties || []).includes('easy'), 'easy записан в wonDifficulties');
+_eq((m.wonDifficulties || []).length, 1, 'wonDifficulties = [easy]');
+`));
+
+// ── 30: difficulty_master — победа на всех 4 сложностях выдаёт ачивку ──
+add(run('Тест 30: difficulty_master — выдаётся на 4-й сложности', `
+const diffs = ['easy', 'normal', 'hard', 'nightmare'];
+let lastSummary;
+diffs.forEach(d => {
+  localStorage.setItem('bt_difficulty_v1', d);
+  lastSummary = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, runMap: { stageIdx: 4 } });
+});
+_ok(lastSummary.newAchievements.some(a => a.id === 'difficulty_master'),
+    'difficulty_master выдан на 4-й сложности');
+const m = RogueMeta.getMeta();
+_eq((m.wonDifficulties || []).length, 4, 'все 4 сложности в wonDifficulties');
+_ok((m.achievements || []).includes('difficulty_master'), 'ачивка в achievements');
+`));
+
+// ── 31: difficulty_master — повторные победы не дублируют запись ──
+add(run('Тест 31: wonDifficulties уникален (повторы не дублируются)', `
+localStorage.setItem('bt_difficulty_v1', 'hard');
+RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, runMap: { stageIdx: 4 } });
+RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, runMap: { stageIdx: 4 } });
+RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, runMap: { stageIdx: 4 } });
+const m = RogueMeta.getMeta();
+_eq((m.wonDifficulties || []).length, 1, '3 победы подряд на hard → 1 запись');
+_eq((m.wonDifficulties || [])[0], 'hard', 'запись = hard');
+`));
+
+// ── 32: difficulty запись в history ──
+add(run('Тест 32: difficulty записывается в каждую запись history', `
+localStorage.setItem('bt_difficulty_v1', 'nightmare');
+RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 1 } });
+const m = RogueMeta.getMeta();
+const last = m.history[m.history.length - 1];
+_eq(last.difficulty, 'nightmare', 'последняя запись history.difficulty = nightmare');
+`));
+
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);
