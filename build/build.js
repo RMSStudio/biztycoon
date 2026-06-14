@@ -67,11 +67,13 @@ function scenarioBlock() {
   files.forEach(f => { map[f.replace('.data.js', '')] = read('scenarios/' + f); });
   return [
     '// ── Мульти-сценарный блок (v3.1): выбор из меню, см. ui.js SCENARIO_REGISTRY ──',
-    'var __SCEN_SRC = ' + JSON.stringify(map) + ';',
+    '// v3.18: __SCEN_SRC выложен на window, чтобы switchScenarioLive(id) мог',
+    '// переподгрузить data без location.reload (через new Function).',
+    'window.__SCEN_SRC = ' + JSON.stringify(map) + ';',
     'window.SCENARIO_DATA = (function () {',
     "  var id = localStorage.getItem('bt_scenario_v1') || 'agency';",
-    "  if (!__SCEN_SRC[id]) id = 'agency';",
-    "  (new Function(__SCEN_SRC[id]))();",
+    "  if (!window.__SCEN_SRC[id]) id = 'agency';",
+    "  (new Function(window.__SCEN_SRC[id]))();",
     "  return window.SCENARIO_DATA;",
     '})();',
     read('src/scenario-loader.js'),
@@ -101,6 +103,7 @@ const postEngineBlocks = [
   read('src/runes.js'),
   read('src/storyarcs.js'),
   read('src/runmap.js'),
+  read('src/meta.js'),
   read('dlc/loader.js'),
 ];
 

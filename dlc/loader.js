@@ -20,12 +20,13 @@ const DLC = (() => {
       id:      'roguelite',
       name:    'Rogue-lite',
       icon:    '⚡',
-      version: '0.3',
-      desc:    'Стартовые перки-руны + сюжетные арки + карта рана (5 этапов с milestone-бонусами).',
+      version: '0.4',
+      desc:    'Стартовые перки-руны + сюжетные арки + карта рана + мета-прогресс между партиями (осколки, ачивки, разблокировки).',
       status:  'wip',
       // Реализация механик физически живёт в src/runes.js, src/storyarcs.js,
-      // src/runmap.js (встраивается в single-HTML билд), но гейтуется проверкой
-      // включённости этого DLC через localStorage. Файл ниже — координатор/индикатор.
+      // src/runmap.js, src/meta.js (встраивается в single-HTML билд), но
+      // гейтуется проверкой включённости этого DLC через localStorage.
+      // Файл ниже — координатор/индикатор + хук на end_game для мета-награды.
       scripts: ['dlc/roguelite/roguelite.js'],
       styles:  [],
     },

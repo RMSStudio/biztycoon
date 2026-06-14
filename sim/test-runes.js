@@ -121,15 +121,19 @@ const totals = { pass: 0, fail: 0 };
 function add(r) { totals.pass += r.pass; totals.fail += r.fail; }
 
 // ── 1: модуль грузится, API доступно ──
+// С v3.14 пул расширен 4 запираемыми рунами под мета-прогресс (src/meta.js):
+// hardened, scholar, networker, outsider. В тесте — только модуль рун без meta,
+// поэтому фильтрация по RogueMeta не применяется (back-compat фолбэк).
 add(run('Тест 1: модуль грузится, API доступно', `
 _ok(typeof Runes === 'object', 'window.Runes объявлен');
 _ok(typeof Runes.pick === 'function', 'Runes.pick есть');
 _ok(typeof Runes.getPool === 'function', 'Runes.getPool есть');
 const pool = Runes.getPool();
-_eq(pool.length, 4, 'в пуле 4 руны');
+_eq(pool.length, 8, 'в пуле 8 рун (4 базовых + 4 запираемых под мета-прогресс)');
 const ids = pool.map(r => r.id).sort();
-_ok(JSON.stringify(ids) === JSON.stringify(['connections','insider','perfectionist','serial']),
-   'id рун: connections/insider/perfectionist/serial');
+const expected = ['connections','hardened','insider','networker','outsider','perfectionist','scholar','serial'];
+_ok(JSON.stringify(ids) === JSON.stringify(expected),
+   'id рун: 4 базовых + hardened/scholar/networker/outsider');
 `));
 
 // ── 2: connections ──

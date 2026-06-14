@@ -16,10 +16,11 @@
 //  следующей загрузке) перечисленные модули сами увидят флаг
 //  в localStorage и зарегистрируются.
 //
-//  Статус: v0.3 — реализованы первый (руны), второй (Story Arcs)
-//  и третий (Run Map) шаги. См. backlog/01_features.md п.13:
-//  следующие итерации — мета-прогресс между партиями,
-//  полноценный выбор второй специализации, расширение контента арок.
+//  Статус: v0.4 — реализованы первый (руны), второй (Story Arcs),
+//  третий (Run Map) и четвёртый (мета-прогресс между партиями) шаги.
+//  См. backlog/01_features.md п.13: следующие итерации — полноценный
+//  выбор второй специализации, расширение контента арок, кастомизация
+//  Run Map по сценарию.
 // ══════════════════════════════════════════════════════
 
 (function () {
@@ -36,6 +37,7 @@
   const runesLive  = !!window.__RUNES_LOADED;
   const arcsLive   = !!window.__SA_LOADED;
   const mapLive    = !!window.__RM_LOADED;
+  const metaLive   = !!window.__META_LOADED;
 
   const RL = {
     runCount: 0,
@@ -43,23 +45,68 @@
       runes:      runesLive,
       storyArcs:  arcsLive,
       runMap:     mapLive,
+      meta:       metaLive,
     },
   };
 
-  if (!runesLive || !arcsLive || !mapLive) {
+  if (!runesLive || !arcsLive || !mapLive || !metaLive) {
     console.warn(`[DLC:${ID}] Внимание: часть механик не загрузилась — ` +
-      `runes=${runesLive} storyArcs=${arcsLive} runMap=${mapLive}. ` +
+      `runes=${runesLive} storyArcs=${arcsLive} runMap=${mapLive} meta=${metaLive}. ` +
       `Возможно DLC включили в этой же сессии — перезагрузите страницу.`);
   }
 
-  // Хук на конец игры — счётчик ранов (под мета-прогресс в будущем)
+  // Хук на конец игры — счётчик ранов + начисление мета-прогресса.
+  // RogueMeta.awardAtEndGame обновит localStorage, посчитает ачивки и
+  // вернёт сводку для нотификаций; модал-сводку показываем поверх
+  // экрана конца игры (если модуль meta доступен).
   EventBus.on('end_game', ({ won }) => {
     RL.runCount++;
-    console.log(`[DLC:${ID}] end_game (won=${won}), runs=${RL.runCount}`);
+    let summary = null;
+    if (window.RogueMeta && typeof window.RogueMeta.awardAtEndGame === 'function') {
+      try {
+        summary = window.RogueMeta.awardAtEndGame(!!won, (typeof G !== 'undefined') ? G : null);
+        _announceMetaAward(summary);
+        // Обновляем подпись «X ✦» на кнопке мета-прогресса (если она уже в DOM)
+        if (typeof window.RogueMeta._injectModeButton === 'function') {
+          // Удаляем кэшированную кнопку и пересоздаём (внутри инжектор сам поставит свежее значение)
+          const btn = (typeof document !== 'undefined') ? document.getElementById('meta-mode-btn') : null;
+          if (btn && btn.parentElement) btn.parentElement.removeChild(btn);
+          try { window.RogueMeta._injectModeButton(); } catch (e) {}
+        }
+      } catch (e) {
+        console.warn(`[DLC:${ID}] meta award error:`, e);
+      }
+    }
+    console.log(`[DLC:${ID}] end_game (won=${won}), runs=${RL.runCount}` +
+      (summary ? `, +${summary.award}✦ → ${summary.meta.shards}✦` : ''));
   });
+
+  // Нотификации/лог-сводка по итогам начисления мета-прогресса
+  function _announceMetaAward(s) {
+    if (!s) return;
+    if (typeof addLog === 'function') {
+      addLog(`⚡ Мета-прогресс: +${s.award} ✦ (база ${s.base}${s.stageBonus ? ' + этап ' + s.stageBonus : ''}). Всего ${s.meta.shards} ✦.`, 'purple');
+      (s.newAchievements || []).forEach(a => {
+        addLog(`${a.icon} Ачивка «${a.name}»: ${a.desc} · +${a.shards} ✦`, 'green');
+      });
+      (s.newRunes || []).forEach(id => {
+        addLog(`🔓 Открыта руна: ${id}`, 'green');
+      });
+      (s.newBonuses || []).forEach(id => {
+        addLog(`🔓 Открыт бонус Run Map: ${id}`, 'green');
+      });
+    }
+    if (typeof notify === 'function') {
+      const parts = [`⚡ +${s.award} ✦`];
+      if (s.newAchievements && s.newAchievements.length) parts.push(`${s.newAchievements.length} ачивок`);
+      const unlocks = (s.newRunes?.length || 0) + (s.newBonuses?.length || 0);
+      if (unlocks) parts.push(`+${unlocks} разблок.`);
+      notify(parts.join(' · '), 'success');
+    }
+  }
 
   window._RL = RL;
 
-  console.log(`[DLC:${ID}] v0.3 активирован — компоненты: ` +
-    `руны=${runesLive ? 'on' : 'off'} · арки=${arcsLive ? 'on' : 'off'} · карта=${mapLive ? 'on' : 'off'}`);
+  console.log(`[DLC:${ID}] v0.4 активирован — компоненты: ` +
+    `руны=${runesLive ? 'on' : 'off'} · арки=${arcsLive ? 'on' : 'off'} · карта=${mapLive ? 'on' : 'off'} · мета=${metaLive ? 'on' : 'off'}`);
 })();

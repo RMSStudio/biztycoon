@@ -143,10 +143,89 @@ function initScenarioSelect() {
 }
 
 function switchScenario(id) {
+  // v3.18: основной путь — live-переключение без перезагрузки страницы.
+  // Старое поведение (location.reload) оставлено как фолбэк, если live-режим
+  // не справляется (нет доступа к источнику data — например, кастомные dev-сборки).
+  return switchScenarioLive(id);
+}
+
+// ── v3.18: live-переключение сценария без location.reload ─────
+// Логика:
+//   1) если активен ран — confirm и сброс через resetGame() (G обнуляется)
+//   2) грузим SCENARIO_DATA для нового id (dev: <script src>, dist: __SCEN_SRC)
+//   3) пере-гидрируем SCENARIO, перепривязываем биндинги в engine
+//   4) перерисовываем mode-screen — карточки сценария/сложности/спеков/интро/DLC
+function switchScenarioLive(id) {
   const cur = localStorage.getItem(LS_SCENARIO_KEY) || 'agency';
-  if (id === cur || !SCENARIO_REGISTRY.find(s => s.id === id)) return;
+  if (id === cur || !SCENARIO_REGISTRY.find(s => s.id === id)) return false;
+
+  // Если посреди партии — спросить подтверждение и сбросить
+  if (typeof G !== 'undefined' && G && (G.month || 0) > 0) {
+    const ok = (typeof window.confirm === 'function')
+      ? window.confirm('Активная партия будет сброшена. Сменить сценарий?')
+      : true;
+    if (!ok) return false;
+    if (typeof resetGame === 'function') resetGame();
+    EventBus.emit('navigate', { screen: 'screen-mode' });
+  }
+
   localStorage.setItem(LS_SCENARIO_KEY, id);
-  location.reload();   // const-биндинги движка читают SCENARIO при загрузке
+
+  _loadScenarioData(id, function (err) {
+    if (err) {
+      console.warn('[switchScenarioLive] не удалось загрузить data, фолбэк на reload:', err);
+      location.reload();
+      return;
+    }
+    try {
+      SCENARIO = ScenarioLoader.hydrate(window.SCENARIO_DATA);
+      if (typeof SE !== 'undefined' && typeof SE.applyActiveScenario === 'function') SE.applyActiveScenario();
+      if (typeof rebindFromScenario === 'function') rebindFromScenario();
+      // initState полностью обновит G под новый сценарий
+      if (typeof initState === 'function') initState();
+
+      // Перерисовка mode-screen и интро
+      initScenarioSelect();
+      initDifficultySelect();
+      renderSpecGrid();
+      applyScenarioChrome();
+      if (typeof SE !== 'undefined' && typeof SE.syncIntroStats === 'function') SE.syncIntroStats();
+
+      // Кнопка «Продолжить» — обновить состояние сейвов под новый сценарий
+      const loadBtn = document.getElementById('btn-load-save');
+      if (loadBtn && typeof hasSaves === 'function') loadBtn.disabled = !hasSaves();
+
+      EventBus.emit('render');
+      if (typeof notify === 'function') {
+        const meta = SCENARIO_REGISTRY.find(s => s.id === id);
+        notify(`${meta?.icon || '🎯'} Сценарий переключён: ${meta?.name || id}`, 'success');
+      }
+    } catch (e) {
+      console.error('[switchScenarioLive] hydrate/rebind упал, делаем reload:', e);
+      location.reload();
+    }
+  });
+  return true;
+}
+
+// Загрузка SCENARIO_DATA по id — два пути:
+//   • multi-дист: глобальный __SCEN_SRC map (id → исходник как строка)
+//   • dev: динамический <script src="scenarios/<id>.data.js">
+function _loadScenarioData(id, done) {
+  // 1) Multi-дист: SCENARIO_DATA пересоздаётся через new Function
+  if (typeof window.__SCEN_SRC !== 'undefined' && window.__SCEN_SRC[id]) {
+    try {
+      (new Function(window.__SCEN_SRC[id]))();
+      done(null);
+    } catch (e) { done(e); }
+    return;
+  }
+  // 2) Dev: инжект <script> и ждём onload (data-файл присваивает window.SCENARIO_DATA)
+  const s = document.createElement('script');
+  s.src = `scenarios/${id}.data.js?ts=${Date.now()}`;  // обходим кеш
+  s.onload  = () => done(null);
+  s.onerror = () => done(new Error(`не удалось загрузить scenarios/${id}.data.js`));
+  document.head.appendChild(s);
 }
 
 // ══════════════════════════════════════════════════════
@@ -191,11 +270,56 @@ function initDifficultySelect() {
 }
 
 function switchDifficulty(id) {
-  if (typeof ScenarioLoader === 'undefined') return;
+  // v3.18: основной путь — live-переключение без перезагрузки страницы.
+  return switchDifficultyLive(id);
+}
+
+// ── v3.18: live-переключение сложности без location.reload ────
+// Сложность применяется через ScenarioLoader.applyDifficulty(sc, id),
+// который мутирует SCENARIO.settings (overhead/winCondition/...).
+// После этого initState() ресинкает все let-биндинги движка.
+function switchDifficultyLive(id) {
+  if (typeof ScenarioLoader === 'undefined') return false;
   const cur = localStorage.getItem(LS_DIFFICULTY_KEY_UI) || 'normal';
-  if (id === cur || !ScenarioLoader.DIFFICULTY_ORDER.includes(id)) return;
+  if (id === cur || !ScenarioLoader.DIFFICULTY_ORDER.includes(id)) return false;
+
+  if (typeof G !== 'undefined' && G && (G.month || 0) > 0) {
+    const ok = (typeof window.confirm === 'function')
+      ? window.confirm('Активная партия будет сброшена. Сменить сложность?')
+      : true;
+    if (!ok) return false;
+    if (typeof resetGame === 'function') resetGame();
+    EventBus.emit('navigate', { screen: 'screen-mode' });
+  }
+
   localStorage.setItem(LS_DIFFICULTY_KEY_UI, id);
-  location.reload();
+
+  try {
+    // applyDifficulty переписывает settings под новый пресет (мутирует SCENARIO)
+    ScenarioLoader.applyDifficulty(SCENARIO, id);
+    if (typeof SE !== 'undefined' && typeof SE.applyActiveScenario === 'function') SE.applyActiveScenario();
+    if (typeof rebindFromScenario === 'function') rebindFromScenario();
+    if (typeof initState === 'function') initState();
+
+    // Перерисовка экранов выбора и интро
+    initDifficultySelect();
+    renderSpecGrid();
+    applyScenarioChrome();
+    if (typeof SE !== 'undefined' && typeof SE.syncIntroStats === 'function') SE.syncIntroStats();
+
+    const loadBtn = document.getElementById('btn-load-save');
+    if (loadBtn && typeof hasSaves === 'function') loadBtn.disabled = !hasSaves();
+
+    EventBus.emit('render');
+    if (typeof notify === 'function' && SCENARIO._activeDifficulty) {
+      notify(`Сложность переключена: ${SCENARIO._activeDifficulty.label}`, 'success');
+    }
+    return true;
+  } catch (e) {
+    console.error('[switchDifficultyLive] упал, делаем reload:', e);
+    location.reload();
+    return false;
+  }
 }
 
 // Сценарный «хром»: интро-текст, иконки лого, title — из SCENARIO

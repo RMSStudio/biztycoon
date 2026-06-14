@@ -7,17 +7,37 @@
 // SCENARIO объявляется в scenarios/{id}.js и загружается до engine.js.
 // Алиасы дают обратную совместимость: весь код внутри engine.js
 // продолжает использовать прежние имена без изменений.
-const STAFF_DEFS        = SCENARIO.staff;
-const STAFF_ROLES       = SCENARIO.staffRoles;
-const ROLE_LABELS       = SCENARIO.roleLabels;
-const PROJECT_POOL      = SCENARIO.projects;
-const BUDGET_RANGES     = SCENARIO.budgetRanges;
-const UPGRADES          = SCENARIO.upgrades;
-const SPECS             = SCENARIO.specs;
-const EVENTS            = SCENARIO.events;
-// let (не const) — чтобы initState() ресинкал их после SE.applyActiveScenario()
+//
+// v3.18: ВСЕ биндинги — let, чтобы rebindFromScenario() мог переприсвоить
+// их при live-смене сценария или сложности (без location.reload).
+// Раньше эти 8 были const и держали ссылки на старый сценарий после reload.
+let STAFF_DEFS        = SCENARIO.staff;
+let STAFF_ROLES       = SCENARIO.staffRoles;
+let ROLE_LABELS       = SCENARIO.roleLabels;
+let PROJECT_POOL      = SCENARIO.projects;
+let BUDGET_RANGES     = SCENARIO.budgetRanges;
+let UPGRADES          = SCENARIO.upgrades;
+let SPECS             = SCENARIO.specs;
+let EVENTS            = SCENARIO.events;
 let OVERHEAD          = SCENARIO.settings.overhead;
 let ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
+
+// v3.18: единая точка перепривязки биндингов к текущему SCENARIO.
+// Вызывается из initState() и из switchScenarioLive/switchDifficultyLive.
+function rebindFromScenario() {
+  STAFF_DEFS        = SCENARIO.staff;
+  STAFF_ROLES       = SCENARIO.staffRoles;
+  ROLE_LABELS       = SCENARIO.roleLabels;
+  PROJECT_POOL      = SCENARIO.projects;
+  BUDGET_RANGES     = SCENARIO.budgetRanges;
+  UPGRADES          = SCENARIO.upgrades;
+  SPECS             = SCENARIO.specs;
+  EVENTS            = SCENARIO.events;
+  OVERHEAD          = SCENARIO.settings.overhead;
+  ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
+  SCOUT_COST        = SCENARIO.settings.scoutCost;
+  HIRE_COST         = SCENARIO.settings.hireCost;
+}
 
 // Рабочие дни месяца (v3.3): производственный календарь из сценария
 // (settings.workdays[12]); фолбэк — плоский actionsPerMonth
@@ -73,13 +93,11 @@ const LOAN_TIERS = [
 ];
 
 function initState() {
-  // Применяем активный сценарий и ресинкаем let-биндинги.
-  // Работает и при первом запуске, и при "Играть снова" без перезагрузки страницы.
+  // Применяем активный сценарий и ресинкаем все let-биндинги.
+  // Работает и при первом запуске, и при «Играть снова», и после
+  // live-смены сценария/сложности без перезагрузки страницы (v3.18).
   if (typeof SE !== 'undefined') SE.applyActiveScenario();
-  OVERHEAD          = SCENARIO.settings.overhead;
-  ACTIONS_PER_MONTH = SCENARIO.settings.actionsPerMonth;
-  SCOUT_COST        = SCENARIO.settings.scoutCost;
-  HIRE_COST         = SCENARIO.settings.hireCost;
+  rebindFromScenario();
 
   G = {
     spec:null, money:500000, month:0,
@@ -1537,7 +1555,8 @@ function advanceMonth() {
   if (typeof autoSave === 'function') autoSave();
 
   // Win / Lose
-  if (G.money>=SCENARIO.settings.winCondition){ _emitRender(); _emitEndGame(true); return; }
+  // winCondition временно отключён — режим бесконечной игры
+  // if (G.money>=SCENARIO.settings.winCondition){ _emitRender(); _emitEndGame(true); return; }
   if (G.money<=0)       { _emitRender(); _emitEndGame(false); return; }
 
   // Случайное событие (40%, пропуск 1-го месяца; не когда идёт событие ИИ)

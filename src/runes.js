@@ -108,6 +108,39 @@
       color: '#22d3ee',
       effects: { serialUnlock: true },
     },
+    // ── Запираемые руны (открываются мета-прогрессом, см. src/meta.js) ──
+    {
+      id:    'hardened',
+      icon:  '🛡',
+      name:  'Закалённый',
+      desc:  'Просрочка бьёт по репутации в 2 раза меньше (penalty shield). Зато overhead +10% — закалка не бесплатна.',
+      color: '#fb7185',
+      effects: { penaltyShield: true, overheadBumpPct: 0.10 },
+    },
+    {
+      id:    'scholar',
+      icon:  '🎓',
+      name:  'Стипендиат',
+      desc:  '+10 к качеству от стартовых апгрейдов. Но выплаты −5% — академия не подружила со скоростью бизнеса.',
+      color: '#60a5fa',
+      effects: { qualityBonus: 10, payoutMult: -0.05 },
+    },
+    {
+      id:    'networker',
+      icon:  '🌐',
+      name:  'Сетевик',
+      desc:  '+2 лида при каждом скаутинге. Стартовый кэш −300 000 ₽ — много заплатил за интро и абонементы конференций.',
+      color: '#10b981',
+      effects: { scoutBonus: 2, startMoneyDelta: -300000 },
+    },
+    {
+      id:    'outsider',
+      icon:  '🌪',
+      name:  'Аутсайдер',
+      desc:  'Overhead −20% (работаешь из подвала, экономишь на всём). Стартовая репутация −15 — тебя пока никто не знает.',
+      color: '#facc15',
+      effects: { overheadBumpPct: -0.20, startReputationDelta: -15 },
+    },
   ];
 
   // ── Внутренний стейт модуля ───────────────────────────
@@ -184,15 +217,25 @@
     if (typeof e.penaltyMult === 'number' && e.penaltyMult > 1) {
       G.runePenaltyMult = e.penaltyMult;
     }
-    if (typeof e.overheadBumpPct === 'number' && e.overheadBumpPct > 0) {
+    if (typeof e.overheadBumpPct === 'number' && e.overheadBumpPct !== 0) {
       // OVERHEAD-let в engine.js недоступен из этого скоупа.
       // Поэтому сохраняем абсолютную величину доп.списания и вычитаем
       // её каждый месяц в обёртке advanceMonth (после оригинального advance).
+      // Отрицательное значение → экономия (Аутсайдер): runeOverheadBump уйдёт в минус,
+      // и в _postAdvance ветка `G.money -= bump` фактически вернёт часть.
       const baseOverhead = (typeof SCENARIO !== 'undefined' && SCENARIO?.settings?.overhead) || 0;
-      G.runeOverheadBump = Math.round(baseOverhead * e.overheadBumpPct);
+      G.runeOverheadBump = (G.runeOverheadBump || 0) + Math.round(baseOverhead * e.overheadBumpPct);
     }
-    if (e.insiderRare)   G.runeInsiderRare  = true;
-    if (e.serialUnlock)  G.runeSerialUnlock = true;
+    // Новые каналы для запираемых рун (открываются мета-прогрессом)
+    if (typeof e.qualityBonus === 'number' && e.qualityBonus !== 0) {
+      G.caseQBonus = (G.caseQBonus || 0) + e.qualityBonus;
+    }
+    if (typeof e.startReputationDelta === 'number' && e.startReputationDelta !== 0) {
+      G.reputation = Math.max(0, Math.min(100, (G.reputation || 0) + e.startReputationDelta));
+    }
+    if (e.penaltyShield)  G.perkPenaltyShield = true;
+    if (e.insiderRare)    G.runeInsiderRare   = true;
+    if (e.serialUnlock)   G.runeSerialUnlock  = true;
 
     // Карточка руны в стейте — для UI и сейвов
     G.activeRune = {
@@ -209,12 +252,20 @@
   function _postAdvance() {
     if (!G) return;
 
-    // (а) Инсайдер: доп.списание overhead — отдельной строкой в логе,
+    // (а) Доп.overhead / экономия — отдельной строкой в логе,
     //     не дублирует базовый overhead (он уже списан движком).
+    //     Положительный bump → доп.списание (Инсайдер).
+    //     Отрицательный bump → возврат части (Аутсайдер — подвальный режим).
     if (G.runeOverheadBump && G.money > 0) {
       G.money -= G.runeOverheadBump;
       if (typeof addLog === 'function') {
-        addLog(`🕵 Инсайдер: контакты −${_fmt(G.runeOverheadBump)} (доп.overhead)`, 'red');
+        if (G.runeOverheadBump > 0) {
+          const tag = G.activeRune ? G.activeRune.icon + ' ' + G.activeRune.name : '🕵 Инсайдер';
+          addLog(`${tag}: контакты −${_fmt(G.runeOverheadBump)} (доп.overhead)`, 'red');
+        } else {
+          const tag = G.activeRune ? G.activeRune.icon + ' ' + G.activeRune.name : '🌪 Подвал';
+          addLog(`${tag}: экономия +${_fmt(-G.runeOverheadBump)} (overhead)`, 'green');
+        }
       }
     }
 
@@ -281,8 +332,22 @@
       m.onclick = (e) => { if (e.target === m) _closeModal(); };
       document.body.appendChild(m);
     }
-    // 3 случайные из общего пула
-    const pool = [...RUNES];
+    // 3 случайные из ОТКРЫТОЙ части общего пула.
+    // Запираемые руны (hardened/scholar/networker/outsider) появятся в пуле
+    // только когда мета-прогресс наберёт нужные осколки (см. src/meta.js).
+    // Если RogueMeta недоступен — все руны считаются открытыми (back-compat).
+    const meta = (typeof window !== 'undefined') ? window.RogueMeta : null;
+    const pool = [...RUNES].filter(r =>
+      !meta || typeof meta.isRuneUnlocked !== 'function' || meta.isRuneUnlocked(r.id)
+    );
+    if (pool.length < 3) {
+      // Если открыто меньше 3 — добавляем «свободные» руны без проверки,
+      // чтобы пользователь всегда получил 3 варианта (фолбэк безопасности).
+      for (const r of RUNES) {
+        if (pool.length >= 3) break;
+        if (!pool.includes(r)) pool.push(r);
+      }
+    }
     const shown = [];
     while (shown.length < 3 && pool.length) {
       const idx = Math.floor(Math.random() * pool.length);

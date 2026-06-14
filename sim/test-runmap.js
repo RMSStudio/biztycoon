@@ -81,9 +81,10 @@ function makeSandbox(opts) {
 
 function loadEngineSrc(opts) {
   opts = opts || {};
+  const scenarioFile = opts.scenario === 'bank' ? 'scenarios/bank.data.js' : 'scenarios/agency.data.js';
   const FILES = [
     'src/constants.js', 'src/events.js',
-    'scenarios/agency.data.js', 'src/scenario-loader.js',
+    scenarioFile, 'src/scenario-loader.js',
     'src/engine.js', 'src/projects.js', 'src/staff.js',
   ];
   let src = FILES
@@ -125,23 +126,28 @@ const totals = { pass: 0, fail: 0 };
 function add(r) { totals.pass += r.pass; totals.fail += r.fail; }
 
 // ── 1: API доступно, этапы и бонусы ──
+// С v3.15 этапы и бонусы вынесены в данные сценария (Тип C).
+// Сценарий agency имеет свои id: studio_garage..studio_endgame.
 add(run('Тест 1: модуль активирован, API доступно', `
 _ok(typeof RunMap === 'object', 'window.RunMap объявлен');
 _ok(typeof RunMap.getStages === 'function', 'RunMap.getStages есть');
 const stages = RunMap.getStages();
 _eq(stages.length, 5, 'в карте 5 этапов');
-_eq(stages[0].id, 'startup', 'первый этап = startup');
-_eq(stages[stages.length - 1].id, 'endgame', 'последний = endgame');
+_eq(stages[0].id, 'studio_garage', 'первый этап agency = studio_garage');
+_eq(stages[stages.length - 1].id, 'studio_endgame', 'последний agency = studio_endgame');
 const bonuses = RunMap.getBonuses();
 _ok(bonuses.length >= 10, 'пул бонусов ≥ 10 (' + bonuses.length + ')');
-_ok(bonuses.every(b => typeof b.apply === 'function'), 'у каждого бонуса есть apply');
+// Бонусы переехали с inline apply() на массив effects[] (DSL),
+// чтобы данные сценария оставались чистым JSON (правило Godot-portability).
+_ok(bonuses.every(b => Array.isArray(b.effects) && b.effects.length >= 1),
+    'у каждого бонуса есть effects[] для applyOps');
 `));
 
 // ── 2: стартовый этап и пилюля ──
-add(run('Тест 2: стартовый этап = Гараж, состояние инициализируется', `
+add(run('Тест 2: стартовый этап = первый этап, состояние инициализируется', `
 initState(); selectSpec('smm'); startGame();
 const cur = RunMap.getCurrent();
-_eq(cur.id, 'startup', 'на старте — этап startup');
+_eq(cur.id, 'studio_garage', 'на старте agency — этап studio_garage');
 // G.runMap появляется после первого тика (advanceMonth)
 advanceMonth();
 _ok(G.runMap, 'G.runMap инициализирован');
@@ -149,13 +155,14 @@ _eq(G.runMap.stageIdx, 0, 'stageIdx = 0');
 `));
 
 // ── 3: milestone на границе monthEnd ──
-add(run('Тест 3: на M6 (граница startup) выстреливает milestone foothold', `
+add(run('Тест 3: на M6 (граница 1-го этапа) выстреливает milestone', `
 initState(); selectSpec('smm'); startGame();
 G.month = 6;
 __lastEv = null;
 advanceMonth();
 _ok(__lastEv && __lastEv._runmap === true, 'выстрелил milestone-модал');
-_ok((__lastEv.title || '').includes('Закрепление'), 'заголовок про новый этап');
+const stages = RunMap.getStages();
+_ok((__lastEv.title || '').includes(stages[1].name), 'заголовок содержит название нового этапа (' + stages[1].name + ')');
 _eq((__lastEv.choices || []).length, 3, 'ровно 3 варианта бонуса');
 `));
 
@@ -245,6 +252,124 @@ initState(); selectSpec('smm'); startGame();
 G.month = 6; advanceMonth();
 _ok(typeof G.runMap === 'undefined', 'G.runMap не появилась');
 `, { killSwitch: true }));
+
+// ── 10: bank-сценарий имеет свой тематический runMap (Тип C) ──
+add(run('Тест 10: bank — свои этапы (bank_license..bank_topten) и тематические бонусы', `
+_ok(typeof SCENARIO === 'object', 'SCENARIO загружен');
+_eq(SCENARIO.id, 'bank', 'SCENARIO.id = bank');
+_ok(SCENARIO.runMap && Array.isArray(SCENARIO.runMap.stages), 'SCENARIO.runMap.stages есть');
+const stages = RunMap.getStages();
+_eq(stages.length, 5, 'у банка 5 этапов');
+_eq(stages[0].id, 'bank_license', 'первый этап = bank_license (Получили лицензию)');
+_eq(stages[stages.length - 1].id, 'bank_topten', 'последний = bank_topten (Топ-10)');
+const bonuses = RunMap.getBonuses();
+// С v3.17 в банке 12 универсальных + 8 этап-эксклюзивов = 20.
+_eq(bonuses.length, 20, 'у банка 12 универсальных + 8 этап-эксклюзивов = 20');
+const ids = bonuses.map(b => b.id);
+_ok(ids.includes('deposit_base'), 'есть deposit_base (Депозитная база)');
+_ok(ids.includes('scoring'),      'есть scoring (Скоринг-модель)');
+_ok(ids.includes('regulator'),    'есть regulator (Лобби в регуляторе)');
+_ok(!ids.includes('cash'),        'нет агентского cash — банк свой пул');
+// Этап-эксклюзивы
+_ok(ids.includes('core_banking'),    'есть core_banking (эксклюзив bank_retail)');
+_ok(ids.includes('spo_capital'),     'есть spo_capital (эксклюзив bank_topten)');
+_ok(ids.includes('vip_office'),      'есть vip_office (эксклюзив bank_private)');
+_ok(ids.includes('systemic_status'), 'есть systemic_status (эксклюзив bank_topten)');
+`, { scenario: 'bank' }));
+
+// ── 11: DSL-эффекты применяются — money, gAdd, gSet, overheadBump ──
+add(run('Тест 11: DSL-эффекты бонусов через applyOps реально мутируют G', `
+initState(); selectSpec('smm'); startGame();
+const baseOverhead = SCENARIO.settings.overhead;
+// money +250 000
+ScenarioLoader.applyOps([{ money: 250000 }], G);
+_eq(G.money, SCENARIO.settings.startMoney + 250000, 'money +250 000');
+// gAdd: perkPayoutMult +0.05
+const beforeMult = G.perkPayoutMult || 0;
+ScenarioLoader.applyOps([{ gAdd: { perkPayoutMult: 0.05 } }], G);
+_ok(Math.abs((G.perkPayoutMult || 0) - (beforeMult + 0.05)) < 1e-9, 'perkPayoutMult +0.05');
+// gAdd: caseQBonus +5 (целочисленный канал)
+ScenarioLoader.applyOps([{ gAdd: { caseQBonus: 5 } }], G);
+_eq(G.caseQBonus, 5, 'caseQBonus = 5');
+// gSet: perkPenaltyShield = true
+_ok(!G.perkPenaltyShield, 'до gSet: shield не выставлен');
+ScenarioLoader.applyOps([{ gSet: { perkPenaltyShield: true } }], G);
+_eq(G.perkPenaltyShield, true, 'gSet → perkPenaltyShield = true');
+// overheadBump -0.10 → runeOverheadBump = -round(base * 0.10)
+ScenarioLoader.applyOps([{ overheadBump: -0.10 }], G);
+_eq(G.runeOverheadBump, -Math.round(baseOverhead * 0.10), 'overheadBump -10% → runeOverheadBump = -base×0.10');
+`));
+
+// ── 12: фолбэк на DEFAULT_STAGES при пустом SCENARIO.runMap ──
+add(run('Тест 12: если SCENARIO.runMap не задан → берём встроенные дефолты', `
+// Стираем runMap из SCENARIO «как будто сценарий не описал его»
+delete SCENARIO.runMap;
+const stages  = RunMap.getStages();
+const bonuses = RunMap.getBonuses();
+_eq(stages.length,  5,  'fallback: 5 встроенных этапов');
+_eq(stages[0].id,   'startup',  'fallback: первый этап = startup (DEFAULT_STAGES)');
+_eq(stages[4].id,   'endgame',  'fallback: последний = endgame');
+_eq(bonuses.length, 12, 'fallback: 12 встроенных бонусов');
+_ok(bonuses.find(b => b.id === 'cash'), 'fallback: есть cash');
+_ok(bonuses.every(b => Array.isArray(b.effects)), 'дефолтные бонусы тоже на effects[]');
+`));
+
+// ── 13: этап-эксклюзивы — bonusFitsStage / getBonusesForStage ──
+add(run('Тест 13: bonusFitsStage / getBonusesForStage — фильтр по этапу', `
+_ok(typeof RunMap.bonusFitsStage === 'function', 'API bonusFitsStage есть');
+_ok(typeof RunMap.getBonusesForStage === 'function', 'API getBonusesForStage есть');
+const bank_retail  = RunMap.getBonusesForStage('bank_retail').map(b => b.id);
+const bank_topten  = RunMap.getBonusesForStage('bank_topten').map(b => b.id);
+const bank_private = RunMap.getBonusesForStage('bank_private').map(b => b.id);
+// На retail видим универсальные + retail-эксклюзивы, без top-/private-эксклюзивов
+_ok(bank_retail.includes('deposit_base'),  'retail: universal deposit_base виден');
+_ok(bank_retail.includes('core_banking'),  'retail: эксклюзив core_banking виден');
+_ok(!bank_retail.includes('spo_capital'),  'retail: SPO (топ-10 эксклюзив) НЕ виден');
+_ok(!bank_retail.includes('vip_office'),   'retail: VIP (private эксклюзив) НЕ виден');
+// На топ-10 видим SPO/SZKO, но НЕ core_banking
+_ok(bank_topten.includes('spo_capital'),     'top-10: SPO виден');
+_ok(bank_topten.includes('systemic_status'), 'top-10: SZKO виден');
+_ok(!bank_topten.includes('core_banking'),   'top-10: core_banking (retail) НЕ виден');
+// На private видим VIP/wealth, но НЕ spo
+_ok(bank_private.includes('vip_office'),      'private: VIP виден');
+_ok(bank_private.includes('wealth_advisors'), 'private: wealth_advisors виден');
+_ok(!bank_private.includes('spo_capital'),    'private: SPO НЕ виден');
+`, { scenario: 'bank' }));
+
+// ── 14: milestone на bank_retail предлагает универсальные + retail-эксклюзивы ──
+add(run('Тест 14: milestone на bank_retail — выбор только из retail-подходящих', `
+initState(); selectSpec('retail'); startGame();
+G.month = 6; // граница bank_license (monthEnd:6) → next stage bank_retail
+__lastEv = null;
+advanceMonth();
+_ok(__lastEv && __lastEv._runmap, 'milestone выстрелил');
+_eq(__lastEv.id, 'runmap_bank_retail', 'переход именно на bank_retail');
+const offered = (__lastEv.choices || []).map(c => c.text);
+// Каждый из 3 предложенных должен быть валидным для bank_retail (универсал или retail-эксклюзив)
+const validIds = new Set(RunMap.getBonusesForStage('bank_retail').map(b => b.id));
+const bonusList = RunMap.getBonuses();
+const offeredValid = (__lastEv.choices || []).every(c => {
+  const found = bonusList.find(b => c.text.includes(b.name));
+  return found && validIds.has(found.id);
+});
+_ok(offeredValid, 'все 3 предложенных бонуса подходят bank_retail');
+`, { scenario: 'bank' }));
+
+// ── 15: агентство — на studio_brand видны brand-эксклюзивы, без endgame ──
+add(run('Тест 15: агентство studio_brand — brand-эксклюзивы видны, endgame нет', `
+const onBrand   = RunMap.getBonusesForStage('studio_brand').map(b => b.id);
+const onEndgame = RunMap.getBonusesForStage('studio_endgame').map(b => b.id);
+_ok(onBrand.includes('thought_leader'),  'studio_brand: thought_leader виден');
+_ok(onBrand.includes('design_awards'),   'studio_brand: design_awards виден');
+_ok(!onBrand.includes('boutique_premium'),'studio_brand: бутик (endgame) НЕ виден');
+_ok(!onBrand.includes('agency_franchise'),'studio_brand: франшиза (endgame) НЕ виден');
+_ok(onEndgame.includes('boutique_premium'),'studio_endgame: бутик виден');
+_ok(onEndgame.includes('agency_franchise'),'studio_endgame: франшиза виден');
+_ok(!onEndgame.includes('thought_leader'), 'studio_endgame: thought_leader (brand) НЕ виден');
+// Универсальные доступны на обоих
+_ok(onBrand.includes('cash')   && onEndgame.includes('cash'),   'универсальный cash виден на обоих');
+_ok(onBrand.includes('payout') && onEndgame.includes('payout'), 'универсальный payout виден на обоих');
+`));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);

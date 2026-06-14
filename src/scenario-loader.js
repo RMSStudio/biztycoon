@@ -23,6 +23,9 @@
 //  { "ifRole": { "role":"developer", "then":[ops], "else":[ops] } }
 //  { "scoutInject": { ...дефиниция проекта... } }
 //  { "schedule": { "inMonths":2, "label":"...", "money":-40000, "icon":"💳" } } — отложенный эффект (календарь)
+//  { "gAdd":   { "perkPayoutMult":0.05, "caseQBonus":5 } } — прибавить к G[ключ] (для перков/бонусов Run Map)
+//  { "gSet":   { "perkPenaltyShield":true } }              — присвоить G[ключ] (для bool-флагов)
+//  { "overheadBump": -0.10 } — runeOverheadBump += round(базовый overhead × коэффициент); отрицательное = экономия
 //
 //  ── СЛОЖНОСТЬ (v3.9) ──
 //  Пресеты в DEFAULT_DIFFICULTIES, выбор пользователя в localStorage
@@ -177,6 +180,32 @@ const ScenarioLoader = (() => {
       g.scoutPool = g.scoutPool || [];
       g.scoutPool.push(JSON.parse(JSON.stringify(op.scoutInject)));
       addLog(`🔥 В пуле заявок появился «${op.scoutInject.name}»`, 'teal');
+    }
+
+    // ── Универсальные G-каналы (для перков, рунных эффектов, бонусов Run Map) ──
+    // gAdd: складывает дельты с округлением до 2 знаков (валюты — целые).
+    if (op.gAdd && typeof op.gAdd === 'object') {
+      Object.keys(op.gAdd).forEach(k => {
+        const delta = Number(op.gAdd[k]) || 0;
+        if (!delta) return;
+        const cur = Number(g[k]) || 0;
+        const next = cur + delta;
+        // Простое округление, чтобы не плодить плавающую точку
+        g[k] = (k === 'money' || k === 'portfolio' || k === 'reputation')
+          ? Math.round(next)
+          : Math.round(next * 100) / 100;
+      });
+    }
+    // gSet: жёсткое присваивание (булевые флаги вроде perkPenaltyShield)
+    if (op.gSet && typeof op.gSet === 'object') {
+      Object.keys(op.gSet).forEach(k => { g[k] = op.gSet[k]; });
+    }
+    // overheadBump: добавка к runeOverheadBump пропорционально базовому overhead.
+    // Отрицательное значение → экономия (см. _postAdvance в src/runes.js).
+    if (op.overheadBump != null) {
+      const pct = Number(op.overheadBump) || 0;
+      const base = (typeof SCENARIO !== 'undefined' && SCENARIO && SCENARIO.settings && SCENARIO.settings.overhead) || 0;
+      g.runeOverheadBump = (g.runeOverheadBump || 0) + Math.round(base * pct);
     }
   }
 
