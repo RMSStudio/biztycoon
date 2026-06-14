@@ -263,8 +263,8 @@ _eq(stages.length, 5, 'у банка 5 этапов');
 _eq(stages[0].id, 'bank_license', 'первый этап = bank_license (Получили лицензию)');
 _eq(stages[stages.length - 1].id, 'bank_topten', 'последний = bank_topten (Топ-10)');
 const bonuses = RunMap.getBonuses();
-// С v3.17 в банке 12 универсальных + 8 этап-эксклюзивов = 20.
-_eq(bonuses.length, 20, 'у банка 12 универсальных + 8 этап-эксклюзивов = 20');
+// С v3.19 в банке 12 универсальных + 11 этап-эксклюзивов (license×2 + retail×2 + corp×2 + private×2 + topten×3) = 23.
+_eq(bonuses.length, 23, 'у банка 12 универсальных + 11 этап-эксклюзивов = 23');
 const ids = bonuses.map(b => b.id);
 _ok(ids.includes('deposit_base'), 'есть deposit_base (Депозитная база)');
 _ok(ids.includes('scoring'),      'есть scoring (Скоринг-модель)');
@@ -369,6 +369,69 @@ _ok(!onEndgame.includes('thought_leader'), 'studio_endgame: thought_leader (bran
 // Универсальные доступны на обоих
 _ok(onBrand.includes('cash')   && onEndgame.includes('cash'),   'универсальный cash виден на обоих');
 _ok(onBrand.includes('payout') && onEndgame.includes('payout'), 'универсальный payout виден на обоих');
+`));
+
+// ── 16: v3.19 агентство — эксклюзивы новых этапов ──
+add(run('Тест 16: v3.19 агентство — studio_garage/team/growth эксклюзивы', `
+const onGarage = RunMap.getBonusesForStage('studio_garage').map(b => b.id);
+const onTeam   = RunMap.getBonusesForStage('studio_team').map(b => b.id);
+const onGrowth = RunMap.getBonusesForStage('studio_growth').map(b => b.id);
+// studio_garage: word_of_mouth, startup_grant
+_ok(onGarage.includes('word_of_mouth'),   'studio_garage: word_of_mouth виден');
+_ok(onGarage.includes('startup_grant'),   'studio_garage: startup_grant виден');
+_ok(!onGarage.includes('team_spirit'),    'studio_garage: team_spirit (team) НЕ виден');
+_ok(!onGarage.includes('design_awards'),  'studio_garage: design_awards (brand) НЕ виден');
+// studio_team: team_spirit, process_standards
+_ok(onTeam.includes('team_spirit'),       'studio_team: team_spirit виден');
+_ok(onTeam.includes('process_standards'), 'studio_team: process_standards виден');
+_ok(!onTeam.includes('word_of_mouth'),    'studio_team: word_of_mouth (garage) НЕ виден');
+_ok(!onTeam.includes('media_feature'),    'studio_team: media_feature (growth) НЕ виден');
+// studio_growth: media_feature, strategic_partner
+_ok(onGrowth.includes('media_feature'),     'studio_growth: media_feature виден');
+_ok(onGrowth.includes('strategic_partner'), 'studio_growth: strategic_partner виден');
+_ok(!onGrowth.includes('startup_grant'),    'studio_growth: startup_grant (garage) НЕ виден');
+_ok(!onGrowth.includes('boutique_premium'), 'studio_growth: boutique (endgame) НЕ виден');
+// Универсальные — везде
+_ok(onGarage.includes('cash') && onTeam.includes('cash') && onGrowth.includes('cash'),
+    'универсальный cash виден на всех трёх');
+`));
+
+// ── 17: v3.19 банк — эксклюзивы bank_license и третий bank_topten ──
+add(run('Тест 17: v3.19 банк — bank_license эксклюзивы + новый bank_topten', `
+const onLicense = RunMap.getBonusesForStage('bank_license').map(b => b.id);
+const onTopten  = RunMap.getBonusesForStage('bank_topten').map(b => b.id);
+// bank_license: gov_contract, initial_capital
+_ok(onLicense.includes('gov_contract'),    'bank_license: gov_contract виден');
+_ok(onLicense.includes('initial_capital'), 'bank_license: initial_capital виден');
+_ok(!onLicense.includes('core_banking'),   'bank_license: core_banking (retail) НЕ виден');
+_ok(!onLicense.includes('spo_capital'),    'bank_license: SPO (topten) НЕ виден');
+// bank_topten: уже было 2, теперь +1 (mna_acquisition)
+_ok(onTopten.includes('spo_capital'),     'bank_topten: SPO (старый) виден');
+_ok(onTopten.includes('systemic_status'), 'bank_topten: systemic_status (старый) виден');
+_ok(onTopten.includes('mna_acquisition'), 'bank_topten: mna_acquisition (новый) виден');
+_ok(!onTopten.includes('gov_contract'),   'bank_topten: gov_contract (license) НЕ виден');
+// Универсальные — везде
+_ok(onLicense.includes('deposit_base') && onTopten.includes('deposit_base'),
+    'универсальный deposit_base виден на обоих');
+`, { scenario: 'bank' }));
+
+// ── 18: milestone на studio_garage — выбор только из garage-подходящих ──
+add(run('Тест 18: milestone studio_garage — только garage-подходящие', `
+initState(); selectSpec('web'); startGame();
+G.month = 6; // граница studio_garage (monthEnd:6) → переход на studio_team
+__lastEv = null;
+advanceMonth();
+_ok(__lastEv && __lastEv._runmap, 'milestone выстрелил при переходе с garage');
+// Переход именно на studio_team
+_eq(__lastEv.id, 'runmap_studio_team', 'переход на studio_team (после garage)');
+// Все предложенные должны подходить новому этапу studio_team (не предыдущему garage)
+const validIds = new Set(RunMap.getBonusesForStage('studio_team').map(b => b.id));
+const bonusList = RunMap.getBonuses();
+const offeredValid = (__lastEv.choices || []).every(c => {
+  const found = bonusList.find(b => c.text.includes(b.name));
+  return found && validIds.has(found.id);
+});
+_ok(offeredValid, 'все 3 бонуса на milestone подходят studio_team');
 `));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);

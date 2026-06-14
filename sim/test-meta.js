@@ -270,15 +270,16 @@ lockedIds.forEach(id => _ok(!unlockedNow.includes(id), id + ' пока запе�
 `, { withRunes: true }));
 
 // ── 13: интеграция с runmap — запираемые бонусы вне пула при 0 ✦ ──
-// С v3.17 в агентстве 12 универсальных + 4 этап-эксклюзива (thought_leader,
-// design_awards, boutique_premium, agency_franchise) — итого 16. Эксклюзивы
-// не запираемые (нет в BONUS_UNLOCKS) → при 0 ✦ открыто 8 базовых + 4 эксклюзива = 12.
+// С v3.19 в агентстве 12 универсальных + 10 этап-эксклюзивов (по 2 на каждый из 5 этапов:
+// garage word_of_mouth/startup_grant; team team_spirit/process_standards; growth media_feature/strategic_partner;
+// brand thought_leader/design_awards; endgame boutique_premium/agency_franchise) = 22.
+// Эксклюзивы не запираемые (нет в BONUS_UNLOCKS) → при 0 ✦ открыто 8 базовых + 10 эксклюзивов = 18.
 add(run('Тест 13: integration runmap — запираемые бонусы вне пула при 0 ✦', `
 const lockedBonus = ['prepay','penalty_shield','fatigue','portfolio'];
 const all = RunMap.getBonuses();
-_eq(all.length, 16, 'полный пул содержит 16 бонусов (12 универсальных + 4 этап-эксклюзива)');
+_eq(all.length, 22, 'полный пул содержит 22 бонуса (12 универсальных + 10 этап-эксклюзивов)');
 const openNow = all.filter(b => RogueMeta.isBonusUnlocked(b.id)).map(b => b.id);
-_eq(openNow.length, 12, 'открыто 8 базовых + 4 этап-эксклюзива = 12 (эксклюзивы не запираемые)');
+_eq(openNow.length, 18, 'открыто 8 базовых + 10 этап-эксклюзивов = 18 (эксклюзивы не запираемые)');
 lockedBonus.forEach(id => _ok(!openNow.includes(id), 'бонус ' + id + ' пока заперт'));
 `, { withRunMap: true }));
 
