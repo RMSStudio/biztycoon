@@ -94,11 +94,13 @@ const postEngineBlocks = [
   read('src/saves.js'),
   read('src/ai.js'),
   // Опциональные модули ядра — отключаются комментированием строки
-  // (или флагом внутри файла; см. src/outsource.js → OUTSOURCE_ENABLED,
-  // src/runes.js → RUNES_ENABLED, src/storyarcs.js → STORY_ARCS_ENABLED)
+  // (или флагом внутри файла; см. src/outsource.js → OUTSOURCE_ENABLED).
+  // Roguelite-механики (runes/storyarcs/runmap) дополнительно гейтуются
+  // включённостью DLC «Rogue-lite» внутри IIFE — см. src/runes.js и т.д.
   read('src/outsource.js'),
   read('src/runes.js'),
   read('src/storyarcs.js'),
+  read('src/runmap.js'),
   read('dlc/loader.js'),
 ];
 

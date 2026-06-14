@@ -1,10 +1,10 @@
 // ══════════════════════════════════════════════════════
 //  DLC: Rogue-lite — координатор
 //
-//  Сами механики (стартовые перки-руны, сюжетные арки)
-//  физически живут в:
+//  Сами механики физически живут в:
 //    src/runes.js      — стартовые перки-руны (v3.10)
 //    src/storyarcs.js  — сюжетные арки Story Arcs (v3.11)
+//    src/runmap.js     — карта рана с milestone-бонусами (v3.13)
 //
 //  Они встроены в single-HTML build, чтобы dist работал без
 //  отдельной папки dlc/. Активация — гейтом по localStorage
@@ -13,13 +13,13 @@
 //
 //  Этот файл — точка входа DLC по реестру `dlc/loader.js`.
 //  При активации DLC после перезагрузки страницы (или при
-//  следующей загрузке) src/runes.js и src/storyarcs.js сами
-//  увидят флаг в localStorage и зарегистрируются.
+//  следующей загрузке) перечисленные модули сами увидят флаг
+//  в localStorage и зарегистрируются.
 //
-//  Статус: v0.2 — реализованы первый (руны, v3.10) и второй
-//  (Story Arcs, v3.11) шаги. См. backlog/01_features.md п.13:
-//  следующие итерации — Run Map, мета-прогресс между партиями,
-//  полноценный выбор второй специализации.
+//  Статус: v0.3 — реализованы первый (руны), второй (Story Arcs)
+//  и третий (Run Map) шаги. См. backlog/01_features.md п.13:
+//  следующие итерации — мета-прогресс между партиями,
+//  полноценный выбор второй специализации, расширение контента арок.
 // ══════════════════════════════════════════════════════
 
 (function () {
@@ -35,18 +35,20 @@
   // Проверка: реальные модули загрузились?
   const runesLive  = !!window.__RUNES_LOADED;
   const arcsLive   = !!window.__SA_LOADED;
+  const mapLive    = !!window.__RM_LOADED;
 
   const RL = {
     runCount: 0,
     components: {
       runes:      runesLive,
       storyArcs:  arcsLive,
+      runMap:     mapLive,
     },
   };
 
-  if (!runesLive || !arcsLive) {
+  if (!runesLive || !arcsLive || !mapLive) {
     console.warn(`[DLC:${ID}] Внимание: часть механик не загрузилась — ` +
-      `runes=${runesLive} storyArcs=${arcsLive}. ` +
+      `runes=${runesLive} storyArcs=${arcsLive} runMap=${mapLive}. ` +
       `Возможно DLC включили в этой же сессии — перезагрузите страницу.`);
   }
 
@@ -58,6 +60,6 @@
 
   window._RL = RL;
 
-  console.log(`[DLC:${ID}] v0.2 активирован — компоненты: ` +
-    `руны=${runesLive ? 'on' : 'off'} · арки=${arcsLive ? 'on' : 'off'}`);
+  console.log(`[DLC:${ID}] v0.3 активирован — компоненты: ` +
+    `руны=${runesLive ? 'on' : 'off'} · арки=${arcsLive ? 'on' : 'off'} · карта=${mapLive ? 'on' : 'off'}`);
 })();
