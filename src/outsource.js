@@ -1,13 +1,19 @@
 // ══════════════════════════════════════════════════════
-//  DLC: Outsource (подрядчики/аутсорс)
-//  Загружается ТОЛЬКО если активирован в меню режимов.
-//  Не импортируется из index.html напрямую.
+//  Подрядчики (аутсорс) — опциональный модуль ядра
 //
-//  Принцип изоляции (правило Романа):
-//    • ядро НЕ модифицируется — обёртки + DOM-инжект
-//    • подрядчик добавляется в G.staff с маркером _outsource
-//    • разовая оплата при найме (salary=0 → не учитывается в ФОТ)
-//    • срок истёк → отвязка от проектов + удаление + notify
+//  Включение/выключение — одна строка (флаг ниже).
+//  Или просто закомментировать <script src="src/outsource.js">
+//  в index.html / убрать из build/build.js postEngineBlocks.
+//
+//  Принцип: ядро игры (engine.js, staff.js, projects.js, ui.js)
+//  не модифицируется — модуль цепляется через EventBus, обёртки
+//  глобальных функций (advanceMonth, renderTeamCards) и DOM-инжект
+//  в панель «Действия». При отключении игра ведёт себя так, будто
+//  модуля никогда не было.
+//
+//  Godot-портируемость: математика и стейт лежат в G/обёртках,
+//  UI-инжект → перенесётся в Godot как отдельная сцена-панель,
+//  обёртки → в Godot как сигналы advanceMonth.
 //
 //  Бэклог: п.3 «Аутсорс-ресурс»
 // ══════════════════════════════════════════════════════
@@ -15,14 +21,18 @@
 (function () {
   'use strict';
 
-  const ID = 'outsource';
+  // ─── Флаг включения модуля ────────────────────────────
+  // Выключить аутсорс целиком — поставить false (UI исчезнет, обёртки
+  // не зарегистрируются, ядро работает без изменений).
+  const OUTSOURCE_ENABLED = true;
 
+  if (!OUTSOURCE_ENABLED) return;
   if (typeof EventBus === 'undefined') {
-    console.error(`[DLC:${ID}] EventBus не найден — DLC не активирован`);
+    console.error('[outsource] EventBus не найден — модуль не активирован');
     return;
   }
-  if (window.__OS_DLC_LOADED) return;        // guard от двойной загрузки
-  window.__OS_DLC_LOADED = true;
+  if (window.__OS_LOADED) return;            // guard от двойной загрузки
+  window.__OS_LOADED = true;
 
   // ── Каталог подрядчиков ───────────────────────────────
   // Подрядчик — это «арендованный» специалист высокого грейда.
@@ -120,7 +130,7 @@
     const _orig = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _orig.apply(this, arguments);
-      try { _tickOutsource(); } catch (e) { console.warn('[DLC:outsource] tick error:', e); }
+      try { _tickOutsource(); } catch (e) { console.warn('[outsource] tick error:', e); }
       return r;
     };
     window.advanceMonth.__osWrapped = true;
@@ -309,7 +319,7 @@
 
   // ── Подписки ──────────────────────────────────────────
   EventBus.on('render', _injectPanel);
-  // Если игра уже запущена при подключении DLC — попробуем сразу
+  // Если игра уже запущена при подключении модуля — попробуем сразу
   try { _injectPanel(); } catch (e) {}
 
   // ── Утилиты ───────────────────────────────────────────
@@ -332,5 +342,5 @@
     _renderPanel: _injectPanel,
   };
 
-  console.log(`[DLC:${ID}] v0.1 активирован: 3 типа подрядчиков, обёртки advanceMonth + renderTeamCards`);
+  console.log('[outsource] v0.1 активирован: 3 типа подрядчиков, обёртки advanceMonth + renderTeamCards');
 })();

@@ -36,16 +36,6 @@ const DLC = (() => {
       scripts: ['dlc/strategy/strategy.js'],
       styles:  [],
     },
-    {
-      id:      'outsource',
-      name:    'Подрядчики (аутсорс)',
-      icon:    '🤝',
-      version: '0.1',
-      desc:    'Временный найм внешних подрядчиков за повышенную ставку — разовый буст Q/V/слотов без долгосрочных обязательств.',
-      status:  'wip',
-      scripts: ['dlc/outsource/outsource.js'],
-      styles:  [],
-    },
     // Место для будущих DLC:
     // { id:'hardcore', name:'Hardcore', icon:'💀', status:'locked', ... },
   ];

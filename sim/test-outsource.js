@@ -1,5 +1,5 @@
 'use strict';
-// Смоук-тест Outsource DLC (п.3):
+// Смоук-тест модуля outsource (п.3):
 //  • найм 3 типов подрядчиков
 //  • разовая оплата (G.money уменьшается)
 //  • подрядчик попадает в G.staff с _outsource-маркером
@@ -56,7 +56,7 @@ const FILES = [
   'src/projects.js',
   'src/staff.js',
   'src/saves.js',
-  'dlc/outsource/outsource.js',
+  'src/outsource.js',
 ];
 const src = FILES.map(f => `// ===== ${f} =====\n` + fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n;\n');
 
