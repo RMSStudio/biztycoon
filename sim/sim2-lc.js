@@ -59,11 +59,24 @@ const fakeDocument = {
   addEventListener(){}, removeEventListener(){},
 };
 
+// ── Difficulty (v3.9): прокидываем через fake-localStorage ─────
+const DIFF_ARG = (process.argv.find(a => a.startsWith('--difficulty=')) || '').split('=')[1] || 'normal';
+const VALID_DIFFS = ['easy', 'normal', 'hard', 'nightmare'];
+if (!VALID_DIFFS.includes(DIFF_ARG)) {
+  console.error(`❌ --difficulty: ожидалось ${VALID_DIFFS.join('|')}, получено «${DIFF_ARG}»`);
+  process.exit(1);
+}
+const _fakeLS = { 'bt_difficulty_v1': DIFF_ARG };
+
 // ── Sandbox ───────────────────────────────────────────
 const sandbox = {
   console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
   document: fakeDocument,
-  localStorage: { getItem(){ return null; }, setItem(){}, removeItem(){} },
+  localStorage: {
+    getItem(k){ return Object.prototype.hasOwnProperty.call(_fakeLS, k) ? _fakeLS[k] : null; },
+    setItem(k, v){ _fakeLS[k] = String(v); },
+    removeItem(k){ delete _fakeLS[k]; },
+  },
   navigator: {},
   renderPortfolioTab(){},
 };

@@ -35,6 +35,12 @@
     <!-- заполняется initScenarioSelect() из SCENARIO_REGISTRY (ui.js) -->
   </div>
 
+  <!-- Сложность — пресеты экономики (v3.9) -->
+  <div class="dlc-section-label">Сложность</div>
+  <div id="difficulty-select" style="display:flex;gap:8px;flex-wrap:wrap">
+    <!-- заполняется initDifficultySelect() из ScenarioLoader.DIFFICULTY_ORDER -->
+  </div>
+
   <!-- Расширения — рендерятся из DLC.getAll() -->
   <div class="dlc-section-label">Расширения</div>
   <div id="dlc-cards">
@@ -528,6 +534,7 @@
   initState();
   initEventBus();
   initScenarioSelect();   // v3.1: карточки выбора сценария на экране режима
+  initDifficultySelect(); // v3.9: пресеты сложности
   renderSpecGrid();       // v3.1: spec-карточки из SCENARIO.specs
   applyScenarioChrome();  // v3.1: интро/лого/title из SCENARIO
   SE.syncIntroStats();

@@ -149,6 +149,55 @@ function switchScenario(id) {
   location.reload();   // const-биндинги движка читают SCENARIO при загрузке
 }
 
+// ══════════════════════════════════════════════════════
+//  СЛОЖНОСТЬ (v3.9): пресеты экономики, выбор до старта
+//  Применяется в scenario-loader.hydrate() через override
+//  settings (startMoney/overhead/winCondition/startReputation).
+//  Реестр содержит порядок и meta — сами моды живут в loader.
+// ══════════════════════════════════════════════════════
+const LS_DIFFICULTY_KEY_UI = 'bt_difficulty_v1';
+
+function initDifficultySelect() {
+  const host = document.getElementById('difficulty-select');
+  if (!host || typeof ScenarioLoader === 'undefined') return;
+  const cur = localStorage.getItem(LS_DIFFICULTY_KEY_UI) || 'normal';
+  const presets = ScenarioLoader.resolveDifficulties(SCENARIO);
+  const order = ScenarioLoader.DIFFICULTY_ORDER;
+  // Цветовая раскладка по сложности — оранжевые/тил-оттенки
+  const TINT = {
+    easy:      { bd: 'rgba(74,222,128,.4)',  bg: 'rgba(74,222,128,.07)', tag: 'var(--green)' },
+    normal:    { bd: 'rgba(45,212,191,.45)', bg: 'rgba(45,212,191,.08)', tag: 'var(--teal)' },
+    hard:      { bd: 'rgba(251,191,36,.45)', bg: 'rgba(251,191,36,.08)', tag: 'var(--amber)' },
+    nightmare: { bd: 'rgba(248,113,113,.45)',bg: 'rgba(248,113,113,.08)',tag: 'var(--red)' },
+  };
+  host.innerHTML = order.map(id => {
+    const p = presets[id]; if (!p) return '';
+    const active = id === cur;
+    const t = TINT[id] || TINT.normal;
+    const perks = (p.perks || []).map(x => `<span class="dlc-pill" style="background:rgba(255,255,255,.05);color:var(--sub);font-size:10px">${x}</span>`).join(' ');
+    return `<div onclick="switchDifficulty('${id}')" style="flex:1;min-width:200px;cursor:${active ? 'default' : 'pointer'};
+        display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;
+        border:1px solid ${active ? t.bd : 'var(--border)'};
+        background:${active ? t.bg : 'var(--bg2)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="font-size:13px;font-weight:700">${p.label}</div>
+        ${active ? `<span class="dlc-pill" style="background:${t.bg};color:${t.tag};font-size:10px">Выбрана</span>`
+                 : `<span class="dlc-pill" style="background:rgba(255,255,255,.06);color:var(--sub);font-size:10px">Выбрать</span>`}
+      </div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.35">${p.desc || ''}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${perks}</div>
+    </div>`;
+  }).join('');
+}
+
+function switchDifficulty(id) {
+  if (typeof ScenarioLoader === 'undefined') return;
+  const cur = localStorage.getItem(LS_DIFFICULTY_KEY_UI) || 'normal';
+  if (id === cur || !ScenarioLoader.DIFFICULTY_ORDER.includes(id)) return;
+  localStorage.setItem(LS_DIFFICULTY_KEY_UI, id);
+  location.reload();
+}
+
 // Сценарный «хром»: интро-текст, иконки лого, title — из SCENARIO
 function applyScenarioChrome() {
   if (typeof SCENARIO === 'undefined') return;
@@ -156,6 +205,17 @@ function applyScenarioChrome() {
   if (intro && SCENARIO.settings?.introText) intro.innerHTML = SCENARIO.settings.introText;
   document.querySelectorAll('.logo-icon').forEach(el => { el.textContent = SCENARIO.icon || '🏢'; });
   document.title = `BizTycoon — ${SCENARIO.name || ''}`;
+  // Пилюля активной сложности на интро-экране
+  if (intro && SCENARIO._activeDifficulty) {
+    const d = SCENARIO._activeDifficulty;
+    const old = document.getElementById('intro-diff-pill');
+    if (old) old.remove();
+    const pill = document.createElement('div');
+    pill.id = 'intro-diff-pill';
+    pill.style.cssText = 'margin-top:10px;display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);font-size:12px;color:var(--sub)';
+    pill.innerHTML = `<span>Сложность:</span><b style="color:var(--text)">${d.label}</b><span style="opacity:.7">— ${d.desc || ''}</span>`;
+    intro.parentNode.insertBefore(pill, intro.nextSibling);
+  }
 }
 
 // Spec-карточки из SCENARIO.specs — статический HTML ломал не-агентские сценарии
@@ -1223,7 +1283,8 @@ function showEvent(ev) {
       document.getElementById('event-modal').classList.remove('active');
       renderGame();
       if (G.money<=0){endGame(false);return;}
-      if (G.money>=SCENARIO.settings.winCondition){endGame(true);}
+      // winCondition временно отключён — режим бесконечной игры
+      // if (G.money>=SCENARIO.settings.winCondition){endGame(true);}
     };
     div.appendChild(btn);
   });

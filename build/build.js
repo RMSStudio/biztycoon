@@ -113,6 +113,7 @@ const inlined = [
   `  initState();`,
   `  initEventBus();`,
   `  initScenarioSelect();`,
+  `  initDifficultySelect();`,
   `  renderSpecGrid();`,
   `  applyScenarioChrome();`,
   `  SE.syncIntroStats();`,
