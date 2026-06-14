@@ -268,40 +268,120 @@ const STRAT = (() => {
   // ════════════════════════════════════════════════════
   const MC_RUNS_DEFAULT = 60;
 
-  // Автопилот «консервативный»: ведёт текущие контракты, добирает проекты
-  // в свободные слоты (T1–T3, проходные по Q/V), НЕ нанимает — моделирует
-  // «продолжаем текущую линию без новых управленческих решений»
-  function _mcBotMonth() {
-    // решения work-событий: первый безопасный вариант
+  // ──────────────────────────────────────────────────────
+  //  Политики автопилота для Monte-Carlo (v3.23)
+  //
+  //  Полный набор — три предустановки. Каждая отвечает на
+  //  один вопрос «как ведёт себя двойник»:
+  //
+  //   • as_is        — пассивный наблюдатель. Только решает work-
+  //                    события безопасным вариантом и расставляет
+  //                    команду. Не скаутит, не подписывает, не
+  //                    нанимает. Отвечает на «что будет, если
+  //                    вообще ничего не менять».
+  //
+  //   • conservative — текущий (исторический) дефолт. Ведёт контракты,
+  //                    добирает T1–T3 в свободные слоты, расставляет
+  //                    команду — но НЕ нанимает. Отвечает на «что
+  //                    будет, если продолжать текущую линию».
+  //
+  //   • aggressive   — давит на рост. Берёт всё (включая T4–T7,
+  //                    приоритет epic), нанимает middle/senior
+  //                    если денег > 800K и активных проектов ≥ 2,
+  //                    запускает paid-скаутинг. Отвечает на «что
+  //                    будет, если масштабироваться без оглядки».
+  //
+  //  По умолчанию — conservative (бэк-компат: runMonteCarlo(60)
+  //  без opts.policy работает как раньше).
+  // ──────────────────────────────────────────────────────
+  const MC_POLICIES = {
+    as_is:         { id: 'as_is',        label: 'Без действий',     icon: '🪨' },
+    conservative:  { id: 'conservative', label: 'Как сейчас',       icon: '🧭' },
+    aggressive:    { id: 'aggressive',   label: 'Рост на максимум', icon: '🚀' },
+  };
+
+  // Общие хелперы (work-события + расстановка) — используются всеми политиками
+  function _mcResolveWorkEvents() {
     (G.activeClients || []).filter(c => c._lcPendingDecision).forEach(c => {
       Projects.resolveWorkEvent(c.id);
       _pumpLC();
     });
-    // завершённые → сдаём (LC сам через advanceMonth), добор проектов
-    if ((G.activeClients || []).length < Math.min(2, getCapacity()) && G.actions >= SCOUT_COST) {
-      doScouting(); _pumpLC();
-      const Q = getQuality(), V = getVolume();
-      const pool = (G.scoutPool || []).filter(p =>
-        (p.minQ || 0) <= Q && (p.minV || 0) <= V && (p.tier || 1) <= 3 &&
-        !(G.activeClients || []).find(c => c.id.startsWith(p.id)));
-      if (pool.length) {
-        pool.sort((a, b) => ((b.oneTime?1:0)-(a.oneTime?1:0)) || ((b.tier||1)-(a.tier||1)));
-        signProject(pool[0].id); _pumpLC();
-      }
-    }
-    // расстановка: жадно по дефициту
-    const regular = (G.activeClients || []).filter(c => c._lcPhase && c._lcPhase.startsWith('work_'));
-    if (regular.length) {
-      G.staff.filter(s => s.status !== 'fired').forEach(s => unassignStaff(s._iid || s.id));
-      G.staff.filter(s => s.status !== 'fired')
-        .sort((a, b) => calcStaffWorkUnit(b) - calcStaffWorkUnit(a))
-        .forEach(s => {
-          let best = null, gap = -Infinity;
-          regular.forEach(c => { const g = getProjectLoad(c) - getProjectThroughput(c); if (g > gap) { gap = g; best = c; } });
-          if (best && gap > 0) assignStaffToProject(s._iid || s.id, best.id);
-        });
-    }
   }
+  function _mcReassignTeam() {
+    const regular = (G.activeClients || []).filter(c => c._lcPhase && c._lcPhase.startsWith('work_'));
+    if (!regular.length) return;
+    G.staff.filter(s => s.status !== 'fired').forEach(s => unassignStaff(s._iid || s.id));
+    G.staff.filter(s => s.status !== 'fired')
+      .sort((a, b) => calcStaffWorkUnit(b) - calcStaffWorkUnit(a))
+      .forEach(s => {
+        let best = null, gap = -Infinity;
+        regular.forEach(c => { const g = getProjectLoad(c) - getProjectThroughput(c); if (g > gap) { gap = g; best = c; } });
+        if (best && gap > 0) assignStaffToProject(s._iid || s.id, best.id);
+      });
+  }
+  // Бот скаутит, если есть слот + actions, и подписывает первый проходящий
+  // фильтр-tier из пула. tierCap = верхняя граница тира к подписи.
+  function _mcScoutAndSign(slotCap, tierCap, preferEpic) {
+    if ((G.activeClients || []).length >= slotCap || G.actions < SCOUT_COST) return;
+    doScouting(); _pumpLC();
+    const Q = getQuality(), V = getVolume();
+    let pool = (G.scoutPool || []).filter(p =>
+      (p.minQ || 0) <= Q && (p.minV || 0) <= V && (p.tier || 1) <= tierCap &&
+      !(G.activeClients || []).find(c => c.id.startsWith(p.id)));
+    if (!pool.length) return;
+    if (preferEpic) {
+      // приоритет: rare/epic первыми, затем по убывающему тиру
+      const rarityScore = r => ({ epic: 3, rare: 2, common: 1 })[r] || 0;
+      pool.sort((a, b) => rarityScore(b.rarity) - rarityScore(a.rarity) || ((b.tier || 1) - (a.tier || 1)));
+    } else {
+      pool.sort((a, b) => ((b.oneTime ? 1 : 0) - (a.oneTime ? 1 : 0)) || ((b.tier || 1) - (a.tier || 1)));
+    }
+    signProject(pool[0].id); _pumpLC();
+  }
+  // Найм: ищет в STAFF_DEFS подходящего по бюджету (зарплата ≤ G.money/4),
+  // берёт самого высокого по грейду из доступных. Возвращает true при найме.
+  function _mcHireOne() {
+    if (typeof STAFF_DEFS === 'undefined' || !Array.isArray(STAFF_DEFS)) return false;
+    if (G.actions < HIRE_COST) return false;
+    const budget = (G.money || 0) / 4;
+    const teamSize = (G.staff || []).filter(s => s.status !== 'fired').length;
+    if (teamSize >= 8) return false;  // потолок команды для бота
+    const GRADE_ORDER = ['lead', 'senior', 'middle', 'junior'];
+    const cands = STAFF_DEFS
+      .filter(d => (d.salary || 0) <= budget)
+      .filter(d => (G.reputation || 0) >= (d.minRep || 0))
+      .sort((a, b) => GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade));
+    if (!cands.length) return false;
+    try { hireStaff(cands[0].id); return true; } catch (e) { return false; }
+  }
+
+  // Фабрика _mcBotMonth по id политики
+  function _makeMcBotMonth(policyId) {
+    const policy = MC_POLICIES[policyId] ? policyId : 'conservative';
+    if (policy === 'as_is') {
+      return function () { _mcResolveWorkEvents(); _mcReassignTeam(); };
+    }
+    if (policy === 'aggressive') {
+      return function () {
+        _mcResolveWorkEvents();
+        // Агрессив: до 3 слотов, ТИР ДО 7, приоритет epic
+        _mcScoutAndSign(Math.min(3, getCapacity()), 7, true);
+        // Найм при условиях: касса >0.8M, проектов ≥2
+        const active = (G.activeClients || []).length;
+        if ((G.money || 0) > 800000 && active >= 2) _mcHireOne();
+        _mcReassignTeam();
+      };
+    }
+    // default conservative — текущее поведение
+    return function () {
+      _mcResolveWorkEvents();
+      _mcScoutAndSign(Math.min(2, getCapacity()), 3, false);
+      _mcReassignTeam();
+    };
+  }
+
+  // Активный bot-month — переключается при каждом запуске runMonteCarlo
+  let _mcBotMonth = _makeMcBotMonth('conservative');
 
   // Насос LC-модалки для автопилота (политика: команда → highlight → первый)
   function _pumpLC() {
@@ -320,8 +400,19 @@ const STRAT = (() => {
     if (guard <= 0) modal.classList.remove('active');
   }
 
-  function runMonteCarlo(runs) {
-    runs = runs || MC_RUNS_DEFAULT;
+  function runMonteCarlo(opts) {
+    // Бэк-компат: runMonteCarlo(60) — number → runs (политика дефолт).
+    // runMonteCarlo({ runs, policy }) — объект.
+    let runs, policy;
+    if (typeof opts === 'number' || opts == null) {
+      runs = opts || MC_RUNS_DEFAULT;
+      policy = 'conservative';
+    } else {
+      runs = opts.runs || MC_RUNS_DEFAULT;
+      policy = MC_POLICIES[opts.policy] ? opts.policy : 'conservative';
+    }
+    // Подменим _mcBotMonth на нужную политику на время цикла
+    _mcBotMonth = _makeMcBotMonth(policy);
     if (typeof _snap !== 'function') { notify('Сейвы недоступны', 'error'); return; }
     const base    = _snap();
     const horizon = (G._strategyMode?.months || 6);
@@ -367,7 +458,45 @@ const STRAT = (() => {
     }
 
     G._strategyMode.lastMC = _mcStats(results, left);
-    _openModal(`🎲 Monte-Carlo · ${runs} прогонов · ${left} мес. вперёд`, _mcHtml(G._strategyMode.lastMC));
+    G._strategyMode.lastMC.policy = policy;
+    const pol = MC_POLICIES[policy] || MC_POLICIES.conservative;
+    _openModal(`🎲 Monte-Carlo · ${runs} прогонов · ${left} мес. вперёд · ${pol.icon} ${pol.label}`,
+               _mcHtml(G._strategyMode.lastMC));
+  }
+
+  // ──────────────────────────────────────────────────────
+  //  Промежуточный селектор политики MC (v3.23 UI):
+  //  открывает модал с тремя кнопками. Выбор запускает
+  //  runMonteCarlo({ policy }).
+  // ──────────────────────────────────────────────────────
+  function openMonteCarlo() {
+    if (typeof _openModal !== 'function') { runMonteCarlo(); return; }
+    const cards = Object.values(MC_POLICIES).map(p => `
+      <button onclick="STRAT.runMonteCarlo({ policy: '${p.id}' })"
+        style="background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.3);
+               color:var(--text);border-radius:10px;padding:14px;cursor:pointer;
+               display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+               text-align:left;width:100%;font-family:inherit">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">${p.icon}</span>
+          <b style="font-size:13px;color:var(--text)">${p.label}</b>
+        </div>
+        <span style="font-size:11px;color:var(--sub);line-height:1.45">${_policyHint(p.id)}</span>
+      </button>`).join('');
+    _openModal('🎲 Monte-Carlo · политика автопилота', `
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--sub);line-height:1.45">
+          Выбор политики определяет, как двойник принимает решения за горизонт прогноза.
+          Это не события фасилитатора — те всегда применяются поверх любой политики.
+        </span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">${cards}</div>
+    `);
+  }
+  function _policyHint(id) {
+    if (id === 'as_is')        return 'Двойник ведёт только текущие контракты — никакого скаутинга, подписания и найма. Полезно увидеть «нижнюю границу»: что если совсем не действовать.';
+    if (id === 'aggressive')   return 'Скаутит и подписывает агрессивно (T1–T7, приоритет epic), нанимает middle/senior при кассе > 800К и ≥2 активных проектах. Покажет «верхний потолок» с риском.';
+    return 'Дефолт: добирает T1–T3 в свободные слоты, расставляет команду — без найма. Отвечает на «продолжаем как есть».';
   }
 
   function _mcStats(rs, horizon) {
@@ -422,9 +551,14 @@ const STRAT = (() => {
       <div style="font-size:11px;color:var(--sub);line-height:1.7">
         Детализация: диапазон ${fmtM(s.min)} … ${fmtM(s.max)} · средняя репутация ${s.avgRep} ·
         сдано в среднем ${s.avgDone} проектов за горизонт ${s.horizon} мес.<br>
-        <span style="color:var(--muted)">Автопилот ведёт текущие контракты и добирает проекты в свободные слоты, но не нанимает —
-        прогноз отвечает на вопрос «что будет, если продолжать как есть».</span>
+        <span style="color:var(--muted)">${_mcPolicyTail(s.policy)}</span>
       </div>`;
+  }
+
+  function _mcPolicyTail(p) {
+    if (p === 'as_is')      return 'Политика «без действий»: двойник ведёт только текущие контракты и расставляет команду. Никакого скаутинга, подписания или найма.';
+    if (p === 'aggressive') return 'Политика «рост на максимум»: агрессивный скаутинг (T1–T7, приоритет epic), найм при кассе > 800К и ≥ 2 активных проектах.';
+    return 'Политика «как сейчас»: добирает T1–T3 в свободные слоты, расставляет команду, но не нанимает — прогноз отвечает на «что будет, если продолжать линию».';
   }
 
   // ════════════════════════════════════════════════════
@@ -633,7 +767,7 @@ const STRAT = (() => {
       <div style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-xs btn-ghost" onclick="STRAT.branchPrompt()">⑂ Развилка</button>
         <button class="btn btn-xs btn-ghost" onclick="STRAT.stampCurrentLine()">📌 Исход</button>
-        <button class="btn btn-xs btn-ghost" onclick="STRAT.runMonteCarlo()">🎲 Monte-Carlo</button>
+        <button class="btn btn-xs btn-ghost" onclick="STRAT.openMonteCarlo()">🎲 Monte-Carlo</button>
         <button class="btn btn-xs btn-ghost" onclick="STRAT.openEventEditor()">⚡ События</button>
         <button class="btn btn-xs btn-ghost" onclick="STRAT.exportReport()">📄 Отчёт</button>
       </div>
@@ -753,7 +887,8 @@ const STRAT = (() => {
   return {
     startSession, loadTwinFile,
     branchPrompt, createBranch, openBranch, openCompare, stampCurrentLine,
-    runMonteCarlo, openEventEditor, addEvent, removeEvent, exportReport,
+    runMonteCarlo, openMonteCarlo, getMcPolicies: () => Object.assign({}, MC_POLICIES),
+    openEventEditor, addEvent, removeEvent, exportReport,
     closeModal: _closeModal,
     _seededRandom, // для тестов
   };

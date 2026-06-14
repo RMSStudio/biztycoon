@@ -96,6 +96,37 @@ STRAT.exportReport();
 ok('отчёт сгенерирован',              typeof __REPORT === 'string' && __REPORT.includes('# Отчёт стратегической сессии'));
 ok('отчёт: есть Monte-Carlo и ветки', __REPORT.includes('Monte-Carlo') && __REPORT.includes('Ветки гипотез'));
 
+// ── 8. v3.23: политики автопилота Monte-Carlo ──
+const policies = STRAT.getMcPolicies();
+ok('политики: API getMcPolicies есть',       typeof STRAT.getMcPolicies === 'function');
+ok('политики: 3 предустановки',              Object.keys(policies).length === 3);
+ok('политики: as_is есть',                   !!policies.as_is);
+ok('политики: conservative есть',            !!policies.conservative);
+ok('политики: aggressive есть',              !!policies.aggressive);
+ok('политики: openMonteCarlo экспозирован',  typeof STRAT.openMonteCarlo === 'function');
+
+const stateBefore8 = { money: G.money, month: G.month, staff: G.staff.length };
+STRAT.runMonteCarlo({ runs: 4, policy: 'as_is' });
+const mcAsIs = G._strategyMode.lastMC;
+ok('MC as_is: 4 прогона посчитаны',          mcAsIs && mcAsIs.runs === 4);
+ok('MC as_is: policy записана в результат',  mcAsIs.policy === 'as_is');
+ok('MC as_is: реальное состояние не тронуто',
+   G.money === stateBefore8.money && G.month === stateBefore8.month && G.staff.length === stateBefore8.staff);
+
+STRAT.runMonteCarlo({ runs: 4, policy: 'aggressive' });
+ok('MC aggressive: policy записана',         G._strategyMode.lastMC.policy === 'aggressive');
+
+STRAT.runMonteCarlo({ runs: 4, policy: 'conservative' });
+ok('MC conservative: policy записана',       G._strategyMode.lastMC.policy === 'conservative');
+
+// Back-compat: вызов с числом → policy дефолт conservative
+STRAT.runMonteCarlo(4);
+ok('MC back-compat: число → conservative',   G._strategyMode.lastMC.policy === 'conservative');
+
+// Неизвестная политика → conservative дефолт
+STRAT.runMonteCarlo({ runs: 4, policy: 'nonexistent_xyz' });
+ok('MC неизвестная политика → conservative', G._strategyMode.lastMC.policy === 'conservative');
+
 __OUT.push(...out);
 `;
 
