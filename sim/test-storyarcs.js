@@ -283,5 +283,122 @@ _ok(!wasArc, 'после advanceMonth ни одна арка не выстрел
 _ok(typeof G.arcState === 'undefined', 'G.arcState не появилась');
 `, { noRoguelite: true }));
 
+// ── 12: v3.20 — новые арки агентства подключены ──
+add(run('Тест 12: v3.20 agency — pivot_offer / tender_invite в пуле', `
+const arcs = StoryArcs.getArcs();
+_ok(arcs.some(a => a.id === 'pivot_offer'),   'агентство: арка pivot_offer есть');
+_ok(arcs.some(a => a.id === 'tender_invite'), 'агентство: арка tender_invite есть');
+_eq(arcs.length, 4, 'агентство: всего 4 арки (old_friend, burnout_signal, pivot_offer, tender_invite)');
+const pivot = arcs.find(a => a.id === 'pivot_offer');
+_eq((pivot.trigger || {}).requires, 'old_friend', 'pivot_offer.trigger.requires = old_friend');
+const tender = arcs.find(a => a.id === 'tender_invite');
+_ok(!(tender.trigger && tender.trigger.requires), 'tender_invite БЕЗ requires (стартует независимо)');
+_eq((tender.trigger || {}).minPortfolio, 5, 'tender_invite требует minPortfolio 5');
+`));
+
+// ── 13: pivot_offer.requires — без old_friend не появляется (по поведению) ──
+add(run('Тест 13: pivot_offer.requires — гейт через completed', `
+initState(); selectSpec('smm'); startGame();
+G.month = 15; G.reputation = 70; G.portfolio = 12;
+let firedWithout = 0;
+for (let i = 0; i < 80; i++) {
+  G.arcState = { completed: [], inProgress: null, cooldown: 0 };
+  __lastEv = null;
+  StoryArcs._tick();
+  if (__lastEv && __lastEv._arc && __lastEv.arcId === 'pivot_offer') firedWithout++;
+}
+_eq(firedWithout, 0, 'без old_friend в completed pivot_offer НЕ стреляет (80 попыток)');
+// С old_friend в completed — должна иметь шанс выстрелить
+let firedWith = 0;
+for (let i = 0; i < 80; i++) {
+  G.arcState = { completed: ['old_friend'], inProgress: null, cooldown: 0 };
+  __lastEv = null;
+  StoryArcs._tick();
+  if (__lastEv && __lastEv._arc && __lastEv.arcId === 'pivot_offer') firedWith++;
+}
+_ok(firedWith > 0, 'с old_friend в completed pivot_offer стреляет (' + firedWith + '/80)');
+`));
+
+// ── 14: tender_invite — ветвление через 3 choices ──
+add(run('Тест 14: tender_invite — 3 ветки в первой стадии', `
+initState(); selectSpec('smm'); startGame();
+G.month = 8; G.reputation = 50; G.portfolio = 8;
+StoryArcs.fire('tender_invite');
+_ok(__lastEv && __lastEv._arc && __lastEv.arcId === 'tender_invite', 'tender_invite запустился');
+_eq(__lastEv.choices.length, 3, 'первая стадия имеет 3 ветки');
+_ok(__lastEv.choices[0].text.toLowerCase().includes('соло'),       'ветка 0 — соло');
+_ok(__lastEv.choices[1].text.toLowerCase().includes('консорциум'), 'ветка 1 — консорциум');
+_ok(__lastEv.choices[2].text.toLowerCase().includes('отказ'),      'ветка 2 — отказ');
+`));
+
+// ── 15: tender_invite solo → solo_resolve ──
+add(run('Тест 15: tender_invite solo → solo_resolve', `
+initState(); selectSpec('smm'); startGame();
+G.month = 8; G.reputation = 50; G.portfolio = 8;
+StoryArcs.fire('tender_invite');
+_pickChoice(0);  // solo
+const st = StoryArcs.getState();
+_ok(st.inProgress, 'арка in progress после solo');
+_eq(st.inProgress.stageId, 'solo_resolve', 'переход на solo_resolve');
+`));
+
+// ── 16: tender_invite consortium → consortium_resolve ──
+add(run('Тест 16: tender_invite consortium → consortium_resolve', `
+initState(); selectSpec('smm'); startGame();
+G.month = 8; G.reputation = 50; G.portfolio = 8;
+StoryArcs.fire('tender_invite');
+_pickChoice(1);  // consortium
+const st = StoryArcs.getState();
+_ok(st.inProgress, 'арка in progress после consortium');
+_eq(st.inProgress.stageId, 'consortium_resolve', 'переход на consortium_resolve');
+`));
+
+// ── 17: tender_invite decline → end сразу ──
+add(run('Тест 17: tender_invite decline → end сразу', `
+initState(); selectSpec('smm'); startGame();
+G.month = 8; G.reputation = 50; G.portfolio = 8;
+StoryArcs.fire('tender_invite');
+_pickChoice(2);  // decline
+const st = StoryArcs.getState();
+_ok(!st.inProgress, 'арка завершена (inProgress = null)');
+_ok(st.completed.includes('tender_invite'), 'tender_invite в completed');
+_ok(st.cooldown > 0, 'кулдаун выставлен');
+`));
+
+// ── 18: v3.20 — новые арки банка подключены ──
+add(run('Тест 18: v3.20 bank — data_breach / regional_expansion в пуле', `
+const arcs = StoryArcs.getArcs();
+_ok(arcs.some(a => a.id === 'data_breach'),         'банк: арка data_breach есть');
+_ok(arcs.some(a => a.id === 'regional_expansion'),  'банк: арка regional_expansion есть');
+_eq(arcs.length, 4, 'банк: всего 4 арки (regulator_call, vip_client_pivot, data_breach, regional_expansion)');
+const reg = arcs.find(a => a.id === 'regional_expansion');
+_eq((reg.trigger || {}).requires, 'regulator_call', 'regional_expansion.requires = regulator_call');
+const breach = arcs.find(a => a.id === 'data_breach');
+_ok(!(breach.trigger && breach.trigger.requires), 'data_breach БЕЗ requires');
+`, { scenario: 'scenarios/bank.data.js' }));
+
+// ── 19: data_breach leak → apology ──
+add(run('Тест 19: data_breach leak → apology', `
+initState(); selectSpec(Object.keys(SPECS)[0]); startGame();
+G.month = 10; G.reputation = 60; G.portfolio = 8;
+StoryArcs.fire('data_breach');
+_ok(__lastEv && __lastEv._arc, 'data_breach запустился');
+_eq(__lastEv.stage, 'leak', 'стартовая стадия leak');
+_eq(__lastEv.choices.length, 2, 'leak имеет 2 ветки');
+_pickChoice(0);  // apology
+const st = StoryArcs.getState();
+_eq(st.inProgress.stageId, 'apology', 'ветка 0 → apology');
+`, { scenario: 'scenarios/bank.data.js' }));
+
+// ── 20: data_breach leak → silence ──
+add(run('Тест 20: data_breach leak → silence (альтернативная ветка)', `
+initState(); selectSpec(Object.keys(SPECS)[0]); startGame();
+G.month = 10; G.reputation = 60; G.portfolio = 8;
+StoryArcs.fire('data_breach');
+_pickChoice(1);  // silence
+const st = StoryArcs.getState();
+_eq(st.inProgress.stageId, 'silence', 'ветка 1 → silence');
+`, { scenario: 'scenarios/bank.data.js' }));
+
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);
