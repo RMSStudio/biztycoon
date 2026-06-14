@@ -58,12 +58,22 @@ const fakeDocument = {
   addEventListener(){}, removeEventListener(){},
 };
 
-function makeSandbox() {
+function makeSandbox(opts) {
+  opts = opts || {};
   REGISTRY.clear();
+  // Гейт DLC «Rogue-lite»: арки активируются только если включён DLC
+  // (по умолчанию включён в тестах; передать noRoguelite:true для negative-test)
+  const _fakeLS = opts.noRoguelite
+    ? {}
+    : { 'bt_enabled_dlcs_v1': JSON.stringify(['roguelite']) };
   const sb = {
     console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
     document: fakeDocument,
-    localStorage: { getItem(){return null;}, setItem(){}, removeItem(){} },
+    localStorage: {
+      getItem(k){ return Object.prototype.hasOwnProperty.call(_fakeLS, k) ? _fakeLS[k] : null; },
+      setItem(k, v){ _fakeLS[k] = String(v); },
+      removeItem(k){ delete _fakeLS[k]; },
+    },
     navigator: {},
     renderPortfolioTab(){},
     __TR: { pass: 0, fail: 0, log: [] },
@@ -105,7 +115,8 @@ function _pickChoice(idx) {
 `;
 
 function run(name, body, opts) {
-  const sb = makeSandbox();
+  opts = opts || {};
+  const sb = makeSandbox({ noRoguelite: opts.noRoguelite });
   const src = loadEngineSrc(opts) + '\n;\n' + HARNESS + '\n;\n' + body;
   vm.createContext(sb);
   try { vm.runInContext(src, sb); }
@@ -259,6 +270,18 @@ _pickChoice(0);  // Подготовиться — next: 'audit_result'
 const st = StoryArcs.getState();
 _eq(st.inProgress.stageId, 'audit_result', 'стадия audit_result');
 `, { scenario: 'scenarios/bank.data.js' }));
+
+// ── 11: DLC roguelite не включён — арки не активируются ──
+add(run('Тест 11: без DLC roguelite — арки не активируются', `
+_ok(typeof StoryArcs === 'undefined', 'window.StoryArcs НЕ объявлен (DLC выключен)');
+initState(); selectSpec('smm'); startGame();
+__lastEv = null;
+G.month = 5; G.reputation = 100;
+advanceMonth();
+const wasArc = __lastEv && __lastEv._arc;
+_ok(!wasArc, 'после advanceMonth ни одна арка не выстрелила');
+_ok(typeof G.arcState === 'undefined', 'G.arcState не появилась');
+`, { noRoguelite: true }));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);

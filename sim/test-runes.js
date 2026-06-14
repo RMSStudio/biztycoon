@@ -56,12 +56,22 @@ const fakeDocument = {
   addEventListener(){}, removeEventListener(){},
 };
 
-function makeSandbox() {
+function makeSandbox(opts) {
+  opts = opts || {};
   REGISTRY.clear();
+  // Гейт DLC «Rogue-lite»: руны активируются только если включён DLC
+  // (по умолчанию включён в тестах; передать noRoguelite:true для negative-test)
+  const _fakeLS = opts.noRoguelite
+    ? {}
+    : { 'bt_enabled_dlcs_v1': JSON.stringify(['roguelite']) };
   const sb = {
     console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
     document: fakeDocument,
-    localStorage: { getItem(){return null;}, setItem(){}, removeItem(){} },
+    localStorage: {
+      getItem(k){ return Object.prototype.hasOwnProperty.call(_fakeLS, k) ? _fakeLS[k] : null; },
+      setItem(k, v){ _fakeLS[k] = String(v); },
+      removeItem(k){ delete _fakeLS[k]; },
+    },
     navigator: {},
     renderPortfolioTab(){},
     __TR: { pass: 0, fail: 0, log: [] },
@@ -93,8 +103,8 @@ function _ok(cond, msg) {
 function _eq(a, b, msg) { _ok(a === b, msg + ' (' + JSON.stringify(a) + ' === ' + JSON.stringify(b) + ')'); }
 `;
 
-function run(name, body, extraRunesPatch) {
-  const sb = makeSandbox();
+function run(name, body, extraRunesPatch, sandboxOpts) {
+  const sb = makeSandbox(sandboxOpts);
   const src = loadEngineSrc(extraRunesPatch) + '\n;\n' + HARNESS + '\n;\n' + body;
   vm.createContext(sb);
   try { vm.runInContext(src, sb); }
@@ -207,14 +217,22 @@ _ok(drop >= baseOverhead8 + bump * 0.95,
    'списано базовый overhead + bump (' + drop + ' ≥ ' + (baseOverhead8 + bump) + ')');
 `));
 
-// ── 9: RUNES_ENABLED=false ──
-add(run('Тест 9: модуль выкл. при RUNES_ENABLED=false', `
+// ── 9: RUNES_ENABLED=false (hard kill-switch) ──
+add(run('Тест 9: модуль выкл. при RUNES_ENABLED=false (kill-switch)', `
 _ok(typeof Runes === 'undefined', 'window.Runes НЕ объявлен');
 initState(); selectSpec('smm');
 startGame();
 _eq(G.month, 0, 'startGame работает без рун (G.month=0 после старта)');
 _ok(typeof G.activeRune === 'undefined', 'G.activeRune не появилась');
 `, s => s.replace('const RUNES_ENABLED = true;', 'const RUNES_ENABLED = false;')));
+
+// ── 10: DLC roguelite не включён — руны не активируются ──
+add(run('Тест 10: без DLC roguelite — руны не активируются', `
+_ok(typeof Runes === 'undefined', 'window.Runes НЕ объявлен (DLC выключен)');
+initState(); selectSpec('smm'); startGame();
+_eq(G.month, 0, 'startGame работает без рун');
+_ok(typeof G.activeRune === 'undefined', 'G.activeRune не появилась');
+`, null, { noRoguelite: true }));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);

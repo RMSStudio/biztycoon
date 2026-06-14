@@ -1,9 +1,18 @@
 // ══════════════════════════════════════════════════════
-//  Сюжетные арки (Story Arcs) — опциональный модуль ядра
+//  Сюжетные арки (Story Arcs) — реализация roguelite-механики
 //
-//  Включение/выключение — одна строка (флаг ниже).
-//  Или просто закомментировать <script src="src/storyarcs.js">
-//  в index.html / убрать из build/build.js postEngineBlocks.
+//  Активируются ТОЛЬКО когда включён DLC «Rogue-lite»
+//  (тумблер на mode-screen, persistence в localStorage
+//  под ключом 'bt_enabled_dlcs_v1'). Без DLC модуль молча
+//  не регистрируется — игра ведёт себя как будто файла нет.
+//
+//  Hard kill-switch — флаг `STORY_ARCS_ENABLED` ниже (false
+//  отключает даже при включённом DLC; для дебага/A-B-тестов).
+//
+//  Файл физически лежит в src/, чтобы при single-HTML
+//  build всё было встроено в один файл; гейт по DLC сделан
+//  через прямое чтение localStorage (не зависит от объекта
+//  DLC, который объявляется в dlc/loader.js позже по порядку).
 //
 //  Принцип: контент живёт в данных сценария (SCENARIO.storyArcs),
 //  движок не модифицируется — модуль цепляется обёрткой
@@ -47,18 +56,30 @@
 (function () {
   'use strict';
 
-  // ─── Флаг включения модуля ────────────────────────────
-  // Выключить арки целиком — поставить false (диспетчер не зарегистрируется,
-  // SCENARIO.storyArcs просто игнорируется, ядро работает без изменений).
+  // ─── Hard kill-switch ─────────────────────────────────
+  // Выключить арки целиком даже при включённом DLC — false.
   const STORY_ARCS_ENABLED = true;
-
   if (!STORY_ARCS_ENABLED) return;
+
+  // ─── Гейт по DLC «Rogue-lite» ─────────────────────────
+  // Без DLC механика не запускается. Чтение localStorage напрямую
+  // (DLC.isEnabled здесь недоступна — loader.js парсится позже).
+  if (!_rogueliteEnabled()) return;
+
   if (typeof EventBus === 'undefined') {
     console.error('[storyarcs] EventBus не найден — модуль не активирован');
     return;
   }
   if (window.__SA_LOADED) return;
   window.__SA_LOADED = true;
+
+  function _rogueliteEnabled() {
+    try {
+      const raw = (typeof localStorage !== 'undefined' && localStorage.getItem('bt_enabled_dlcs_v1')) || '[]';
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.includes('roguelite');
+    } catch (e) { return false; }
+  }
 
   const DEFAULTS = {
     stageDelayMonths: 1,

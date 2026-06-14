@@ -1,5 +1,42 @@
 # BizTycoon — Changelog
 
+## v3.12 — Roguelite-механики гейтуются DLC (2026-06-14)
+
+По уточнению Романа: **все механики п.13 (roguelite) должны срабатывать только
+при включённом DLC «Rogue-lite»** — это не базовый геймплей, а кастомная версия.
+Перевёл стартовые руны (v3.10) и Story Arcs (v3.11) под гейт DLC без переноса
+файлов (чтобы single-HTML build остался без отдельной папки `dlc/` рядом с дистом).
+
+- **Гейт активации** в `src/runes.js` и `src/storyarcs.js`: на старте IIFE
+  проверяет `localStorage['bt_enabled_dlcs_v1']` на наличие `'roguelite'`
+  (чтение напрямую — глобальный объект `DLC` объявляется в `dlc/loader.js`
+  позже по порядку, недоступен на момент парсинга наших модулей). Без DLC
+  модуль молча не регистрируется: `window.Runes` / `window.StoryArcs`
+  не появляются, обёртки `startGame`/`advanceMonth`/`_generateOffers`
+  не ставятся — игра ведёт себя как будто файлов нет.
+- **Hard kill-switch** (`RUNES_ENABLED` / `STORY_ARCS_ENABLED`) сохранён
+  как override для дебага/A-B-тестов (false выключает даже при включённом DLC).
+- **Координатор** `dlc/roguelite/roguelite.js` обновлён до v0.2: проверяет
+  `window.__RUNES_LOADED` / `window.__SA_LOADED`, логирует какие компоненты
+  активны, ведёт счётчик ранов через `EventBus.on('end_game')` под мета-прогресс.
+  Хук `month_end`/`project_completed`/`game_started` из stub-версии убран —
+  движок их не эмитит, на v0.2 нужен только `end_game`.
+- **Реестр DLC** (`dlc/loader.js` REGISTRY[roguelite]): описание обновлено —
+  «Стартовые перки-руны + сюжетные арки». Версия DLC 0.1 → 0.2.
+- **Manifest** `dlc/roguelite/manifest.json` синхронизирован.
+- **Симы**: `test-runes` и `test-storyarcs` теперь по умолчанию ставят
+  fake-`localStorage` с включённым `roguelite` (иначе все ассерты «модуль
+  работает» провалились бы). Добавлен флаг `noRoguelite:true` в sandbox-опции
+  и **новые negative-тесты**: «без DLC — руны/арки не активируются» (тест 10
+  для runes, тест 11 для arcs).
+- **Поведение для пользователя**: по умолчанию DLC «Rogue-lite» выключен
+  (тумблер на mode-screen → раздел «Расширения») — новые партии идут без рун
+  и без арок. Чтобы включить — щёлкнуть тумблер и перезагрузить страницу.
+- Валидация: `test-runes` **27/27** · `test-storyarcs` **37/37** ·
+  `sim2-lc 12 agency` 0 ошибок, 54 сдачи · `sim2-lc 4 bank` 0 ошибок, 23 сдачи ·
+  `test-strategy` 23/23 · `test-outsource` 27/27 · `build` multi/agency/bank — OK.
+
+
 ## v3.11 — Сюжетные арки Story Arcs (2026-06-14)
 
 Закрыт второй шаг п.13 бэклога — **Story Arcs** (многоэтапные цепочки событий-диалогов).

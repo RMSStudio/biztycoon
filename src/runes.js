@@ -1,20 +1,28 @@
 // ══════════════════════════════════════════════════════
-//  Стартовые перки-руны — опциональный модуль ядра
+//  Стартовые перки-руны — реализация roguelite-механики
 //
-//  Включение/выключение — одна строка (флаг ниже).
-//  Или просто закомментировать <script src="src/runes.js">
-//  в index.html / убрать из build/build.js postEngineBlocks.
+//  Активируются ТОЛЬКО когда включён DLC «Rogue-lite»
+//  (тумблер на mode-screen, persistence в localStorage
+//  под ключом 'bt_enabled_dlcs_v1'). Без DLC модуль молча
+//  не регистрируется — игра ведёт себя как будто файла нет.
+//
+//  Hard kill-switch — флаг `RUNES_ENABLED` ниже (false
+//  отключает даже при включённом DLC; для дебага/A-B-тестов).
+//
+//  Файл физически лежит в src/, чтобы при single-HTML
+//  build всё было встроено в один файл; гейт по DLC сделан
+//  через прямое чтение localStorage (не зависит от объекта
+//  DLC, который объявляется в dlc/loader.js позже по порядку).
 //
 //  Принцип: ядро игры (engine.js/staff.js/projects.js/ui.js)
 //  не модифицируется — модуль цепляется через EventBus и
 //  обёртки глобальных функций (startGame, advanceMonth,
-//  _generateOffers). При отключении игра ведёт себя как
-//  будто модуля никогда не было.
+//  _generateOffers).
 //
-//  Поток: spec выбрана → «Начать дело» → startGame() →
-//  обёртка перехватывает первый вызов → модал с 3 рунами
-//  из общего пула (4) → выбор записывает G.activeRune,
-//  применяет эффекты, продолжает оригинальный startGame().
+//  Поток: DLC включён → spec выбрана → «Начать дело» →
+//  обёртка перехватывает первый вызов startGame → модал
+//  с 3 рунами из общего пула (4) → выбор записывает
+//  G.activeRune, применяет эффекты, продолжает оригинал.
 //
 //  Эффекты — пять каналов:
 //   1) startMoneyDelta — разовое изменение G.money
@@ -35,18 +43,32 @@
 (function () {
   'use strict';
 
-  // ─── Флаг включения модуля ────────────────────────────
-  // Выключить руны целиком — поставить false (модал не покажется,
-  // обёртки не зарегистрируются, ядро работает без изменений).
+  // ─── Hard kill-switch ─────────────────────────────────
+  // Выключить руны целиком даже при включённом DLC — false.
   const RUNES_ENABLED = true;
-
   if (!RUNES_ENABLED) return;
+
+  // ─── Гейт по DLC «Rogue-lite» ─────────────────────────
+  // Без DLC механика не запускается (правило: roguelite-фичи
+  // только при активном DLC). Чтение напрямую из localStorage:
+  // DLC.isEnabled читать нельзя — dlc/loader.js загружается
+  // позже по порядку.
+  if (!_rogueliteEnabled()) return;
+
   if (typeof EventBus === 'undefined') {
     console.error('[runes] EventBus не найден — модуль не активирован');
     return;
   }
   if (window.__RUNES_LOADED) return;
   window.__RUNES_LOADED = true;
+
+  function _rogueliteEnabled() {
+    try {
+      const raw = (typeof localStorage !== 'undefined' && localStorage.getItem('bt_enabled_dlcs_v1')) || '[]';
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.includes('roguelite');
+    } catch (e) { return false; }
+  }
 
   // ── Каталог рун (общий пул) ───────────────────────────
   // На старте показываем 3 случайные из этого пула.

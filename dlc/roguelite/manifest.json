@@ -2,17 +2,14 @@
   "id": "roguelite",
   "name": "Rogue-lite",
   "icon": "⚡",
-  "version": "0.1",
+  "version": "0.2",
   "status": "wip",
-  "description": "Процедурные события, уникальные перки между ранами и нарастающая сложность.",
+  "description": "Стартовые перки-руны (1 из 3 на старте) + сюжетные арки (многоэтапные цепочки событий по триггерам).",
   "author": "BizTycoon DLC",
   "scripts": ["roguelite.js"],
   "styles": [],
   "hooks": [
-    "game_started",
-    "month_end",
-    "project_completed",
-    "game_ended"
+    "end_game"
   ],
-  "notes": "Stub-реализация. Хуки зарегистрированы, механики в разработке. См. backlog/05_roguelite.md"
+  "notes": "Реальные механики — src/runes.js (стартовые руны, v3.10) и src/storyarcs.js (Story Arcs, v3.11). Файл roguelite.js — координатор/индикатор. Сами модули гейтуются проверкой localStorage 'bt_enabled_dlcs_v1' (включается тумблером DLC на mode-screen). Следующие итерации — Run Map, мета-прогресс, полноценная вторая спека для руны «Серийный предприниматель»."
 }
