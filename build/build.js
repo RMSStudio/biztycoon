@@ -94,8 +94,10 @@ const postEngineBlocks = [
   read('src/saves.js'),
   read('src/ai.js'),
   // Опциональные модули ядра — отключаются комментированием строки
-  // (или флагом внутри файла; см. src/outsource.js → OUTSOURCE_ENABLED)
+  // (или флагом внутри файла; см. src/outsource.js → OUTSOURCE_ENABLED,
+  // src/runes.js → RUNES_ENABLED)
   read('src/outsource.js'),
+  read('src/runes.js'),
   read('dlc/loader.js'),
 ];
 
