@@ -162,10 +162,13 @@ _eq(s.meta.wins, 0, 'wins = 0');
 _ok(s.meta.history.length === 1 && s.meta.history[0].bankrupt === true, 'история записана с bankrupt=true');
 `));
 
-// ── 3: первая победа → +stageBonus, +first_win + millionaire (v0.2) ──
-// Финал 9M ≥ 5M → новая ачивка millionaire (+150 ✦) тоже срабатывает.
+// ── 3: первая победа → +stageBonus, +first_win + millionaire (v0.2) + v0.4 комбо ──
+// Финал 9M ≥ 5M → millionaire (+150 ✦). FakeG без staff/runMap.choicesTaken →
+// staffCount=0, choicesTaken=0 → v0.4 ачивки solo_win (+250) и no_milestones (+200)
+// тоже срабатывают. Передаём staff:[{}] и runMap.choicesTaken:['x'] чтобы
+// заблокировать комбо-ачивки в этом тесте (фокус — базовые ачивки + millionaire).
 add(run('Тест 3: первая победа на endgame → base+stageBonus+ачивки', `
-const fakeG = { money: 9000000, monthsPlayed: 28, runMap: { stageIdx: 4 } };
+const fakeG = { money: 9000000, monthsPlayed: 28, staff: [{}], runMap: { stageIdx: 4, choicesTaken: ['x'] } };
 const s = RogueMeta.awardAtEndGame(true, fakeG);
 _eq(s.base, 100, 'базовая награда 100 за победу');
 _eq(s.stageBonus, 80, 'stageBonus = 4×20 (cap 80)');
@@ -173,6 +176,8 @@ _ok(s.newAchievements.some(a => a.id === 'first_run'), 'засчитан first_r
 _ok(s.newAchievements.some(a => a.id === 'first_win'), 'засчитан first_win');
 _ok(s.newAchievements.some(a => a.id === 'endgame_reached'), 'засчитан endgame_reached');
 _ok(s.newAchievements.some(a => a.id === 'millionaire'), 'засчитан millionaire (peakMoney фолбэк = 9M ≥ 5M)');
+_ok(!s.newAchievements.some(a => a.id === 'solo_win'),       'solo_win НЕ засчитан (staff.length=1)');
+_ok(!s.newAchievements.some(a => a.id === 'no_milestones'),  'no_milestones НЕ засчитан (choicesTaken=1)');
 // 100 + 80 + 50 (first_run) + 100 (first_win) + 60 (endgame_reached) + 150 (millionaire) = 540
 _eq(s.award, 540, 'суммарное начисление 540');
 _eq(s.meta.shards, 540, 'shards = 540');
@@ -411,17 +416,20 @@ _ok(G._runMaxMoney >= peakBefore + 500000 || G._runMaxMoney >= G.money,
     '_runMaxMoney обновлён после роста');
 `, { withRunes: true }));
 
-// ── 23: v0.3 мета-перки — API доступно, дефолт пуст ──
-add(run('Тест 23: v0.3 META_PERKS — API и дефолтное состояние', `
+// ── 23: v0.3/v0.4 мета-перки — API доступно, дефолт пуст ──
+add(run('Тест 23: META_PERKS — API и дефолтное состояние (3 v0.3 + 3 v0.4 = 6)', `
 _ok(typeof RogueMeta.getMetaPerks === 'function',        'API getMetaPerks есть');
 _ok(typeof RogueMeta.purchaseMetaPerk === 'function',    'API purchaseMetaPerk есть');
 _ok(typeof RogueMeta.isMetaPerkUnlocked === 'function',  'API isMetaPerkUnlocked есть');
 _ok(typeof RogueMeta.getBonusRerolls === 'function',     'API getBonusRerolls есть');
 const perks = RogueMeta.getMetaPerks();
-_eq(perks.length, 3, 'в пуле 3 мета-перка');
-_ok(perks.some(p => p.id === 'extra_reroll'),  'есть extra_reroll');
-_ok(perks.some(p => p.id === 'seed_money'),    'есть seed_money');
-_ok(perks.some(p => p.id === 'brand_starter'), 'есть brand_starter');
+_eq(perks.length, 6, 'в пуле 6 мета-перков (3 v0.3 + 3 v0.4)');
+_ok(perks.some(p => p.id === 'extra_reroll'),   'v0.3: extra_reroll');
+_ok(perks.some(p => p.id === 'seed_money'),     'v0.3: seed_money');
+_ok(perks.some(p => p.id === 'brand_starter'),  'v0.3: brand_starter');
+_ok(perks.some(p => p.id === 'penalty_grace'),  'v0.4: penalty_grace');
+_ok(perks.some(p => p.id === 'signature_lead'), 'v0.4: signature_lead');
+_ok(perks.some(p => p.id === 'wise_consult'),   'v0.4: wise_consult');
 _eq(RogueMeta.getBonusRerolls(), 0, 'по дефолту bonusRerolls = 0');
 _eq(RogueMeta.getUnlockedMetaPerkIds().length, 0, 'по дефолту перки не куплены');
 `));
@@ -527,6 +535,106 @@ RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 1 } });
 const m = RogueMeta.getMeta();
 const last = m.history[m.history.length - 1];
 _eq(last.difficulty, 'nightmare', 'последняя запись history.difficulty = nightmare');
+`));
+
+// ── 33: v0.4 penalty_grace — выставляет G.perkPenaltyShield в startGame ──
+add(run('Тест 33: penalty_grace перк → G.perkPenaltyShield=true с старта', `
+initState(); selectSpec('smm'); startGame();
+_ok(!G.perkPenaltyShield, 'без перка G.perkPenaltyShield не выставлен');
+for (let i = 0; i < 16; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r = RogueMeta.purchaseMetaPerk('penalty_grace');
+_ok(r.ok, 'penalty_grace куплен');
+initState(); selectSpec('smm'); startGame();
+_ok(G.perkPenaltyShield === true, 'с купленным penalty_grace: shield=true с самого старта');
+`));
+
+// ── 34: v0.4 signature_lead — +1 caseScoutBonus с старта ──
+add(run('Тест 34: signature_lead перк → +caseScoutBonus с старта', `
+initState(); selectSpec('smm'); startGame();
+const scoutBase = G.caseScoutBonus || 0;
+for (let i = 0; i < 12; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r = RogueMeta.purchaseMetaPerk('signature_lead');
+_ok(r.ok, 'signature_lead куплен');
+initState(); selectSpec('smm'); startGame();
+_eq(G.caseScoutBonus, scoutBase + 1, '+1 к caseScoutBonus');
+`));
+
+// ── 35: v0.4 wise_consult — +3 caseQBonus с старта ──
+add(run('Тест 35: wise_consult перк → +caseQBonus с старта', `
+initState(); selectSpec('smm'); startGame();
+const qBase = G.caseQBonus || 0;
+for (let i = 0; i < 10; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r = RogueMeta.purchaseMetaPerk('wise_consult');
+_ok(r.ok, 'wise_consult куплен');
+initState(); selectSpec('smm'); startGame();
+_eq(G.caseQBonus, qBase + 3, '+3 к caseQBonus');
+`));
+
+// ── 36: solo_win — победа без найма команды ──
+add(run('Тест 36: solo_win — победа с пустым G.staff', `
+const fakeG = { money: 8000000, monthsPlayed: 18, staff: [], runMap: { stageIdx: 4, choicesTaken: [] } };
+const s = RogueMeta.awardAtEndGame(true, fakeG);
+_ok(s.newAchievements.some(a => a.id === 'solo_win'), 'solo_win засчитан (staff=0)');
+// Контр-пример: победа с командой → solo_win НЕ засчитан
+RogueMeta.reset();
+const fakeG2 = { money: 8000000, monthsPlayed: 18, staff: [{}, {}], runMap: { stageIdx: 4, choicesTaken: [] } };
+const s2 = RogueMeta.awardAtEndGame(true, fakeG2);
+_ok(!s2.newAchievements.some(a => a.id === 'solo_win'), 'с командой solo_win НЕ засчитан');
+`));
+
+// ── 37: no_milestones — победа без выбора бонусов на milestones ──
+add(run('Тест 37: no_milestones — победа с choicesTaken=[]', `
+const fakeG = { money: 8000000, monthsPlayed: 18, staff: [{}], runMap: { stageIdx: 4, choicesTaken: [] } };
+const s = RogueMeta.awardAtEndGame(true, fakeG);
+_ok(s.newAchievements.some(a => a.id === 'no_milestones'), 'no_milestones засчитан (choicesTaken=0)');
+// Контр-пример: с выбранными бонусами → НЕ засчитан
+RogueMeta.reset();
+const fakeG2 = { money: 8000000, monthsPlayed: 18, staff: [{}], runMap: { stageIdx: 4, choicesTaken: ['cash','rep'] } };
+const s2 = RogueMeta.awardAtEndGame(true, fakeG2);
+_ok(!s2.newAchievements.some(a => a.id === 'no_milestones'), 'с выбранными бонусами no_milestones НЕ засчитан');
+`));
+
+// ── 38: progress API — master_5_wins показывает прогресс ──
+add(run('Тест 38: master_5_wins.progress → {cur:0..5, max:5}', `
+const a = RogueMeta.getAchievements().find(x => x.id === 'master_5_wins');
+_ok(typeof a.progress === 'function', 'progress API у master_5_wins');
+const meta0 = RogueMeta.getMeta();
+const p0 = a.progress({ meta: meta0 });
+_eq(p0.cur, 0, 'до побед: cur=0');
+_eq(p0.max, 5, 'максимум: max=5');
+// 2 победы → cur=2
+for (let i = 0; i < 2; i++) RogueMeta.awardAtEndGame(true, { money: 8000000, runMap: { stageIdx: 4 } });
+const p1 = a.progress({ meta: RogueMeta.getMeta() });
+_eq(p1.cur, 2, 'после 2 побед: cur=2');
+`));
+
+// ── 39: progress API — rune_collector показывает прогресс ──
+add(run('Тест 39: rune_collector.progress отражает playedRuneIds', `
+const a = RogueMeta.getAchievements().find(x => x.id === 'rune_collector');
+_ok(typeof a.progress === 'function', 'progress API у rune_collector');
+const p0 = a.progress({ meta: RogueMeta.getMeta() });
+_eq(p0.cur, 0, 'до игр: cur=0');
+_eq(p0.max, 4, 'максимум: 4 базовые руны');
+// Симулируем ран с руной
+RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 }, activeRune: { id: 'connections' } });
+const p1 = a.progress({ meta: RogueMeta.getMeta() });
+_eq(p1.cur, 1, 'после рана с connections: cur=1');
+`));
+
+// ── 40: progress API — difficulty_master отражает wonDifficulties ──
+add(run('Тест 40: difficulty_master.progress отражает wonDifficulties', `
+const a = RogueMeta.getAchievements().find(x => x.id === 'difficulty_master');
+_ok(typeof a.progress === 'function', 'progress API у difficulty_master');
+const p0 = a.progress({ meta: RogueMeta.getMeta() });
+_eq(p0.cur, 0, 'до побед: cur=0');
+_eq(p0.max, 4, 'максимум: 4 сложности');
+// Победа на easy и hard
+localStorage.setItem('bt_difficulty_v1', 'easy');
+RogueMeta.awardAtEndGame(true, { money: 8000000, runMap: { stageIdx: 4 } });
+localStorage.setItem('bt_difficulty_v1', 'hard');
+RogueMeta.awardAtEndGame(true, { money: 8000000, runMap: { stageIdx: 4 } });
+const p1 = a.progress({ meta: RogueMeta.getMeta() });
+_eq(p1.cur, 2, 'после 2 разных сложностей: cur=2');
 `));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);

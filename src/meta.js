@@ -79,21 +79,36 @@
 
   // ── v0.3 (2026-06-15): Мета-перки — накопительные модификаторы ──
   // Покупаются за shards один раз, действуют во всех будущих ранах.
-  // Эффекты применяются:
+  // Эффекты применяются в _applyMetaPerksToG (обёртка startGame):
   //   - extra_reroll      → +1 к лимиту перебросов в модале выбора руны
   //                          (читается из runes.js через RogueMeta.getBonusRerolls)
-  //   - seed_money        → +money к G.money после startGame (через обёртку)
-  //   - brand_starter     → +rep к G.reputation после startGame (через обёртку)
+  //   - seed_money        → +money к G.money
+  //   - brand_starter     → +rep к G.reputation
+  //   - penalty_grace     → G.perkPenaltyShield = true (штраф просрочки −50%
+  //                          с самого старта, без ожидания milestone)
+  //   - signature_lead    → +caseScoutBonus к G (1 лид при скаутинге с старта)
+  //   - wise_consult      → +caseQBonus к G (стартовый Q-бонус от «опыта»)
   const META_PERKS = [
-    { id: 'extra_reroll',  icon: '🎲', name: '+1 переброс руны',
+    { id: 'extra_reroll',   icon: '🎲', name: '+1 переброс руны',
       desc: 'Лимит перебросов в модале старта рана 2 → 3',
       cost: 250, effects: { bonusRerolls: 1 } },
-    { id: 'seed_money',    icon: '💰', name: 'Стартовый бонус',
+    { id: 'seed_money',     icon: '💰', name: 'Стартовый бонус',
       desc: '+100 000 ₽ к стартовому капиталу любого рана',
       cost: 300, effects: { startMoney: 100000 } },
-    { id: 'brand_starter', icon: '⭐', name: 'Уже известны',
+    { id: 'brand_starter',  icon: '⭐', name: 'Уже известны',
       desc: '+5 стартовой репутации (поверх руны/сложности)',
       cost: 200, effects: { startRep: 5 } },
+
+    // v0.4 (2026-06-15): вторая волна перков
+    { id: 'penalty_grace',  icon: '🛡', name: 'Авторитет с порога',
+      desc: 'Просрочки бьют по репутации −50% с самого старта (без ожидания milestone)',
+      cost: 350, effects: { startPenaltyShield: true } },
+    { id: 'signature_lead', icon: '🎯', name: 'Подпись агентства',
+      desc: '+1 лид при скаутинге с первого месяца (поверх кейсов/бонусов)',
+      cost: 250, effects: { startScoutBonus: 1 } },
+    { id: 'wise_consult',   icon: '🧠', name: 'Стартовая экспертиза',
+      desc: '+3 Q к стартовой команде (опыт переносится между ранами)',
+      cost: 200, effects: { startQBonus: 3 } },
   ];
 
   // ── Ачивки ────────────────────────────────────────────
@@ -107,7 +122,12 @@
     { id: 'first_win',        icon: '🏆', name: 'Первая победа',     desc: 'Первая победа в любой партии',                    shards: 100,
       check: ctx => ctx.run.won && ctx.winsAfter === 1 },
     { id: 'endgame_reached',  icon: '👑', name: 'До эндгейма',       desc: 'Дойти до финального этапа Run Map',               shards: 60,
-      check: ctx => (ctx.run.stageReached || 0) >= 4 },
+      check: ctx => (ctx.run.stageReached || 0) >= 4,
+      // v0.4: progress hint — max stageReached в истории / 4
+      progress: ctx => {
+        const max = Math.max(0, ...(ctx.meta.history || []).map(r => r.stageReached || 0));
+        return { cur: max, max: 4 };
+      } },
     { id: 'social_win',       icon: '🤝', name: 'Социалист',         desc: 'Победа с руной «Связи в отрасли»',                shards: 50,
       check: ctx => ctx.run.won && ctx.run.runeId === 'connections' },
     { id: 'perfectionist_win',icon: '🎯', name: 'Без огрехов',       desc: 'Победа с руной «Перфекционист»',                  shards: 50,
@@ -115,17 +135,32 @@
     { id: 'insider_win',      icon: '🕵', name: 'Кто-то всегда знает',desc: 'Победа с руной «Инсайдер рынка»',                shards: 50,
       check: ctx => ctx.run.won && ctx.run.runeId === 'insider' },
     { id: 'master_5_wins',    icon: '💎', name: 'Мастер агентства',  desc: '5 побед суммарно',                                 shards: 200,
-      check: ctx => ctx.winsAfter >= 5 },
+      check: ctx => ctx.winsAfter >= 5,
+      progress: ctx => ({ cur: Math.min(5, ctx.meta.wins || 0), max: 5 }) },
     { id: 'survivor',         icon: '🛟', name: 'Выживший',          desc: 'Завершить 3 рана подряд без банкротства',         shards: 75,
-      check: ctx => ctx.lastN(3).length === 3 && ctx.lastN(3).every(r => !r.bankrupt) },
+      check: ctx => ctx.lastN(3).length === 3 && ctx.lastN(3).every(r => !r.bankrupt),
+      progress: ctx => {
+        const last3 = (ctx.meta.history || []).slice(-3);
+        const noB = last3.filter(r => !r.bankrupt).length;
+        return { cur: noB, max: 3 };
+      } },
 
     // ── v0.2 (2026-06-14): расширение мета-прогресса ──
     { id: 'millionaire',      icon: '💰', name: 'Миллионщик',        desc: 'Достичь пика 5 000 000 ₽ за партию',              shards: 150,
-      check: ctx => (ctx.run.peakMoney || ctx.run.finalMoney || 0) >= 5000000 },
+      check: ctx => (ctx.run.peakMoney || ctx.run.finalMoney || 0) >= 5000000,
+      progress: ctx => {
+        const peak = Math.max(0, ...(ctx.meta.history || []).map(r => r.peakMoney || 0));
+        return { cur: Math.min(5000000, peak), max: 5000000 };
+      } },
     { id: 'rune_collector',   icon: '🎲', name: 'Коллекционер рун',  desc: 'Сыграть со всеми 4 базовыми рунами хотя бы по разу', shards: 200,
       check: ctx => {
         const played = new Set(ctx.meta.playedRuneIds || []);
         return BASE_RUNE_IDS.every(id => played.has(id));
+      },
+      progress: ctx => {
+        const played = new Set(ctx.meta.playedRuneIds || []);
+        const cur = BASE_RUNE_IDS.filter(id => played.has(id)).length;
+        return { cur, max: BASE_RUNE_IDS.length };
       } },
     { id: 'speedrun',         icon: '⚡', name: 'Скоростной ран',     desc: 'Победа до 20-го месяца включительно',             shards: 150,
       check: ctx => ctx.run.won && (ctx.run.monthsPlayed || 0) > 0 && (ctx.run.monthsPlayed || 0) <= 20 },
@@ -134,7 +169,12 @@
     { id: 'no_breakdowns',    icon: '🛡', name: 'Без срывов',        desc: 'Финишировать ран с репутацией ≥ 80',              shards: 80,
       check: ctx => (ctx.run.finalReputation || 0) >= 80 },
     { id: 'win_streak_3',     icon: '🔄', name: 'Серия из трёх',     desc: '3 победы подряд (без банкротств между ними)',     shards: 250,
-      check: ctx => ctx.lastN(3).length === 3 && ctx.lastN(3).every(r => r.won) },
+      check: ctx => ctx.lastN(3).length === 3 && ctx.lastN(3).every(r => r.won),
+      progress: ctx => {
+        const last3 = (ctx.meta.history || []).slice(-3);
+        const wins = last3.filter(r => r.won).length;
+        return { cur: wins, max: 3 };
+      } },
 
     // ── v0.3 (2026-06-15): мастер сложностей ──
     // Победа на всех 4 пресетах сложности (easy / normal / hard / nightmare).
@@ -143,7 +183,20 @@
       check: ctx => {
         const won = new Set(ctx.meta.wonDifficulties || []);
         return ['easy','normal','hard','nightmare'].every(d => won.has(d));
+      },
+      progress: ctx => {
+        const won = new Set(ctx.meta.wonDifficulties || []);
+        const cur = ['easy','normal','hard','nightmare'].filter(d => won.has(d)).length;
+        return { cur, max: 4 };
       } },
+
+    // ── v0.4 (2026-06-15): комбо-ачивки следующей волны ──
+    // solo_win: победа без найма команды (G.staff не пополнялся, end-of-run snapshot.staffCount = 0).
+    { id: 'solo_win',         icon: '🧘', name: 'Соло-режим',        desc: 'Победить без найма ни одного сотрудника', shards: 250,
+      check: ctx => ctx.run.won && (ctx.run.staffCount === 0) },
+    // no_milestones: победа без выбора ни одного бонуса на Run Map milestone (choicesTaken пуст).
+    { id: 'no_milestones',    icon: '🚫', name: 'Без подсказок',     desc: 'Победить, не взяв ни одного бонуса на milestone Run Map', shards: 200,
+      check: ctx => ctx.run.won && (ctx.run.choicesTaken === 0) },
   ];
 
   // ── Загрузка/сохранение ──────────────────────────────
@@ -254,12 +307,19 @@
       .filter(p => owned.has(p.id))
       .reduce((acc, p) => {
         const fx = p.effects || {};
-        acc.startMoney += (fx.startMoney || 0);
-        acc.startRep   += (fx.startRep   || 0);
+        acc.startMoney        += (fx.startMoney || 0);
+        acc.startRep          += (fx.startRep   || 0);
+        // v0.4: новые поля эффектов
+        acc.startScoutBonus   += (fx.startScoutBonus || 0);
+        acc.startQBonus       += (fx.startQBonus     || 0);
+        acc.startPenaltyShield = acc.startPenaltyShield || !!fx.startPenaltyShield;
         return acc;
-      }, { startMoney: 0, startRep: 0 });
-    if (totals.startMoney) g.money      = (g.money || 0) + totals.startMoney;
-    if (totals.startRep)   g.reputation = (g.reputation || 0) + totals.startRep;
+      }, { startMoney: 0, startRep: 0, startScoutBonus: 0, startQBonus: 0, startPenaltyShield: false });
+    if (totals.startMoney)        g.money            = (g.money || 0) + totals.startMoney;
+    if (totals.startRep)          g.reputation       = (g.reputation || 0) + totals.startRep;
+    if (totals.startScoutBonus)   g.caseScoutBonus   = (g.caseScoutBonus || 0) + totals.startScoutBonus;
+    if (totals.startQBonus)       g.caseQBonus       = (g.caseQBonus || 0) + totals.startQBonus;
+    if (totals.startPenaltyShield) g.perkPenaltyShield = true;
   }
 
   // ── v0.3: Текущая сложность партии — для трекинга difficulty_master ──
@@ -312,6 +372,9 @@
       finalReputation: Math.round(g.reputation || 0),
       // v0.3: на каком пресете сложности был сыгран ран
       difficulty:      difficulty || null,
+      // v0.4: трекеры для комбо-ачивок solo_win / no_milestones
+      staffCount:      Array.isArray(g.staff) ? g.staff.length : 0,
+      choicesTaken:    (g.runMap && Array.isArray(g.runMap.choicesTaken)) ? g.runMap.choicesTaken.length : 0,
       ts: Date.now(),
     };
 
@@ -406,14 +469,48 @@
     if (m) m.style.display = 'none';
   }
 
+  // v0.4: вычислить прогресс по ачивке (если объявлен .progress)
+  function _achProgress(a, meta) {
+    if (typeof a.progress !== 'function') return null;
+    try {
+      const ctx = {
+        meta,
+        totalRunsAfter: meta.totalRuns,
+        winsAfter:      meta.wins,
+        lastN: (n) => (meta.history || []).slice(-n),
+      };
+      const p = a.progress(ctx);
+      if (!p || typeof p.cur !== 'number' || typeof p.max !== 'number' || p.max <= 0) return null;
+      return p;
+    } catch (e) { return null; }
+  }
+
   function _renderModalHtml(meta) {
     const ach = ACHIEVEMENTS.map(a => {
       const got = (meta.achievements || []).includes(a.id);
+      // v0.4: для незавершённых ачивок с числовым порогом — мини-бар
+      let progressBar = '';
+      if (!got) {
+        const p = _achProgress(a, meta);
+        if (p) {
+          const pct = Math.max(0, Math.min(100, Math.round(p.cur / p.max * 100)));
+          // Форматирование: для money — компактно
+          const isMoney = a.id === 'millionaire';
+          const fmt = isMoney ? v => (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v / 1000) + 'K') : v => v;
+          progressBar = `<div style="margin-top:4px">
+            <div style="height:3px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:#f59e0b;border-radius:2px;transition:width .2s"></div>
+            </div>
+            <div style="font-size:9px;color:var(--muted);margin-top:2px">${fmt(p.cur)} / ${fmt(p.max)}</div>
+          </div>`;
+        }
+      }
       return `<div style="border:1px solid ${got ? '#f59e0b66' : 'var(--border)'};background:${got ? 'rgba(245,158,11,.08)' : 'rgba(255,255,255,.02)'};border-radius:8px;padding:9px 11px;display:flex;align-items:center;gap:10px;${got ? '' : 'opacity:.55'}">
         <span style="font-size:22px;filter:${got ? 'none' : 'grayscale(1)'}">${a.icon}</span>
         <div style="min-width:0;flex:1">
           <div style="font-size:12px;font-weight:700;color:var(--text)">${a.name}</div>
           <div style="font-size:10px;color:var(--sub);margin-top:2px">${a.desc}</div>
+          ${progressBar}
         </div>
         <span style="font-size:10px;font-weight:700;color:#f59e0b;white-space:nowrap">+${a.shards}</span>
       </div>`;
@@ -634,5 +731,5 @@
     _buyPerk,
   };
 
-  console.log('[meta] v0.3 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок, ' + META_PERKS.length + ' мета-перков · текущие ✦ ' + getShards());
+  console.log('[meta] v0.4 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок, ' + META_PERKS.length + ' мета-перков · текущие ✦ ' + getShards());
 })();
