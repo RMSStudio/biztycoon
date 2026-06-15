@@ -105,8 +105,22 @@
     }
   }
 
+  // п.29: beforeunload — запись мета-прогресса при закрытии/обновлении страницы
+  // Вызываем awardAtEndGame синхронно (не через EventBus, т.к. слушатели async-like)
+  window.addEventListener('beforeunload', function () {
+    if (typeof G === 'undefined' || !G || (G.month || 0) < 1) return;
+    if (G._endGameFired) return; // уже записано
+    if (window.RogueMeta && typeof window.RogueMeta.awardAtEndGame === 'function') {
+      try {
+        RL.runCount++;
+        G._endGameFired = true;
+        window.RogueMeta.awardAtEndGame(false, G);
+      } catch (e) { /* silently ignore — нельзя логировать в beforeunload */ }
+    }
+  });
+
   window._RL = RL;
 
-  console.log(`[DLC:${ID}] v0.4 активирован — компоненты: ` +
+  console.log(`[DLC:${ID}] v0.5 активирован — компоненты: ` +
     `руны=${runesLive ? 'on' : 'off'} · арки=${arcsLive ? 'on' : 'off'} · карта=${mapLive ? 'on' : 'off'} · мета=${metaLive ? 'on' : 'off'}`);
 })();

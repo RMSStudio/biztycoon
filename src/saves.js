@@ -317,6 +317,53 @@ function _renderSaveList() {
   el.innerHTML = runs.map((run, i) => renderRun(run, i === 0)).join('');
 }
 
+// ── Export / Import ───────────────────────────────────
+
+// п.30: скачать все раны одним JSON-файлом
+function exportSaves() {
+  const data = localStorage.getItem(RUNS_KEY) || '[]';
+  const blob  = new Blob([data], { type: 'application/json' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href      = url;
+  a.download  = `btz_runs_export_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  notify('📥 Сохранения выгружены', 'success');
+}
+
+// п.30: импорт из JSON-файла — merge без дублирования по runId
+function importSaves(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) throw new Error('Неверный формат');
+      const current = _loadRuns();
+      const existingIds = new Set(current.map(r => r.runId));
+      const newRuns = imported.filter(r => r.runId && !existingIds.has(r.runId));
+      const merged = [...newRuns, ...current].slice(0, MAX_RUNS);
+      _saveRuns(merged);
+      _renderSaveList();
+      notify(`✅ Импортировано ${newRuns.length} ран(ов)`, 'success');
+    } catch (err) {
+      notify('Ошибка импорта: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function _triggerImportFile() {
+  const inp = document.createElement('input');
+  inp.type   = 'file';
+  inp.accept = '.json';
+  inp.onchange = e => importSaves(e.target.files[0]);
+  inp.click();
+}
+
 // ── Keyboard shortcut ─────────────────────────────────
 
 document.addEventListener('keydown', e => {

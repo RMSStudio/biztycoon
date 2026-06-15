@@ -2255,6 +2255,10 @@ function _renderPerkTree() {
 //  RESET
 // ══════════════════════════════════════════════════════
 function resetGame() {
+  // п.29: если сессия была активна и end_game ещё не сработал — записать мета-прогресс
+  if (typeof G !== 'undefined' && G && (G.month || 0) > 0 && !G._endGameFired) {
+    EventBus.emit('end_game', { won: false });
+  }
   initState();
   initEventBus();
   document.querySelectorAll('.spec-card').forEach(c=>c.classList.remove('selected'));

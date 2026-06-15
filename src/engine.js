@@ -156,7 +156,7 @@ function startGame() {
   if (!G.spec) return;
   if (typeof startRun === 'function') startRun(); // saves.js: открыть новый ран
   G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[]; G.candidatePool=[];
-  G.tempDiscount=0; G.monthsPlayed=0;
+  G.tempDiscount=0; G.monthsPlayed=0; G._endGameFired=false;
   G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
@@ -320,7 +320,7 @@ function goTo(id) {
 // Ре-рендер всего игрового поля (вызов UI из engine → через сигнал)
 function _emitRender()     { EventBus.emit('render'); }
 function _emitShowEvent(ev){ EventBus.emit('show_event', { ev }); }
-function _emitEndGame(won) { EventBus.emit('end_game',   { won }); }
+function _emitEndGame(won) { G._endGameFired = true; EventBus.emit('end_game', { won }); }
 
 function npsColor(v) {
   return v>=65?'var(--green)':v>=42?'var(--amber)':'var(--red)';

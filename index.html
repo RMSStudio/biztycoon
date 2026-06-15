@@ -484,8 +484,10 @@
       <h3>💾 Сохранения</h3>
       <p>Ручные сохранения и авто-сохранения по месяцам · <span style="color:var(--sub)">Ctrl+S — быстрое сохранение</span></p>
     </div>
-    <div style="margin-bottom:12px;flex-shrink:0">
-      <button class="btn btn-primary" onclick="quickSave()" style="width:100%;justify-content:center">💾 Сохранить сейчас</button>
+    <div style="margin-bottom:12px;flex-shrink:0;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="quickSave()" style="flex:1;justify-content:center">💾 Сохранить сейчас</button>
+      <button class="btn btn-ghost" onclick="exportSaves()" title="Скачать все раны как JSON" style="padding:7px 12px;font-size:12px;border:1px solid var(--border);white-space:nowrap">⬇ Экспорт</button>
+      <button class="btn btn-ghost" onclick="_triggerImportFile()" title="Импортировать раны из JSON" style="padding:7px 12px;font-size:12px;border:1px solid var(--border);white-space:nowrap">⬆ Импорт</button>
     </div>
     <div id="save-list"></div>
     <button class="btn btn-ghost" onclick="closeSaveModal()" style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
@@ -537,6 +539,7 @@
 <script src="src/runmap.js"></script>
 <script src="src/meta.js"></script>
 <script src="src/livingmarket.js"></script>
+<script src="src/competitors.js"></script>
 <!-- DLC loader — последним; DLC-скрипты грузятся динамически только при включении -->
 <script src="dlc/loader.js"></script>
 <script>
