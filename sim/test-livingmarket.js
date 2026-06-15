@@ -128,8 +128,12 @@ const stages = LivingMarket.getStages();
 _eq(stages.length, 6, '6 стадий');
 _eq(stages[0].id, 'garage', 'первая = garage');
 _eq(stages[5].id, 'empire', 'последняя = empire');
-_ok(stages[3].requiresMarket && stages[4].requiresMarket && stages[5].requiresMarket, 'стадии 4–6 requiresMarket');
+// v0.9 (Фаза C): requiresMarket убран — все 6 стадий теперь живые с реальными гейтами
+_ok(!stages[3].requiresMarket && !stages[4].requiresMarket && !stages[5].requiresMarket, 'стадии 4–6 без requiresMarket (Фаза C)');
 _ok(!stages[0].requiresMarket && !stages[1].requiresMarket && !stages[2].requiresMarket, 'стадии 1–3 живые (без requiresMarket)');
+_ok(typeof stages[3].gate === 'function', 'у Сети реальная gate-функция');
+_ok(typeof stages[4].gate === 'function', 'у Холдинга реальная gate-функция');
+_ok(typeof stages[5].gate === 'function', 'у Империи реальная gate-функция');
 `));
 
 // ── 2: LIVING_MARKET_ENABLED=false → модуль не активируется ──
@@ -228,8 +232,8 @@ advanceMonth();
 _eq(G.living.stage, 1, 'стадия не откатывается');
 `));
 
-// ── 10: стадии 4–6 не достигаются (requiresMarket) ──
-add(run('Тест 10: даже при огромных числах стадии 4–6 не открываются', `
+// ── 10: Фаза C — гейты стадий 4–6 реальные (больше нет requiresMarket) ──
+add(run('Тест 10: при огромных числах Сеть достижима, Холдинг — нет (нужно 3 мес. на #1)', `
 initState(); selectSpec('smm'); startGame();
 G.completedProjects = [];
 for (let i = 0; i < 200; i++) G.completedProjects.push({ id:'p'+i, revenue: 5000000 });
@@ -238,8 +242,13 @@ for (let i = 0; i < 50; i++) G.staff.push({ id:'s'+i });
 G.reputation = 100;
 G.portfolio = 200;
 advanceMonth();
-// Дойти можно до агентства (idx=2), но не до сети (idx=3)
-_eq(G.living.stage, 2, 'стадия упёрлась в агентство (3 живых)');
+// v0.9 (Фаза C): Сеть (idx 3) теперь достижима — гейт: 25 сдач · штат 10 · топ-3 · 60M ₽.
+// При 200 сдачах × 5M и 50 штате игрок в топ-3 (конкуренты только что стартовали).
+// Холдинг (idx 4) требует 3 мес. на #1 подряд → после 1 тика monthsAtRank1=1 < 3 → стоп.
+_eq(G.living.stage, 3, 'достигнута Сеть (idx 3) — Холдинг заблокирован нехваткой мес. на #1');
+_ok(G.market && G.market.competitors && G.market.competitors.length === 5, '5 конкурентов инициализированы');
+_ok(G.market.playerRank != null, 'playerRank проставлен');
+_eq(G.market.monthsAtRank1, 1, 'после 1 тика monthsAtRank1 = 1, нужно 3 для Холдинга');
 `));
 
 // ── 11: майлстоуны срабатывают по cond + пишутся в журнал ──
@@ -1313,6 +1322,151 @@ add(run('Тест DSL.7: _scenarioMilestones возвращает null без SC
 initState(); selectSpec('smm'); startGame();
 delete SCENARIO.milestones;
 _eq(LivingMarket._scenarioMilestones(G), null, 'null когда нет SCENARIO.milestones');
+`));
+
+// ── Фаза C.1: инициализация G.market ──
+add(run('Фаза C.1: startGame создаёт G.market с 5 конкурентами', `
+initState(); selectSpec('smm'); startGame();
+_ok(G.market && typeof G.market === 'object', 'G.market существует');
+_eq(G.market.competitors.length, 5, '5 конкурентов');
+_ok(G.market.playerRank != null, 'playerRank проставлен');
+_eq(G.market.monthsAtRank1, 0, 'monthsAtRank1 = 0 при старте');
+_eq(G.market.acquisitions, 0, 'acquisitions = 0');
+const archetypes = G.market.competitors.map(c => c.archetype);
+_ok(archetypes.includes('dumper'),   'есть Демпер');
+_ok(archetypes.includes('boutique'), 'есть Бутик');
+_ok(archetypes.includes('machine'),  'есть Машина найма');
+_ok(archetypes.includes('networker'),'есть Сетевик');
+_ok(archetypes.includes('wildcard'), 'есть Дикая карта');
+`));
+
+// ── Фаза C.2: тик конкурентов в advanceMonth ──
+add(run('Фаза C.2: advanceMonth увеличивает revenue конкурентов', `
+initState(); selectSpec('smm'); startGame();
+const revBefore = G.market.competitors.map(c => c.revenue);
+advanceMonth();
+const revAfter = G.market.competitors.map(c => c.revenue);
+_ok(revAfter.every((r, i) => r > revBefore[i]), 'каждый конкурент получил выручку за месяц');
+`));
+
+// ── Фаза C.3: рейтинг пересчитывается ──
+add(run('Фаза C.3: playerRank обновляется, игрок обгоняет конкурентов при большой выручке', `
+initState(); selectSpec('smm'); startGame();
+// Дать игроку огромную выручку — он должен быть #1
+G.completedProjects = [];
+for (let i = 0; i < 100; i++) G.completedProjects.push({ id:'p'+i, revenue: 10_000_000 });
+advanceMonth();
+_eq(G.market.playerRank, 1, 'при 1 млрд выручки игрок #1');
+_eq(G.market.monthsAtRank1, 1, 'первый месяц на #1 → monthsAtRank1 = 1');
+`));
+
+// ── Фаза C.4: monthsAtRank1 накапливается и сбрасывается ──
+add(run('Фаза C.4: monthsAtRank1 растёт при #1 и сбрасывается при потере позиции', `
+initState(); selectSpec('smm'); startGame();
+// Игрок без выручки — конкуренты стартуют с 0, но быстро обгоняют
+G.completedProjects = [];
+advanceMonth(); advanceMonth(); advanceMonth();
+// После 3 тиков конкуренты должны опередить (у них rev > 0, у игрока = 0)
+_ok(G.market.monthsAtRank1 === 0, 'без выручки игрок не на #1 — monthsAtRank1 = 0');
+_ok(G.market.playerRank > 1, 'игрок не на первом месте без выручки');
+`));
+
+// ── Фаза C.5: getMarket / getCompetitors публичный API ──
+add(run('Фаза C.5: публичный API LivingMarket работает', `
+initState(); selectSpec('smm'); startGame();
+const market = LivingMarket.getMarket();
+_ok(market && market.competitors, 'getMarket() вернул объект с конкурентами');
+const comps  = LivingMarket.getCompetitors();
+_eq(comps.length, 5, 'getCompetitors() → 5 элементов');
+_ok(LivingMarket.getPlayerRank() != null, 'getPlayerRank() не null');
+_eq(LivingMarket.getMonthsAtRank1(), 0, 'getMonthsAtRank1() = 0 при старте');
+_eq(LivingMarket.getAcquisitions(), 0, 'getAcquisitions() = 0');
+const archs = LivingMarket.getCompetitorArchetypes();
+_ok('dumper' in archs && 'boutique' in archs, 'getCompetitorArchetypes() содержит archetypes');
+`));
+
+// ── Фаза C.6: гейт Сети требует топ-3 ──
+add(run('Фаза C.6: Сеть (idx 3) не открывается без топ-3 рейтинга', `
+initState(); selectSpec('smm'); startGame();
+// Выполнить все другие условия Сети, но рейтинг оставить плохой
+G.completedProjects = [];
+for (let i = 0; i < 30; i++) G.completedProjects.push({ id:'p'+i, revenue: 1000 }); // 30 сдач, но мизер денег
+G.staff = [];
+for (let i = 0; i < 15; i++) G.staff.push({ id:'s'+i });
+G.reputation = 90;
+// Конкурентам дать огромную выручку чтобы игрок был в конце рейтинга
+G.market.competitors.forEach(c => { c.revenue = 500_000_000; });
+LivingMarket._updateMarketRankings();
+_ok(G.market.playerRank > 3, 'без денег игрок не в топ-3');
+// _tickStages не должен дать Сеть
+LivingMarket._tickStages();
+_ok(G.living.stage < 3, 'Сеть не открылась без топ-3 рейтинга (стадия: ' + G.living.stage + ')');
+`));
+
+// ── Фаза C.7: гейт Холдинга требует 3 мес. на #1 ──
+add(run('Фаза C.7: Холдинг (idx 4) не открывается при 1 месяце на #1', `
+initState(); selectSpec('smm'); startGame();
+G.completedProjects = [];
+for (let i = 0; i < 60; i++) G.completedProjects.push({ id:'p'+i, revenue: 5_000_000 });
+G.staff = [];
+for (let i = 0; i < 25; i++) G.staff.push({ id:'s'+i });
+G.reputation = 95;
+// Принудительно: игрок на #1 только 1 месяц
+G.market.monthsAtRank1 = 1;
+G.market.playerRank    = 1;
+LivingMarket._tickStages();
+// Сеть должна открыться (все условия выполнены), Холдинг — нет
+_eq(G.living.stage, 3, 'Сеть открылась, Холдинг ещё нет (нужно 3 мес. на #1)');
+`));
+
+// ── Фаза C.8: гейт Холдинга открывается при 3 мес. на #1 ──
+add(run('Фаза C.8: Холдинг открывается при monthsAtRank1 = 3', `
+initState(); selectSpec('smm'); startGame();
+G.completedProjects = [];
+for (let i = 0; i < 60; i++) G.completedProjects.push({ id:'p'+i, revenue: 5_000_000 });
+G.staff = [];
+for (let i = 0; i < 25; i++) G.staff.push({ id:'s'+i });
+G.reputation = 95;
+G.market.monthsAtRank1 = 3;
+G.market.playerRank    = 1;
+LivingMarket._tickStages();
+_eq(G.living.stage, 4, 'Холдинг открылся при monthsAtRank1 = 3');
+`));
+
+// ── Фаза C.9: гейт Империи требует поглощение ──
+add(run('Фаза C.9: Империя (idx 5) не открывается без поглощений', `
+initState(); selectSpec('smm'); startGame();
+G.completedProjects = [];
+for (let i = 0; i < 110; i++) G.completedProjects.push({ id:'p'+i, revenue: 6_000_000 });
+G.staff = [];
+for (let i = 0; i < 25; i++) G.staff.push({ id:'s'+i });
+G.reputation = 95;
+G.market.monthsAtRank1 = 10;
+G.market.playerRank    = 1;
+G.market.acquisitions  = 0;   // поглощений нет
+LivingMarket._tickStages();
+_eq(G.living.stage, 4, 'Империя заблокирована — acquisitions = 0');
+G.market.acquisitions = 1;    // провели поглощение
+LivingMarket._tickStages();
+_eq(G.living.stage, 5, 'Империя открылась после acquisitions = 1');
+`));
+
+// ── Фаза C.10: save/restore сохраняет G.market ──
+add(run('Фаза C.10: G.market переживает snap/restore через saves.js', `
+initState(); selectSpec('smm'); startGame();
+advanceMonth(); advanceMonth();
+const rankBefore = G.market.playerRank;
+const at1Before  = G.market.monthsAtRank1;
+const revBefore  = G.market.competitors[0].revenue;
+// Snap → restore
+const snap = JSON.parse(JSON.stringify(G));
+G.market.playerRank = 999;  // повреждаем стейт
+G.market.competitors[0].revenue = 0;
+// Restore
+Object.keys(snap).forEach(k => { G[k] = snap[k]; });
+_eq(G.market.playerRank, rankBefore, 'playerRank восстановлен');
+_eq(G.market.monthsAtRank1, at1Before, 'monthsAtRank1 восстановлен');
+_eq(G.market.competitors[0].revenue, revBefore, 'revenue конкурента восстановлен');
 `));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');

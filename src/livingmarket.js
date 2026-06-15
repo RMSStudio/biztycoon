@@ -54,7 +54,7 @@
   // engine-древо, buyUpgrade не блокируется, ничего больше не меняется.
   const USE_TREE2_PROGRESSION = true;
 
-  const VERSION = 'v0.8';
+  const VERSION = 'v0.9';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -126,10 +126,20 @@
       name: 'Сеть',
       icon: '🌐',
       color: '#f59e0b',
-      sub: '25 сдач · штат 10 · награда года ИЛИ топ-3 рейтинга · 60M ₽',
-      gate: () => ({ ok: false, progress: [{ label: 'требуется модуль «Живой рынок»', cur: 0, max: 1, locked: true }] }),
+      sub: '25 сдач · штат 10 · топ-3 рейтинга рынка · 60M ₽',
+      gate: (g) => {
+        const dels  = _countDeliveries(g);
+        const staff = _countStaff(g);
+        const rev   = _cumulativeRevenue(g);
+        const rank  = (g.market && g.market.playerRank != null) ? g.market.playerRank : 999;
+        return _composite([
+          { label: 'сдач',          cur: dels,          max: 25 },
+          { label: 'штат',          cur: staff,         max: 10 },
+          { label: 'выручка',       cur: rev,           max: 60_000_000, fmt: 'money' },
+          { label: 'топ-3 рейтинга',cur: rank <= 3 ? 1 : 0, max: 1 },
+        ]);
+      },
       unlocks: 'второй офис (+capacity), хантинг у конкурентов, T5-сделки',
-      requiresMarket: true,
     },
     {
       id: 'holding',
@@ -137,10 +147,20 @@
       name: 'Холдинг',
       icon: '🏛',
       color: '#facc15',
-      sub: '50 сдач · штат 18 · №1 рейтинга ≥3 мес · 200M ₽',
-      gate: () => ({ ok: false, progress: [{ label: 'требуется модуль «Живой рынок»', cur: 0, max: 1, locked: true }] }),
+      sub: '50 сдач · штат 18 · №1 рейтинга ≥3 мес. · 200M ₽',
+      gate: (g) => {
+        const dels       = _countDeliveries(g);
+        const staff      = _countStaff(g);
+        const rev        = _cumulativeRevenue(g);
+        const monthsAt1  = (g.market && g.market.monthsAtRank1) || 0;
+        return _composite([
+          { label: 'сдач',              cur: dels,       max: 50 },
+          { label: 'штат',              cur: staff,      max: 18 },
+          { label: 'выручка',           cur: rev,        max: 200_000_000, fmt: 'money' },
+          { label: 'мес. на #1 рейтинга', cur: monthsAt1, max: 3 },
+        ]);
+      },
       unlocks: 'саббренды (параллельные команды), поглощение конкурентов, T6',
-      requiresMarket: true,
     },
     {
       id: 'empire',
@@ -149,9 +169,17 @@
       icon: '👑',
       color: '#fde047',
       sub: '100 сдач · поглощён ≥1 конкурент · 500M ₽',
-      gate: () => ({ ok: false, progress: [{ label: 'требуется модуль «Живой рынок»', cur: 0, max: 1, locked: true }] }),
+      gate: (g) => {
+        const dels = _countDeliveries(g);
+        const rev  = _cumulativeRevenue(g);
+        const acq  = (g.market && g.market.acquisitions) || 0;
+        return _composite([
+          { label: 'сдач',         cur: dels, max: 100 },
+          { label: 'выручка',      cur: rev,  max: 500_000_000, fmt: 'money' },
+          { label: 'поглощений',   cur: acq,  max: 1 },
+        ]);
+      },
       unlocks: 'T7, престиж-цели, режим «легаси»',
-      requiresMarket: true,
     },
   ];
 
@@ -1168,6 +1196,254 @@
     SCENARIO.settings.winCondition = Infinity;
   }
 
+  // ── Фаза C: Конкуренты рынка ──────────────────────────────────────────
+  // 5 ИИ-агентств с фиксированными архетипами.  Каждый месяц
+  // _processMarketMonth() начисляет им псевдо-выручку по модели архетипа,
+  // обновляет рейтинг (G.market.playerRank) и счётчики
+  // (monthsAtRank1 — для гейта Холдинга, acquisitions — для Империи).
+  //
+  // Стейт: G.market = { competitors[], playerRank, monthsAtRank1, acquisitions }
+  // Хранится в сейве через saves.js (_snap/G целиком).
+  // _lastRankings — кэш рейтинга, пересчитывается каждый месяц, НЕ в сейве.
+
+  const COMPETITOR_ARCHETYPES = {
+    dumper:    { name: 'Демпер',       icon: '🔨', desc: 'Берёт объёмом, цена ниже рынка',       revenueRange: [150_000, 400_000] },
+    boutique:  { name: 'Бутик',        icon: '💎', desc: 'Высокий чек, нишевые проекты',          revenueRange: [180_000, 480_000] },
+    machine:   { name: 'Машина найма', icon: '🏭', desc: 'Агрессивный рост команды и мощности',   revenueRange: [220_000, 520_000] },
+    networker: { name: 'Сетевик',      icon: '🌐', desc: 'Репутация и партнёрская сеть',           revenueRange: [100_000, 280_000] },
+    wildcard:  { name: 'Дикая карта',  icon: '🃏', desc: 'Непредсказуемые скачки роста',            revenueRange: [50_000,  750_000] },
+  };
+
+  function _createCompetitors() {
+    return Object.keys(COMPETITOR_ARCHETYPES).map((arch) => ({
+      id:            'comp_' + arch,
+      name:          COMPETITOR_ARCHETYPES[arch].name,
+      icon:          COMPETITOR_ARCHETYPES[arch].icon,
+      archetype:     arch,
+      revenue:       0,
+      reputation:    Math.floor(20 + Math.random() * 30),
+      deliveries:    0,
+      monthlyRevenue: 0,
+    }));
+  }
+
+  function _initMarket() {
+    if (typeof G === 'undefined' || !G) return;
+    if (!G.market) {
+      G.market = {
+        competitors:   _createCompetitors(),
+        playerRank:    null,
+        monthsAtRank1: 0,
+        acquisitions:  0,
+      };
+    } else {
+      // back-compat: добиваем недостающие поля
+      if (!G.market.competitors || !G.market.competitors.length)
+        G.market.competitors = _createCompetitors();
+      if (G.market.monthsAtRank1 == null) G.market.monthsAtRank1 = 0;
+      if (G.market.acquisitions  == null) G.market.acquisitions  = 0;
+    }
+  }
+
+  function _competitorMonthlyDelta(archetype) {
+    const a = COMPETITOR_ARCHETYPES[archetype] || COMPETITOR_ARCHETYPES.dumper;
+    const [lo, hi] = a.revenueRange;
+    return Math.round((lo + Math.random() * (hi - lo)) / 1000) * 1000;
+  }
+
+  function _processMarketMonth() {
+    if (typeof G === 'undefined' || !G) return;
+    _initMarket();
+    const market = G.market;
+    if (!market || !Array.isArray(market.competitors)) return;
+
+    // Тик каждого конкурента
+    for (let i = 0; i < market.competitors.length; i++) {
+      const c     = market.competitors[i];
+      const delta = _competitorMonthlyDelta(c.archetype);
+      c.monthlyRevenue = delta;
+      c.revenue       += delta;
+      c.deliveries    += Math.round(delta / 220_000);
+      if (Math.random() < 0.3) c.reputation = Math.min(100, (c.reputation || 0) + 1);
+    }
+
+    _updateMarketRankings();
+  }
+
+  // Пересчитать рейтинг и обновить счётчики (вызывать из processMarketMonth).
+  function _updateMarketRankings() {
+    if (typeof G === 'undefined' || !G || !G.market) return;
+    const market    = G.market;
+    const playerRev = _cumulativeRevenue(G);
+
+    const entries = [
+      { id: 'player', revenue: playerRev },
+      ...market.competitors.map(c => ({ id: c.id, revenue: c.revenue })),
+    ];
+    entries.sort((a, b) => b.revenue - a.revenue);
+
+    const playerPos = entries.findIndex(e => e.id === 'player');
+    const newRank   = playerPos + 1;   // 1-indexed
+
+    if (newRank === 1) {
+      market.monthsAtRank1 = (market.monthsAtRank1 || 0) + 1;
+    } else {
+      market.monthsAtRank1 = 0;
+    }
+
+    market.playerRank    = newRank;
+    market._lastRankings = entries;    // UI-кэш, не сохраняется в save
+  }
+
+  // Проставить начальный ранг без изменения счётчиков (для startGame).
+  function _setInitialRankings() {
+    if (typeof G === 'undefined' || !G || !G.market) return;
+    const market    = G.market;
+    const playerRev = _cumulativeRevenue(G);
+    const entries   = [
+      { id: 'player', revenue: playerRev },
+      ...market.competitors.map(c => ({ id: c.id, revenue: c.revenue })),
+    ];
+    entries.sort((a, b) => b.revenue - a.revenue);
+    market.playerRank    = entries.findIndex(e => e.id === 'player') + 1;
+    market._lastRankings = entries;
+    // monthsAtRank1 НЕ трогаем — счётчик растёт только из processMarketMonth
+  }
+
+  // ── UI: модал «Рынок» ─────────────────────────────────────────────────
+
+  function showMarketModal() {
+    if (typeof document === 'undefined') return;
+    let modal = document.getElementById('market-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id        = 'market-modal';
+      modal.className = 'modal-overlay';
+      modal.innerHTML = `
+        <div class="modal" style="max-width:520px;max-height:82vh;overflow:hidden;display:flex;flex-direction:column">
+          <div class="modal-header" style="flex-shrink:0">
+            <h2 style="margin:0;font-size:15px">📊 Рейтинг рынка</h2>
+            <button class="btn btn-ghost" onclick="document.getElementById('market-modal').classList.remove('active')"
+                    style="padding:4px 10px">✕</button>
+          </div>
+          <div id="market-modal-body" style="overflow-y:auto;padding:16px 16px 20px;flex:1"></div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('active'); });
+    }
+    _renderMarketModal();
+    modal.classList.add('active');
+  }
+
+  function _renderMarketModal() {
+    const el = document.getElementById('market-modal-body');
+    if (!el) return;
+
+    if (typeof G === 'undefined' || !G || !G.market || !(G.month > 0)) {
+      el.innerHTML = '<p style="color:var(--muted);font-size:13px">Начни игру, чтобы увидеть рейтинг.</p>';
+      return;
+    }
+
+    const market    = G.market;
+    const playerRev = _cumulativeRevenue(G);
+    const fmtM      = v => _formatMoneyShort(v);
+
+    const entries = [
+      {
+        id: 'player', isPlayer: true,
+        name: 'Вы',
+        icon: (G._spec && G._spec.icon) || '🏢',
+        archetype: null,
+        revenue:   playerRev,
+        reputation: G.reputation || 0,
+        deliveries: (G.completedProjects || []).length,
+        monthlyRevenue: null,
+      },
+      ...market.competitors,
+    ];
+    entries.sort((a, b) => b.revenue - a.revenue);
+
+    const playerRank = entries.findIndex(e => e.isPlayer) + 1;
+
+    // Заголовок — позиция игрока
+    const rankIcon  = playerRank === 1 ? '🏆' : playerRank <= 3 ? '🥈' : '📍';
+    const at1Msg    = market.monthsAtRank1 > 0
+      ? '🔥 ' + market.monthsAtRank1 + ' мес. подряд на #1'
+      : 'Удержите #1 в течение 3 мес. для Холдинга';
+
+    let html = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;
+                  padding:12px;background:rgba(255,255,255,.04);
+                  border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:28px;line-height:1">${rankIcon}</div>
+        <div>
+          <div style="font-size:19px;font-weight:700;color:var(--text)">Место #${playerRank} из ${entries.length}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${at1Msg}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:16px">`;
+
+    entries.forEach((e, i) => {
+      const rank      = i + 1;
+      const rankColor = rank === 1 ? 'var(--yellow)' : rank <= 3 ? 'var(--teal)' : 'var(--muted)';
+      const isP       = !!e.isPlayer;
+      const arch      = (!isP && COMPETITOR_ARCHETYPES[e.archetype]) ? COMPETITOR_ARCHETYPES[e.archetype].desc : '';
+      const monthlyStr = (!isP && e.monthlyRevenue > 0) ? '<div style="font-size:10px;color:var(--muted)">+' + fmtM(e.monthlyRevenue) + '/мес</div>' : '';
+
+      html += `
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
+                    border-radius:7px;
+                    border:1px solid ${isP ? 'var(--purple)' : 'var(--border)'};
+                    background:${isP ? 'rgba(167,139,250,.07)' : 'rgba(255,255,255,.02)'}">
+          <div style="font-size:14px;font-weight:800;color:${rankColor};min-width:22px;text-align:center">${rank}</div>
+          <div style="font-size:17px">${e.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:${isP ? 'var(--purple)' : 'var(--text)'}">${e.name}</div>
+            ${arch ? '<div style="font-size:10px;color:var(--muted)">' + arch + '</div>' : ''}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:12px;font-weight:700;color:var(--teal)">${fmtM(e.revenue)}</div>
+            ${monthlyStr}
+          </div>
+        </div>`;
+    });
+
+    html += '</div>';
+
+    // Пояснение к гейтам
+    const stage     = _stageIdx(G);
+    const nextGate  = STAGES[stage + 1];
+    if (nextGate && !nextGate.requiresMarket) {
+      const gateRes = nextGate.gate(G);
+      const gateHtml = gateRes.progress.map(p => {
+        const frac = Math.min(1, p.fmt === 'money' ? p.cur / p.max : p.cur / p.max);
+        const pct  = Math.round(frac * 100);
+        const col  = frac >= 1 ? 'var(--green)' : 'var(--teal)';
+        const val  = p.fmt === 'money' ? fmtM(p.cur) + ' / ' + fmtM(p.max) : p.cur + ' / ' + p.max;
+        return `<div style="margin-bottom:4px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin-bottom:2px">
+            <span>${p.label}</span><span style="color:${col}">${val}</span>
+          </div>
+          <div style="height:3px;background:rgba(255,255,255,.08);border-radius:99px">
+            <div style="height:100%;width:${pct}%;background:${col};border-radius:99px;transition:width .3s"></div>
+          </div>
+        </div>`;
+      }).join('');
+
+      html += `
+        <div style="padding:10px 12px;background:rgba(255,255,255,.03);
+                    border:1px solid var(--border);border-radius:7px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+                      letter-spacing:.05em;margin-bottom:8px">
+            До стадии ${nextGate.icon} ${nextGate.name}
+          </div>
+          ${gateHtml}
+        </div>`;
+    }
+
+    el.innerHTML = html;
+  }
+
   // ── Тик: стадии + майлстоуны ─────────────────────────────────────────
 
   function _tickStages() {
@@ -1675,6 +1951,8 @@
       try {
         _initLiving();
         _suppressWin();
+        _initMarket();           // Phase C: инициализировать конкурентов
+        _setInitialRankings();   // начальный ранг без инкремента monthsAtRank1
         _tickStages();
         _tickMilestones();
         _renderStagePill();
@@ -1700,6 +1978,7 @@
         _initLiving();
         _updateMoneyPeak();
         _awardDeliveryXp();
+        _processMarketMonth(); // Phase C: тик конкурентов + пересчёт рейтинга
         _tickStages();
         _tickMilestones();
         _maybeTriggerYearly();
@@ -1718,6 +1997,51 @@
         if (typeof G !== 'undefined' && G && G._spec) {  // партия запущена
           _initLiving();
           _renderStagePill();
+        }
+      } catch (e) {}
+    });
+  }
+
+  // ── Phase C: кнопка «📊 Рынок» в шапке игры ─────────────────────────
+  // Добавляем одну кнопку рядом с 💾 при каждом render.
+  // Godot: только внутри _renderXxx-функций — не трогаем DOM вне рендера.
+
+  function _ensureMarketButton() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('btn-market')) return;
+    const header = document.querySelector('.game-header');
+    if (!header) return;
+    const btn        = document.createElement('button');
+    btn.id           = 'btn-market';
+    btn.className    = 'btn btn-ghost';
+    btn.title        = 'Рейтинг рынка';
+    btn.style.cssText = 'font-size:12px;padding:5px 10px';
+    btn.onclick      = () => showMarketModal();
+    // Вставляем перед первой кнопкой в шапке (если есть)
+    const firstBtn = header.querySelector('button');
+    if (firstBtn) header.insertBefore(btn, firstBtn);
+    else header.appendChild(btn);
+    _updateMarketButton(btn);
+  }
+
+  function _updateMarketButton(btn) {
+    if (!btn) btn = document.getElementById('btn-market');
+    if (!btn) return;
+    const rank = (typeof G !== 'undefined' && G && G.market && G.market.playerRank != null)
+      ? G.market.playerRank : null;
+    const rankStr = rank != null ? ' #' + rank : '';
+    btn.textContent = '📊 Рынок' + rankStr;
+  }
+
+  if (typeof EventBus !== 'undefined' && EventBus.on) {
+    EventBus.on('render', () => {
+      try {
+        if (typeof G !== 'undefined' && G && G._spec) {
+          _ensureMarketButton();
+          _updateMarketButton();
+          // Если модал открыт — обновить его тоже
+          const modal = document.getElementById('market-modal');
+          if (modal && modal.classList.contains('active')) _renderMarketModal();
         }
       } catch (e) {}
     });
@@ -1838,9 +2162,21 @@
     getScenarioMilestones: () => (typeof SCENARIO !== 'undefined' && SCENARIO && Array.isArray(SCENARIO.milestones)) ? SCENARIO.milestones.slice() : null,
     compileMilestoneWhen:  _compileMilestoneWhen,
     resolveMilestoneDesc:  _resolveMilestoneDesc,
+    // v0.9 (Фаза C) — конкуренты + рейтинг рынка
+    getMarket:             () => (typeof G !== 'undefined' && G && G.market) ? G.market : null,
+    getCompetitors:        () => (typeof G !== 'undefined' && G && G.market && G.market.competitors) ? G.market.competitors.slice() : [],
+    getPlayerRank:         () => (typeof G !== 'undefined' && G && G.market) ? G.market.playerRank : null,
+    getMonthsAtRank1:      () => (typeof G !== 'undefined' && G && G.market) ? (G.market.monthsAtRank1 || 0) : 0,
+    getAcquisitions:       () => (typeof G !== 'undefined' && G && G.market) ? (G.market.acquisitions || 0) : 0,
+    getCompetitorArchetypes: () => Object.assign({}, COMPETITOR_ARCHETYPES),
+    showMarketModal,
     // dev/test
     _initLiving,
     _suppressWin,
+    _initMarket,
+    _processMarketMonth,
+    _updateMarketRankings,
+    _createCompetitors,
     _tickStages,
     _tickMilestones,
     _maybeTriggerYearly,
@@ -1858,6 +2194,7 @@
 
   try {
     const t4count = TREE_NODES.filter(n => n.tier === 4).length;
-    console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий (3 живых, 3 требуют модуль рынка), древо 2.0: ' + TREE_NODES.length + ' узлов (tier 4 пар: ' + (t4count / 2) + ')');
+    const compCount = Object.keys(COMPETITOR_ARCHETYPES).length;
+    console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий (все живые), ' + compCount + ' конкурентов (Фаза C), древо 2.0: ' + TREE_NODES.length + ' узлов (tier 4 пар: ' + (t4count / 2) + ')');
   } catch (e) {}
 })();
