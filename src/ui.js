@@ -2265,3 +2265,15 @@ function resetGame() {
   document.getElementById('btn-start-game').disabled=true;
   _uiNavigate('screen-mode');
 }
+
+// Кнопка «← Меню» и клик по логотипу — с подтверждением при активной сессии
+function confirmExitToMenu() {
+  const active = typeof G !== 'undefined' && G && (G.month || 0) > 0 && !G._endGameFired;
+  if (active) {
+    const ok = (typeof window.confirm === 'function')
+      ? window.confirm('Завершить текущую сессию и выйти в меню?\n(прогресс рана будет записан в мета-прогресс)')
+      : true;
+    if (!ok) return;
+  }
+  resetGame();
+}

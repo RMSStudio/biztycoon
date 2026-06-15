@@ -110,7 +110,7 @@
 <div id="screen-game" class="screen">
 
   <div class="game-header">
-    <div class="game-logo">BizTycoon <span>/ <span id="g-spec-name"></span></span></div>
+    <div class="game-logo" onclick="confirmExitToMenu()" title="Выйти в меню" style="cursor:pointer;user-select:none" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">BizTycoon <span>/ <span id="g-spec-name"></span></span></div>
     <!-- Командный мостик: банк + цель + рабочие дни -->
     <div class="header-stats">
       <div class="hstat">
@@ -134,7 +134,10 @@
       </div>
       <div class="hstat"><div class="v" id="g-month">Янв 2026</div><div class="l">Месяц</div></div>
     </div>
-    <button onclick="openSaveModal()" title="Сохранения (Ctrl+S)" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:14px;padding:5px 9px;transition:color .15s,border-color .15s" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">💾</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+      <button onclick="openSaveModal()" title="Сохранения (Ctrl+S)" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:14px;padding:5px 9px;transition:color .15s,border-color .15s" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">💾</button>
+      <button onclick="confirmExitToMenu()" title="Завершить сессию и выйти в меню" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:12px;padding:5px 10px;transition:color .15s,border-color .15s;white-space:nowrap" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">← Меню</button>
+    </div>
   </div>
 
   <!-- Actions bar — клик открывает календарь-планировщик (v3.5) -->
