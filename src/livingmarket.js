@@ -128,15 +128,16 @@
       color: '#f59e0b',
       sub: '25 сдач · штат 10 · топ-3 рейтинга рынка · 60M ₽',
       gate: (g) => {
-        const dels  = _countDeliveries(g);
-        const staff = _countStaff(g);
-        const rev   = _cumulativeRevenue(g);
-        const rank  = (g.market && g.market.playerRank != null) ? g.market.playerRank : 999;
+        const dels   = _countDeliveries(g);
+        const staff  = _countStaff(g);
+        const rev    = _cumulativeRevenue(g);
+        const rank   = (g.market && g.market.playerRank != null) ? g.market.playerRank : 999;
+        const awards = (g.market && g.market.awardsWon)          ? g.market.awardsWon  : 0;
         return _composite([
-          { label: 'сдач',          cur: dels,          max: 25 },
-          { label: 'штат',          cur: staff,         max: 10 },
-          { label: 'выручка',       cur: rev,           max: 60_000_000, fmt: 'money' },
-          { label: 'топ-3 рейтинга',cur: rank <= 3 ? 1 : 0, max: 1 },
+          { label: 'сдач',                   cur: dels,                  max: 25 },
+          { label: 'штат',                   cur: staff,                 max: 10 },
+          { label: 'выручка',                cur: rev,                   max: 60_000_000, fmt: 'money' },
+          { label: 'топ-3 ИЛИ награда года', cur: (rank <= 3 || awards >= 1) ? 1 : 0, max: 1 },
         ]);
       },
       unlocks: 'второй офис (+capacity), хантинг у конкурентов, T5-сделки',
@@ -283,8 +284,9 @@
       desc: '−20% усталости команды (умножитель × 0.8) — выгорание не строит резервы', cost: 720,
       excludes: ['peop4'],
       apply: g => { g.perkFatigueMult = (g.perkFatigueMult || 1) * 0.8; } },
-    { id: 'peop5', branch: 'people', tier: 5, icon: '👑', name: 'Культ компании',    desc: '(Фаза C) Иммунитет к хантингу звёзд',             cost: 1200,
-      apply: g => { /* подключается в Фазе C */ } },
+    { id: 'peop5', branch: 'people', tier: 5, icon: '👑', name: 'Культ компании',    desc: 'Иммунитет к хантингу — конкуренты не переманят команду',  cost: 1200,
+      flags: ['perkImmuneToPoaching'],
+      apply: g => { g.perkImmuneToPoaching = true; } },
 
     // ── Рынок ──
     { id: 'mark1', branch: 'market', tier: 1, icon: '🌐', name: 'Портфолио-сайт',    desc: '+5 баллов портфолио',                             cost: 50,
@@ -650,7 +652,6 @@
     if (!n) return false;
     const requiresStage = TIER_STAGE_GATES[n.tier - 1] || 0;
     if (_stageIdx(G) < requiresStage) return false;
-    if (n.tier === 5) return false;     // Фаза C
     return true;
   }
 
@@ -1052,6 +1053,9 @@
       newMilestones,
       ts:               Date.now(),
     };
+    // Phase D: ежегодная награда (вычисляется один раз вместе с отчётом)
+    report.awardWinner = _awardYearlyWinner();
+    return report;
   }
 
   function _maybeTriggerYearly() {
@@ -1166,6 +1170,17 @@
           '</div>' +
         '</div>' +
         milestonesHtml +
+        (r.awardWinner
+          ? '<div style="margin-top:12px;padding:10px 14px;background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.3);border-radius:8px;display:flex;align-items:center;gap:10px">' +
+              '<div style="font-size:26px">🏆</div>' +
+              '<div>' +
+                '<div style="font-size:10px;color:var(--yellow);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Агентство года</div>' +
+                '<div style="font-size:13px;font-weight:700;color:var(--text);margin-top:1px">' +
+                  (r.awardWinner.isPlayer ? 'Вы заняли 1-е место на рынке!' : (r.awardWinner.icon || '') + ' ' + r.awardWinner.name) +
+                '</div>' +
+              '</div>' +
+            '</div>'
+          : '') +
         '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px">' +
           '<button onclick="document.getElementById(\'lm-yearly-modal\').style.display=\'none\'" style="background:#fbbf24;border:none;color:#111;font-weight:700;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:12px">Продолжить</button>' +
         '</div>' +
@@ -1224,6 +1239,7 @@
       reputation:    Math.floor(20 + Math.random() * 30),
       deliveries:    0,
       monthlyRevenue: 0,
+      awardsWon:     0,   // Phase D: ежегодные награды
     }));
   }
 
@@ -1235,6 +1251,8 @@
         playerRank:    null,
         monthsAtRank1: 0,
         acquisitions:  0,
+        awardsWon:     0,     // Phase D: награды «Агентство года» у игрока
+        dumpingWave:   null,  // Phase D: активная демпинг-волна { competitorId, endsAtMonth, intensity, startedAt }
       };
     } else {
       // back-compat: добиваем недостающие поля
@@ -1242,6 +1260,12 @@
         G.market.competitors = _createCompetitors();
       if (G.market.monthsAtRank1 == null) G.market.monthsAtRank1 = 0;
       if (G.market.acquisitions  == null) G.market.acquisitions  = 0;
+      if (G.market.awardsWon     == null) G.market.awardsWon     = 0;
+      if (!('dumpingWave' in G.market))   G.market.dumpingWave   = null;
+      // Добавляем awardsWon каждому конкуренту (back-compat старых сейвов)
+      (G.market.competitors || []).forEach(c => {
+        if (c.awardsWon == null) c.awardsWon = 0;
+      });
     }
   }
 
@@ -1268,6 +1292,162 @@
     }
 
     _updateMarketRankings();
+    _tickDumpingWave();        // Phase D: демпинг-волны
+    _tickStaffPoaching();      // Phase D: хантинг сотрудников
+  }
+
+  // ── Фаза D шаг 1: Ежегодные награды ──────────────────────────────────
+  // Вызывается из _buildYearlyReport.  Rank-1 компания получает награду
+  // «Агентство года».  Засчитывается в гейт стадии Сеть.
+
+  function _awardYearlyWinner() {
+    if (typeof G === 'undefined' || !G || !G.market) return null;
+    const market    = G.market;
+    const playerRev = _cumulativeRevenue(G);
+    const entries   = [
+      { id: 'player', name: 'Вы', revenue: playerRev, isPlayer: true },
+      ...market.competitors.map(c => ({
+        id: c.id, name: c.name, icon: c.icon, revenue: c.revenue, isPlayer: false,
+      })),
+    ];
+    entries.sort((a, b) => b.revenue - a.revenue);
+    const winner = entries[0];
+    if (!winner) return null;
+
+    if (winner.isPlayer) {
+      market.awardsWon = (market.awardsWon || 0) + 1;
+      if (typeof notify === 'function')
+        notify('🏆 Агентство года! Ваша компания № 1 на рынке.', 'success');
+      if (typeof addLog === 'function')
+        addLog('🏆 Награда «Агентство года»: ваша компания лучшая на рынке!', 'yellow');
+    } else {
+      const comp = market.competitors.find(c => c.id === winner.id);
+      if (comp) comp.awardsWon = (comp.awardsWon || 0) + 1;
+    }
+    return winner;
+  }
+
+  // ── Фаза D шаг 1: Демпинг-волны ───────────────────────────────────────
+  // Конкурент-Демпер запускает ценовую войну: бюджеты проектов в скаут-пуле
+  // игрока снижаются на 12–20% на 3–6 месяцев.
+
+  function _tickDumpingWave() {
+    if (!G || !G.market) return;
+    const market = G.market;
+    const cur    = G.month || 0;
+
+    // Завершить активную волну
+    if (market.dumpingWave) {
+      if (cur >= market.dumpingWave.endsAtMonth) {
+        market.dumpingWave = null;
+        if (typeof notify === 'function')
+          notify('📈 Ценовая война завершена — бюджеты стабилизировались', 'info');
+      }
+      return;   // только одна волна за раз
+    }
+
+    // ~5% шанс/месяц запустить волну (только от Демпера)
+    const dumper = market.competitors.find(c => c.archetype === 'dumper');
+    if (!dumper || Math.random() >= 0.05) return;
+
+    const duration  = 3 + Math.floor(Math.random() * 4);  // 3–6 мес
+    const intensity = 0.12 + Math.random() * 0.08;        // 12–20%
+
+    market.dumpingWave = {
+      competitorId: dumper.id,
+      endsAtMonth:  cur + duration,
+      intensity,
+      startedAt:    cur,
+    };
+    const pct = Math.round(intensity * 100);
+    if (typeof notify === 'function')
+      notify(`🔨 ${dumper.name} начал ценовую войну! Бюджеты проектов −${pct}% до M${cur + duration}`, 'error');
+    if (typeof addLog === 'function')
+      addLog(`🔨 Демпинг: ${dumper.name} снизил рынок на −${pct}% на ${duration} мес. (до M${cur + duration})`, 'red');
+  }
+
+  // Применить демпинг к скаут-пулу после генерации офферов.
+  function _applyDumpingToScoutPool() {
+    if (!G || !G.market || !G.market.dumpingWave || !G.scoutPool) return;
+    const penalty = G.market.dumpingWave.intensity || 0.15;
+    G.scoutPool = G.scoutPool.map(p => {
+      const p2 = Object.assign({}, p);
+      if (p2.fixedBudget)  p2.fixedBudget  = Math.round(p2.fixedBudget  * (1 - penalty));
+      if (Array.isArray(p2.budgetRange)) {
+        p2.budgetRange = [
+          Math.round(p2.budgetRange[0] * (1 - penalty)),
+          Math.round(p2.budgetRange[1] * (1 - penalty)),
+        ];
+      }
+      return p2;
+    });
+  }
+
+  // ── Фаза D шаг 2: Хантинг сотрудников ────────────────────────────────
+  // Вызывается ежемесячно из _processMarketMonth().
+  // Networker-конкурент (или любой игрок ТОП-3) с шансом 4%/мес
+  // переманивает одного сотрудника игрока.  Блокируется узлом peop5.
+
+  function _tickStaffPoaching() {
+    if (typeof G === 'undefined' || !G || !G.market) return;
+    const staff = G.staff;
+    if (!Array.isArray(staff) || staff.length < 2) return;  // не трогаем последнего
+
+    // Иммунитет через peop5 («Культ компании»)
+    if (G.perkImmuneToPoaching) return;
+
+    const market = G.market;
+    // Хантит только networker-архетип
+    const networker = market.competitors.find(c => c.archetype === 'networker');
+    if (!networker) return;
+    if (Math.random() >= 0.04) return;
+
+    // Выбираем жертву: предпочитаем усталых (teamFatigue > 60) или случайного
+    let target;
+    if ((G.teamFatigue || 0) > 60 && staff.length >= 2) {
+      target = staff[Math.floor(Math.random() * staff.length)];
+    } else {
+      target = staff[Math.floor(Math.random() * staff.length)];
+    }
+    if (!target) return;
+
+    G.staff = staff.filter(s => s !== target);
+    const msg = `🚪 ${target.icon || '👤'} ${target.name} перешёл в ${networker.icon} ${networker.name}`;
+    if (typeof addLog  === 'function') addLog(msg, 'red');
+    if (typeof notify  === 'function') notify(msg, 'error');
+    if (typeof EventBus !== 'undefined' && EventBus && typeof EventBus.emit === 'function') {
+      EventBus.emit('staff_poached', { staffId: target._iid || target.id, competitorId: networker.id });
+    }
+  }
+
+  // ── Фаза D шаг 2: Питч-тендер (перехват офферов) ─────────────────────
+  // Вызывается из обёртки doScouting после _applyDumpingToScoutPool().
+  // Снимает из пула 1 T3+ проект с шансом 20% — он «ушёл» конкуренту.
+
+  function _applyPitchContestFilter() {
+    if (!G || !G.market || !G.scoutPool || G.scoutPool.length === 0) return;
+    const market = G.market;
+    if (!Array.isArray(market.competitors) || market.competitors.length === 0) return;
+
+    // Только если есть машина/бутик (конкуренты, выигрывающие тендеры)
+    const tendering = market.competitors.find(c => c.archetype === 'machine' || c.archetype === 'boutique');
+    if (!tendering) return;
+    if (Math.random() >= 0.20) return;
+
+    // Ищем T3+ в пуле
+    const highTier = G.scoutPool.filter(p => (p.tier || 1) >= 3);
+    if (highTier.length === 0) return;
+
+    const sniped = highTier[Math.floor(Math.random() * highTier.length)];
+    G.scoutPool  = G.scoutPool.filter(p => p !== sniped);
+
+    const tierStr = sniped.tier ? 'T' + sniped.tier + ' ' : '';
+    const msg = `📋 ${tendering.icon} ${tendering.name} перехватил тендер «${tierStr}${sniped.name || '?'}»`;
+    if (typeof notify === 'function') notify(msg, 'error');
+    if (typeof addLog === 'function') addLog(msg, 'amber');
+    if (typeof EventBus !== 'undefined' && EventBus && typeof EventBus.emit === 'function') {
+      EventBus.emit('pitch_lost', { projectName: sniped.name, projectTier: sniped.tier, competitorId: tendering.id });
+    }
   }
 
   // Пересчитать рейтинг и обновить счётчики (вызывать из processMarketMonth).
@@ -1388,7 +1568,9 @@
       const rankColor = rank === 1 ? 'var(--yellow)' : rank <= 3 ? 'var(--teal)' : 'var(--muted)';
       const isP       = !!e.isPlayer;
       const arch      = (!isP && COMPETITOR_ARCHETYPES[e.archetype]) ? COMPETITOR_ARCHETYPES[e.archetype].desc : '';
-      const monthlyStr = (!isP && e.monthlyRevenue > 0) ? '<div style="font-size:10px;color:var(--muted)">+' + fmtM(e.monthlyRevenue) + '/мес</div>' : '';
+      const monthlyStr  = (!isP && e.monthlyRevenue > 0) ? '<div style="font-size:10px;color:var(--muted)">+' + fmtM(e.monthlyRevenue) + '/мес</div>' : '';
+      const eAwards     = isP ? (market.awardsWon || 0) : (e.awardsWon || 0);
+      const awardsStr   = eAwards > 0 ? `<span title="Агентство года ×${eAwards}" style="font-size:9px;color:var(--yellow);margin-left:4px">🏆×${eAwards}</span>` : '';
 
       html += `
         <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
@@ -1398,7 +1580,7 @@
           <div style="font-size:14px;font-weight:800;color:${rankColor};min-width:22px;text-align:center">${rank}</div>
           <div style="font-size:17px">${e.icon}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;color:${isP ? 'var(--purple)' : 'var(--text)'}">${e.name}</div>
+            <div style="font-size:12px;font-weight:600;color:${isP ? 'var(--purple)' : 'var(--text)'}">${e.name}${awardsStr}</div>
             ${arch ? '<div style="font-size:10px;color:var(--muted)">' + arch + '</div>' : ''}
           </div>
           <div style="text-align:right;flex-shrink:0">
@@ -1409,6 +1591,23 @@
     });
 
     html += '</div>';
+
+    // Phase D: демпинг-волна
+    if (market.dumpingWave) {
+      const dw   = market.dumpingWave;
+      const comp = market.competitors.find(c => c.id === dw.competitorId);
+      const pct  = Math.round((dw.intensity || 0.15) * 100);
+      html += `
+        <div style="margin-bottom:12px;padding:10px 12px;background:rgba(239,68,68,.08);
+                    border:1px solid rgba(239,68,68,.3);border-radius:7px">
+          <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:2px">
+            🔨 Ценовая война активна — до M${dw.endsAtMonth}
+          </div>
+          <div style="font-size:11px;color:var(--muted)">
+            ${comp ? comp.icon + ' ' + comp.name : 'Конкурент'} демпингует: скаут-пул −${pct}% к бюджетам
+          </div>
+        </div>`;
+    }
 
     // Пояснение к гейтам
     const stage     = _stageIdx(G);
@@ -1783,11 +1982,11 @@
     for (let tier = 1; tier <= 5; tier++) {
       const requiresStage = TIER_STAGE_GATES[tier - 1] || 0;
       const tierLocked    = stageIdx < requiresStage;
-      const tierLabel     = tier === 5
-        ? 'Ярус 5 · 🔒 требуется модуль «Живой рынок» (Фаза C)'
-        : (tierLocked ? 'Ярус ' + tier + ' · 🔒 откроется со стадии «' + STAGES[requiresStage].name + '»' : 'Ярус ' + tier);
+      const tierLabel     = tierLocked
+        ? 'Ярус ' + tier + ' · 🔒 откроется со стадии «' + STAGES[requiresStage].name + '»'
+        : 'Ярус ' + tier;
       const tierLabelHtml =
-        '<div style="grid-column:1/-1;font-size:10px;color:' + (tierLocked || tier === 5 ? 'var(--muted)' : 'var(--sub)') + ';font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin:8px 0 4px;padding-bottom:2px;border-bottom:1px dashed var(--border)">' + tierLabel + '</div>';
+        '<div style="grid-column:1/-1;font-size:10px;color:' + (tierLocked ? 'var(--muted)' : 'var(--sub)') + ';font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin:8px 0 4px;padding-bottom:2px;border-bottom:1px dashed var(--border)">' + tierLabel + '</div>';
       const cells = TREE_BRANCHES.map(b => {
         const n = TREE_NODES.find(x => x.branch === b.id && x.tier === tier);
         return n ? _renderNodeCell(n, b) : '<div></div>';
@@ -2002,6 +2201,18 @@
     });
   }
 
+  // ── Phase D: обёртка doScouting — демпинг + питч-тендер ────────────
+  if (typeof window.doScouting === 'function' && !window.doScouting.__marketDumpingWrapped) {
+    const _origDoScouting = window.doScouting;
+    window.doScouting = function () {
+      const r = _origDoScouting.apply(this, arguments);
+      try { _applyDumpingToScoutPool();    } catch (e) {}
+      try { _applyPitchContestFilter();    } catch (e) {}
+      return r;
+    };
+    window.doScouting.__marketDumpingWrapped = true;
+  }
+
   // ── Phase C: кнопка «📊 Рынок» в шапке игры ─────────────────────────
   // Добавляем одну кнопку рядом с 💾 при каждом render.
   // Godot: только внутри _renderXxx-функций — не трогаем DOM вне рендера.
@@ -2170,6 +2381,16 @@
     getAcquisitions:       () => (typeof G !== 'undefined' && G && G.market) ? (G.market.acquisitions || 0) : 0,
     getCompetitorArchetypes: () => Object.assign({}, COMPETITOR_ARCHETYPES),
     showMarketModal,
+    // v0.9 (Фаза D шаг 1) — награды + демпинг
+    getAwardsWon:          () => (typeof G !== 'undefined' && G && G.market) ? (G.market.awardsWon || 0) : 0,
+    getDumpingWave:        () => (typeof G !== 'undefined' && G && G.market) ? (G.market.dumpingWave || null) : null,
+    _awardYearlyWinner,
+    _tickDumpingWave,
+    _applyDumpingToScoutPool,
+    // v0.9 (Фаза D шаг 2) — хантинг + питч-тендер
+    isImmuneToPoaching:    () => !!(typeof G !== 'undefined' && G && G.perkImmuneToPoaching),
+    _tickStaffPoaching,
+    _applyPitchContestFilter,
     // dev/test
     _initLiving,
     _suppressWin,

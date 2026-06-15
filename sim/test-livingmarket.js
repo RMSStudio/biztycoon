@@ -377,8 +377,8 @@ _ok(LivingMarket.isNodeUnlocked('craft2'), 'craft2 (tier 2) открыт');
 _ok(!LivingMarket.isNodeUnlocked('craft3'), 'craft3 (tier 3) заблокирован на гараже');
 // Tier 4 — до Агентства
 _ok(!LivingMarket.isNodeUnlocked('craft4'), 'craft4 (tier 4) заблокирован на гараже');
-// Tier 5 — всегда заблокирован (Фаза C)
-_ok(!LivingMarket.isNodeUnlocked('craft5'), 'craft5 (tier 5) заблокирован — Фаза C');
+// Tier 5 — заблокирован до Сети (stage idx 3), на гараже всегда закрыт
+_ok(!LivingMarket.isNodeUnlocked('craft5'), 'craft5 (tier 5) заблокирован — нужна Сеть');
 `));
 
 // ── 20: после достижения Студии открывается tier 3 ──
@@ -476,15 +476,15 @@ _eq(r.reason, 'locked', 'причина: locked');
 `));
 
 // ── 27: tier 5 заблокирован даже при огромной стадии и XP ──
-add(run('Тест 27: tier 5 (Фаза C) недоступен даже с гипотетической стадией Сеть', `
+add(run('Тест 27: tier 5 открывается на стадии Сеть (Фаза D)', `
 initState(); selectSpec('smm'); startGame();
 // Принудительно поднимем стадию (минуя гейт) и навалим XP
 G.living.stage = 3;  // Сеть
 LivingMarket._awardXp(5000, 'dev');
-_ok(!LivingMarket.isNodeUnlocked('craft5'), 'craft5 (tier 5) НЕ открыт даже на стадии Сеть');
+_ok(LivingMarket.isNodeUnlocked('craft5'), 'craft5 (tier 5) открыт на стадии Сеть');
+// Покупка может упасть по нехватке предшественников — но НЕ по locked
 const r = LivingMarket.purchaseTreeNode('craft5');
-_ok(!r.ok, 'отказ');
-_eq(r.reason, 'locked', 'причина: locked');
+_ok(r.reason !== 'locked', 'причина не locked: ' + r.reason);
 `));
 
 // ── 28: not_enough_xp ──
@@ -949,6 +949,7 @@ _ok(r.bestProject && r.bestProject.name === 'Лендинг', 'best project = Л
 // ── 61: staff diff — найм + увольнение между year-start и end ──
 add(run('Тест 61: hires/leaves считаются через diff staff.ids', `
 initState(); selectSpec('smm'); startGame();
+G.perkImmuneToPoaching = true;  // отключаем хантинг для стабильности теста
 _eq(G.staff.length, 0, 'на старте 0 сотрудников');
 G.staff.push({ id:'sA' });
 G.staff.push({ id:'sB' });
@@ -1467,6 +1468,234 @@ Object.keys(snap).forEach(k => { G[k] = snap[k]; });
 _eq(G.market.playerRank, rankBefore, 'playerRank восстановлен');
 _eq(G.market.monthsAtRank1, at1Before, 'monthsAtRank1 восстановлен');
 _eq(G.market.competitors[0].revenue, revBefore, 'revenue конкурента восстановлен');
+`));
+
+// ══════════════════════════════════════════════════════════════════════════
+// ФАЗА D.1: ежегодные награды + демпинг-волны
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── Фаза D.1: _awardYearlyWinner — игрок на первом месте получает награду ──
+add(run('Фаза D.1: игрок №1 по выручке получает awardsWon++', `
+initState(); selectSpec('smm'); startGame();
+// Даём игроку огромную выручку
+G.completedProjects = [];
+for (let i = 0; i < 100; i++) G.completedProjects.push({ id:'p'+i, revenue: 10_000_000 });
+// Обнуляем выручку конкурентов
+G.market.competitors.forEach(c => { c.revenue = 100; });
+const winner = LivingMarket._awardYearlyWinner();
+_ok(winner, '_awardYearlyWinner вернул winner');
+_ok(winner.isPlayer, 'winner.isPlayer === true');
+_eq(G.market.awardsWon, 1, 'G.market.awardsWon === 1');
+`));
+
+// ── Фаза D.2: победа конкурента — игрок не получает награду ──
+add(run('Фаза D.2: конкурент №1 — у него awardsWon++, игрок не получает', `
+initState(); selectSpec('smm'); startGame();
+// Обнуляем выручку игрока
+G.completedProjects = [];
+// Конкуренты с большой выручкой
+G.market.competitors.forEach(c => { c.revenue = 100_000_000; });
+const winner = LivingMarket._awardYearlyWinner();
+_ok(winner, '_awardYearlyWinner вернул winner');
+_ok(!winner.isPlayer, 'победил конкурент');
+_eq(G.market.awardsWon, 0, 'у игрока awardsWon = 0');
+const winComp = G.market.competitors.find(c => c.id === winner.id);
+_eq(winComp.awardsWon, 1, 'у компании-победителя awardsWon = 1');
+`));
+
+// ── Фаза D.3: гейт Сети учитывает awards >= 1 ──
+add(run('Фаза D.3: Сеть открывается при awards >= 1 даже без топ-3 рейтинга', `
+initState(); selectSpec('smm'); startGame();
+G.completedProjects = [];
+for (let i = 0; i < 30; i++) G.completedProjects.push({ id:'p'+i, revenue: 3_000_000 });
+G.staff = [];
+for (let i = 0; i < 12; i++) G.staff.push({ id:'s'+i });
+G.reputation = 95;
+G.market.playerRank    = 5;   // не в топ-3
+G.market.awardsWon     = 0;
+G.market.monthsAtRank1 = 0;
+LivingMarket._tickStages();
+_eq(G.living.stage, 2, 'без топ-3 и наград — Сеть заблокирована');
+// Теперь даём одну награду
+G.market.awardsWon = 1;
+LivingMarket._tickStages();
+_eq(G.living.stage, 3, 'с 1 наградой Сеть открылась');
+`));
+
+// ── Фаза D.4: _tickDumpingWave — волна стартует и завершается ──
+add(run('Фаза D.4: демпинг стартует (с форсированным RNG) и завершается по времени', `
+initState(); selectSpec('smm'); startGame();
+advanceMonth();
+// Форсируем демпинг напрямую
+G.market.dumpingWave = { competitorId: G.market.competitors[0].id, endsAtMonth: (G.month||1) + 2, intensity: 0.15, startedAt: G.month||1 };
+_ok(G.market.dumpingWave, 'dumpingWave установлена');
+// Симулируем прохождение месяцев до завершения
+G.month = G.market.dumpingWave.endsAtMonth;
+LivingMarket._tickDumpingWave();
+_eq(G.market.dumpingWave, null, 'dumpingWave === null после истечения');
+`));
+
+// ── Фаза D.5: _applyDumpingToScoutPool снижает бюджеты ──
+add(run('Фаза D.5: демпинг уменьшает fixedBudget в scoutPool', `
+initState(); selectSpec('smm'); startGame();
+G.scoutPool = [
+  { id: 'p1', name: 'Test', fixedBudget: 1_000_000, tier: 2 },
+  { id: 'p2', name: 'Test2', budgetRange: [500_000, 800_000], tier: 3 },
+];
+G.market.dumpingWave = { competitorId: G.market.competitors[0].id, endsAtMonth: 999, intensity: 0.20, startedAt: 1 };
+LivingMarket._applyDumpingToScoutPool();
+_eq(G.scoutPool[0].fixedBudget, 800_000, 'fixedBudget снижен на 20%');
+_ok(G.scoutPool[1].budgetRange[0] < 500_000, 'budgetRange[0] снижен');
+_ok(G.scoutPool[1].budgetRange[1] < 800_000, 'budgetRange[1] снижен');
+`));
+
+// ── Фаза D.6: back-compat — старый сейв без awardsWon/dumpingWave ──
+add(run('Фаза D.6: back-compat — G.market без awardsWon/dumpingWave инициализируется корректно', `
+initState(); selectSpec('smm'); startGame();
+// Симулируем старый сейв: удаляем поля Phase D
+delete G.market.awardsWon;
+delete G.market.dumpingWave;
+G.market.competitors.forEach(c => delete c.awardsWon);
+// _initMarket должен их восстановить
+LivingMarket._initMarket();
+_eq(G.market.awardsWon, 0, 'awardsWon восстановлен');
+_eq(G.market.dumpingWave, null, 'dumpingWave === null (восстановлен)');
+G.market.competitors.forEach(c => {
+  _eq(c.awardsWon, 0, 'awardsWon конкурента восстановлен: ' + c.name);
+});
+`));
+
+// ── Фаза D.7: getAwardsWon / getDumpingWave публичное API ──
+add(run('Фаза D.7: публичное API Phase D — getAwardsWon / getDumpingWave', `
+initState(); selectSpec('smm'); startGame();
+_eq(LivingMarket.getAwardsWon(), 0, 'getAwardsWon() = 0 изначально');
+G.market.awardsWon = 3;
+_eq(LivingMarket.getAwardsWon(), 3, 'getAwardsWon() = 3 после изменения');
+_eq(LivingMarket.getDumpingWave(), null, 'getDumpingWave() = null изначально');
+G.market.dumpingWave = { competitorId: 'c1', endsAtMonth: 10, intensity: 0.15, startedAt: 5 };
+_ok(LivingMarket.getDumpingWave() !== null, 'getDumpingWave() вернул волну');
+_eq(LivingMarket.getDumpingWave().intensity, 0.15, 'intensity корректна');
+`));
+
+// ══════════════════════════════════════════════════════════════════════════
+// ФАЗА D.2: хантинг сотрудников + питч-тендер
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── D.2.1: _tickStaffPoaching — networker переманивает стаффа ──
+add(run('Фаза D.2.1: networker переманивает стаффа при 100% шансе', `
+initState(); selectSpec('smm'); startGame();
+// Подкладываем двух сотрудников
+G.staff = [
+  { _iid: 's1', id: 'designer_jr', name: 'Дизайнер', icon: '🎨', role: 'designer' },
+  { _iid: 's2', id: 'pm', name: 'ПМ', icon: '📋', role: 'pm' },
+];
+// Форсируем исход: подменяем Math.random на 0 (< 0.04 → всегда срабатывает)
+const _origRand = Math.random;
+Math.random = () => 0;
+LivingMarket._tickStaffPoaching();
+Math.random = _origRand;
+// Один из двух должен исчезнуть
+_eq(G.staff.length, 1, 'после хантинга стаффа стало 1');
+`));
+
+// ── D.2.2: peop5 (perkImmuneToPoaching) блокирует хантинг ──
+add(run('Фаза D.2.2: perkImmuneToPoaching блокирует хантинг', `
+initState(); selectSpec('smm'); startGame();
+G.staff = [
+  { _iid: 's1', id: 'designer_jr', name: 'Дизайнер', icon: '🎨', role: 'designer' },
+  { _iid: 's2', id: 'pm', name: 'ПМ', icon: '📋', role: 'pm' },
+];
+G.perkImmuneToPoaching = true;
+const _origRand = Math.random;
+Math.random = () => 0;
+LivingMarket._tickStaffPoaching();
+Math.random = _origRand;
+_eq(G.staff.length, 2, 'иммунитет работает — стафф остался 2');
+`));
+
+// ── D.2.3: хантинг не трогает единственного сотрудника ──
+add(run('Фаза D.2.3: хантинг не трогает команду из 1 человека', `
+initState(); selectSpec('smm'); startGame();
+G.staff = [
+  { _iid: 's1', id: 'designer_jr', name: 'Дизайнер', icon: '🎨', role: 'designer' },
+];
+const _origRand = Math.random;
+Math.random = () => 0;
+LivingMarket._tickStaffPoaching();
+Math.random = _origRand;
+_eq(G.staff.length, 1, 'единственный сотрудник не переманён');
+`));
+
+// ── D.2.4: хантинг без networker — не срабатывает ──
+add(run('Фаза D.2.4: без networker-конкурента хантинг не срабатывает', `
+initState(); selectSpec('smm'); startGame();
+G.staff = [
+  { _iid: 's1', id: 'designer_jr', name: 'Дизайнер', icon: '🎨', role: 'designer' },
+  { _iid: 's2', id: 'pm', name: 'ПМ', icon: '📋', role: 'pm' },
+];
+// Меняем архетип networker на что-то другое
+G.market.competitors.forEach(c => { if (c.archetype === 'networker') c.archetype = 'boutique'; });
+const _origRand = Math.random;
+Math.random = () => 0;
+LivingMarket._tickStaffPoaching();
+Math.random = _origRand;
+_eq(G.staff.length, 2, 'без networker хантинг не произошёл');
+`));
+
+// ── D.2.5: peop5 применяется через purchaseTreeNode ──
+add(run('Фаза D.2.5: покупка peop5 устанавливает perkImmuneToPoaching', `
+initState(); selectSpec('smm'); startGame();
+// Форсируем открытие peop5 (обходим гейт tier 5)
+const node = LivingMarket.getTreeNodes().find(n => n.id === 'peop5');
+_ok(!!node, 'peop5 node существует');
+// Устанавливаем нужное кол-во XP и stage
+G.xp = 9999;
+G.living.stage = 5;
+// Делаем купленными все предшествующие узлы ветки people (tier 1-4)
+['peop1','peop2','peop3','peop4'].forEach(id => {
+  if (!G.living.tree2.purchased.includes(id)) {
+    G.living.tree2.purchased.push(id);
+    const n = LivingMarket.getTreeNodes().find(x=>x.id===id);
+    if (n && typeof n.apply === 'function') try { n.apply(G); } catch(e){}
+  }
+});
+const res = LivingMarket.purchaseTreeNode('peop5');
+_ok(res && (res.ok === true || res.reason === 'already_owned'), 'покупка peop5: ' + JSON.stringify(res));
+_ok(!!G.perkImmuneToPoaching, 'perkImmuneToPoaching === true после peop5');
+_ok(LivingMarket.isImmuneToPoaching(), 'isImmuneToPoaching() возвращает true');
+`));
+
+// ── D.2.6: _applyPitchContestFilter снимает T3+ проект при 100% шансе ──
+add(run('Фаза D.2.6: питч-тендер убирает T3+ проект из пула при 100% шансе', `
+initState(); selectSpec('smm'); startGame();
+G.scoutPool = [
+  { id: 'p1', name: 'Мелкий проект', tier: 1 },
+  { id: 'p2', name: 'Средний проект', tier: 2 },
+  { id: 'p3', name: 'Тендер T3', tier: 3 },
+  { id: 'p4', name: 'Тендер T4', tier: 4 },
+];
+const _origRand = Math.random;
+Math.random = () => 0;   // 0 < 0.20 → всегда снайпит
+LivingMarket._applyPitchContestFilter();
+Math.random = _origRand;
+// Один T3+ должен исчезнуть, T1/T2 остаются
+_eq(G.scoutPool.filter(p => p.tier >= 3).length, 1, 'остался 1 из 2 высокоуровневых проектов');
+_ok(G.scoutPool.find(p => p.id === 'p1'), 'T1 проект остался');
+_ok(G.scoutPool.find(p => p.id === 'p2'), 'T2 проект остался');
+`));
+
+// ── D.2.7: _applyPitchContestFilter не трогает T1/T2 ──
+add(run('Фаза D.2.7: питч-тендер не трогает проекты T1/T2', `
+initState(); selectSpec('smm'); startGame();
+G.scoutPool = [
+  { id: 'p1', name: 'T1', tier: 1 },
+  { id: 'p2', name: 'T2', tier: 2 },
+];
+const _origRand = Math.random;
+Math.random = () => 0;
+LivingMarket._applyPitchContestFilter();
+Math.random = _origRand;
+_eq(G.scoutPool.length, 2, 'пул не изменился — нет T3+ проектов');
 `));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
