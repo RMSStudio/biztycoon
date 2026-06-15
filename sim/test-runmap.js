@@ -434,5 +434,53 @@ const offeredValid = (__lastEv.choices || []).every(c => {
 _ok(offeredValid, 'все 3 бонуса на milestone подходят studio_team');
 `));
 
+// ── 19: v3.25 банк — балансовая дифференциация (Тип C) ──
+// Универсальные бонусы перевзвешены под банковский профиль: bank-target 9M
+// vs agency 7.5M, overhead 85K vs 35K, бóльшие сделки T-гейтов.
+// Тест сверяет ключевые перевзвешенные эффекты (money/payout/overhead/
+// prepay/portfolio/fatigue), оставляя те, что не масштабируются
+// (caseScoutBonus cap, caseRepBonus, speedUpgrades, penaltyShield bool).
+add(run('Тест 19: v3.25 банк — bonusy перевзвешены под профиль (money/payout/overhead/prepay)', `
+const byId = id => RunMap.getBonuses().find(b => b.id === id);
+// Универсальные перевзвешены
+_eq(byId('deposit_base').effects[0].money,          400000, 'deposit_base: money 250K → 400K');
+_eq(byId('trust').effects[0].rep,                        6, 'trust: rep +5 → +6');
+_ok(Math.abs(byId('margin').effects[0].gAdd.perkPayoutMult - 0.06) < 1e-9, 'margin: payout +5% → +6%');
+_ok(Math.abs(byId('automation').effects[0].overheadBump - (-0.12)) < 1e-9, 'automation: overhead −10% → −12%');
+_eq(byId('scoring').effects[0].gAdd.caseQBonus,          6, 'scoring: Q +5 → +6');
+_ok(Math.abs(byId('legal_team').effects[0].gAdd.perkPrepayBonus - 0.20) < 1e-9, 'legal_team: prepay +15% → +20%');
+_eq(byId('wellbeing').effects[0].fatigue,              -18, 'wellbeing: fatigue −15 → −18');
+_ok(Math.abs(byId('wellbeing').effects[1].gAdd.perkRecoveryBonus - 0.06) < 1e-9, 'wellbeing: recovery +5% → +6%');
+_eq(byId('case_studies').effects[0].gAdd.portfolio,     12, 'case_studies: portfolio +10 → +12');
+// Не меняем (cap/непрофильное)
+_eq(byId('branch_network').effects[0].gAdd.caseScoutBonus, 1, 'branch_network: scout +1 без изменений (cap)');
+_eq(byId('pr_dept').effects[0].gAdd.caseRepBonus,          1, 'pr_dept: repBonus +1 без изменений');
+_ok(Math.abs(byId('rpa').effects[0].gAdd.speedUpgrades - 0.05) < 1e-9, 'rpa: speed +5% без изменений');
+_eq(byId('regulator').effects[0].gSet.perkPenaltyShield, true, 'regulator: shield bool без изменений');
+// Эксклюзивы перевзвешены
+_eq(byId('gov_contract').effects[0].money,             350000, 'gov_contract: 250K → 350K');
+_eq(byId('core_banking').effects[0].money,             550000, 'core_banking: 400K → 550K');
+_ok(Math.abs(byId('fx_desk').effects[0].gAdd.perkPayoutMult - 0.08) < 1e-9, 'fx_desk: payout +7% → +8%');
+_eq(byId('syndicate_lending').effects[0].gAdd.caseQBonus, 6, 'syndicate_lending: Q +5 → +6');
+_ok(Math.abs(byId('vip_office').effects[0].gAdd.perkPayoutMult - 0.12) < 1e-9, 'vip_office: payout +10% → +12%');
+_eq(byId('spo_capital').effects[0].money,             1200000, 'spo_capital: 800K → 1.2M');
+_eq(byId('systemic_status').effects[1].rep,                 6, 'systemic_status: rep +5 → +6');
+_eq(byId('mna_acquisition').effects[0].money,          700000, 'mna_acquisition: money 500K → 700K');
+_eq(byId('mna_acquisition').effects[1].gAdd.portfolio,     20, 'mna_acquisition: portfolio +15 → +20');
+`, { scenario: 'bank' }));
+
+// ── 20: v3.25 агентство не должно регрессировать — значения как были ──
+// Тут просто страховка от случайной правки agency.data.js под видом
+// «банковской». Снимаем 3 ключевых значения, которые расходятся.
+add(run('Тест 20: v3.25 — agency runMap НЕ изменился (страховка)', `
+const byId = id => RunMap.getBonuses().find(b => b.id === id);
+_eq(byId('cash').effects[0].money,                  250000, 'agency: cash money 250K не тронут');
+_ok(Math.abs(byId('payout').effects[0].gAdd.perkPayoutMult - 0.05) < 1e-9, 'agency: payout +5% не тронут');
+_ok(Math.abs(byId('overhead').effects[0].overheadBump - (-0.10)) < 1e-9, 'agency: overhead −10% не тронут');
+_ok(Math.abs(byId('prepay').effects[0].gAdd.perkPrepayBonus - 0.15) < 1e-9, 'agency: prepay +15% не тронут');
+_eq(byId('fatigue').effects[0].fatigue,                -15, 'agency: fatigue −15 не тронут');
+_eq(byId('portfolio').effects[0].gAdd.portfolio,        10, 'agency: portfolio +10 не тронут');
+`));
+
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);
