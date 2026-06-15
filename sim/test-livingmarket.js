@@ -86,6 +86,12 @@ function loadSrc(opts) {
   let src = FILES.map(f => '// ===== '+f+' =====\n'+fs.readFileSync(path.join(ROOT,f),'utf8')).join('\n;\n');
   let lm = fs.readFileSync(path.join(ROOT, 'src/livingmarket.js'), 'utf8');
   if (opts.killSwitch) lm = lm.replace('const LIVING_MARKET_ENABLED = true;', 'const LIVING_MARKET_ENABLED = false;');
+  if (opts.useTree2Off) lm = lm.replace('const USE_TREE2_PROGRESSION = true;', 'const USE_TREE2_PROGRESSION = false;');
+  // v0.6: подставляем заглушку window.openPerkModal перед загрузкой
+  // livingmarket — модуль обернёт её, как обернул бы реальную из ui.js.
+  if (opts.preloadOpenPerkModal) {
+    src += '\n;\n// ===== preload openPerkModal stub =====\nwindow.openPerkModal = function(){ /* stub */ };\n';
+  }
   src += '\n;\n// ===== src/livingmarket.js =====\n' + lm;
   return src;
 }
@@ -1039,6 +1045,52 @@ _eq(yearEntry.icon, '📅', 'icon 📅');
 _eq(yearEntry.tier, 'large', 'tier large');
 _eq(yearEntry.month, 12, 'month = 12');
 `));
+
+// ══════════════════════════════════════════════════════════════════════
+//   v0.6 (Фаза B, шаг 2 полный) — Tree 2.0 как ОСНОВНОЙ канал
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 69: USE_TREE2_PROGRESSION флаг по умолчанию true ──
+add(run('Тест 69: useTree2Progression=true по умолчанию', `
+_eq(LivingMarket.useTree2Progression, true, 'флаг ON по умолчанию');
+`));
+
+// ── 70: openPerkModal перенаправлен на showTreeModal ──
+// В тест-песочнице ui.js не загружается, поэтому имитируем существующий
+// window.openPerkModal через `__preload` опцию, которая вставляется
+// ПЕРЕД livingmarket.js — чтобы обёртка модуля могла его обернуть.
+add(run('Тест 70: openPerkModal перенаправлен и помечен флагом', `
+_ok(typeof window.openPerkModal === 'function', 'openPerkModal существует');
+_ok(window.openPerkModal.__livingMarketRedirected === true, 'флаг redirect выставлен');
+// Вызываем и убеждаемся, что показывается tree-modal (по DOM-узлу 'lm-tree-modal')
+window.openPerkModal();
+const tm = document.getElementById('lm-tree-modal');
+_ok(!!tm, 'lm-tree-modal создан');
+_eq(tm.style.display, 'flex', 'lm-tree-modal display=flex');
+`, { preloadOpenPerkModal: true }));
+
+// ── 71: buyUpgrade блокирован, возвращает null ──
+add(run('Тест 71: buyUpgrade заблокирован, оригинал сохранён', `
+_ok(typeof window.buyUpgrade === 'function', 'buyUpgrade существует');
+_ok(window.buyUpgrade.__livingMarketBlocked === true, 'флаг block выставлен');
+_ok(typeof window.buyUpgrade.__original === 'function', 'оригинал сохранён');
+initState(); selectSpec('smm'); startGame();
+const moneyBefore = G.money;
+const upgradesBefore = Object.keys(G.upgrades || {}).length;
+const result = window.buyUpgrade('tools_q');
+_eq(result, null, 'buyUpgrade вернул null');
+_eq(G.money, moneyBefore, 'деньги не списались');
+_eq(Object.keys(G.upgrades || {}).length, upgradesBefore, 'G.upgrades не изменился');
+`));
+
+// ── 72: kill-switch USE_TREE2_PROGRESSION=false возвращает старое поведение ──
+add(run('Тест 72: USE_TREE2_PROGRESSION=false — старое поведение восстановлено', `
+_eq(LivingMarket.useTree2Progression, false, 'флаг OFF');
+// openPerkModal НЕ помечен флагом redirect
+_ok(!window.openPerkModal.__livingMarketRedirected, 'openPerkModal без redirect');
+// buyUpgrade НЕ блокирован
+_ok(!window.buyUpgrade.__livingMarketBlocked, 'buyUpgrade без блока');
+`, { useTree2Off: true, preloadOpenPerkModal: true }));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);
