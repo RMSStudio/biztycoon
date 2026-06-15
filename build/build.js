@@ -104,6 +104,7 @@ const postEngineBlocks = [
   read('src/storyarcs.js'),
   read('src/runmap.js'),
   read('src/meta.js'),
+  read('src/livingmarket.js'),
   read('dlc/loader.js'),
 ];
 

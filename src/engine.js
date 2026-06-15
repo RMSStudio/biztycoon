@@ -1555,8 +1555,11 @@ function advanceMonth() {
   if (typeof autoSave === 'function') autoSave();
 
   // Win / Lose
-  // winCondition временно отключён — режим бесконечной игры
-  // if (G.money>=SCENARIO.settings.winCondition){ _emitRender(); _emitEndGame(true); return; }
+  // v3.26: возвращена оригинальная проверка win-условия. Модуль
+  // «Живой рынок» (src/livingmarket.js, Тип A) при включённом флаге
+  // выставляет SCENARIO.settings.winCondition = Infinity — этого
+  // достаточно, чтобы партия стала бесконечной, не трогая engine.
+  if (G.money>=SCENARIO.settings.winCondition){ _emitRender(); _emitEndGame(true); return; }
   if (G.money<=0)       { _emitRender(); _emitEndGame(false); return; }
 
   // Случайное событие (40%, пропуск 1-го месяца; не когда идёт событие ИИ)
