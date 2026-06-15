@@ -619,5 +619,158 @@ tier5.forEach(n => {
 });
 `));
 
+// ══════════════════════════════════════════════════════════════════════
+//   v0.4 (Фаза B, шаг 3) — Респец ветки
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 38: API респека ──
+add(run('Тест 38: API респека доступен', `
+_ok(typeof LivingMarket.canRespecBranch === 'function', 'canRespecBranch есть');
+_ok(typeof LivingMarket.respecBranch === 'function',    'respecBranch есть');
+_ok(typeof LivingMarket.getRespecsUsed === 'function',  'getRespecsUsed есть');
+_ok(typeof LivingMarket.getNodeDelta === 'function',    'getNodeDelta есть');
+`));
+
+// ── 39: canRespecBranch — no_nodes_owned до покупок ──
+add(run('Тест 39: до покупок canRespecBranch → no_nodes_owned', `
+initState(); selectSpec('smm'); startGame();
+const r = LivingMarket.canRespecBranch('craft');
+_ok(!r.ok, 'отказ');
+_eq(r.reason, 'no_nodes_owned', 'reason = no_nodes_owned');
+`));
+
+// ── 40: респец возвращает XP и обнуляет numeric-каналы ──
+add(run('Тест 40: respec возвращает XP и снимает numeric-эффект', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+// Запомним baseline ПОСЛЕ startGame (там уже могли отстреляться милстоуны)
+const qBase  = G.caseQBonus || 0;
+const xpBase = G.xp;
+LivingMarket.purchaseTreeNode('craft1');     // +2 caseQBonus, −50 XP
+_eq(G.caseQBonus, qBase + 2, 'craft1 применился');
+_eq(G.xp, xpBase - 50,        'XP списан');
+// Сохранили delta
+const d = LivingMarket.getNodeDelta('craft1');
+_eq(d.caseQBonus, 2, 'delta содержит caseQBonus: 2');
+// Респец
+const r = LivingMarket.respecBranch('craft');
+_ok(r.ok, 'respec ok');
+_eq(r.refunded, 50, 'возвращено ★50');
+_eq(G.caseQBonus, qBase, 'caseQBonus вернулся к baseline');
+_eq(G.xp, xpBase,         'XP вернулся к pre-purchase значению');
+_ok(!LivingMarket.getPurchasedNodeIds().includes('craft1'), 'craft1 убран из purchased');
+`));
+
+// ── 41: respec mul-канала: scoutSalaryMult делится обратно ──
+add(run('Тест 41: respec корректно инвертирует mul-канал (scoutSalaryMult)', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+const m0 = G.scoutSalaryMult || 1;
+LivingMarket.purchaseTreeNode('peop1');    // scoutSalaryMult × 0.9
+_ok(Math.abs((G.scoutSalaryMult || 1) - m0 * 0.9) < 1e-9, 'после покупки × 0.9');
+LivingMarket.respecBranch('people');
+_ok(Math.abs((G.scoutSalaryMult || 1) - m0) < 1e-9, 'после респека вернулось к baseline');
+`));
+
+// ── 42: лимит — один респец на ветку на стадию ──
+add(run('Тест 42: повторный респец той же ветки на той же стадии → already_used_at_stage', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+LivingMarket.respecBranch('craft');
+// Купим ещё раз и попробуем респец снова на той же стадии
+LivingMarket.purchaseTreeNode('craft1');
+const r = LivingMarket.canRespecBranch('craft');
+_ok(!r.ok, 'отказ');
+_eq(r.reason, 'already_used_at_stage', 'reason = already_used_at_stage');
+const r2 = LivingMarket.respecBranch('craft');
+_ok(!r2.ok, 'функция тоже отказывает');
+_eq(r2.reason, 'already_used_at_stage', 'reason тот же');
+`));
+
+// ── 43: переход стадии разрешает респец снова ──
+add(run('Тест 43: переход на новую стадию даёт респец заново', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(2000, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+LivingMarket.respecBranch('craft');
+LivingMarket.purchaseTreeNode('craft1');
+// Принудительно открываем Студию
+G.living.stage = 1;
+// На новой стадии респец доступен снова
+const r = LivingMarket.canRespecBranch('craft');
+_ok(r.ok, 'на новой стадии респец доступен');
+const r2 = LivingMarket.respecBranch('craft');
+_ok(r2.ok, 'респец выполнен');
+_eq(r2.stage, 1, 'stage в журнале использования = 1');
+`));
+
+// ── 44: respec разных веток независимы ──
+add(run('Тест 44: респец «craft» не блокирует респец «deals»', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(2000, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+LivingMarket.purchaseTreeNode('deal1');
+LivingMarket.respecBranch('craft');
+const r = LivingMarket.canRespecBranch('deals');
+_ok(r.ok, 'deals можно респекнуть после craft');
+const r2 = LivingMarket.respecBranch('deals');
+_ok(r2.ok, 'респец deals выполнен');
+_eq(r2.refunded, 60, 'возвращено ★60 (deal1.cost)');
+`));
+
+// ── 45: респец двух узлов одной ветки возвращает суммарный XP ──
+add(run('Тест 45: респец возвращает XP всех узлов ветки', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');  // 50
+LivingMarket.purchaseTreeNode('craft2');  // 150
+const xpBeforeRespec = G.xp;
+const r = LivingMarket.respecBranch('craft');
+_ok(r.ok, 'respec ok');
+_eq(r.refunded, 200, 'возвращено ★200 (50+150)');
+_eq(G.xp, xpBeforeRespec + 200, 'XP вырос на 200');
+_eq(r.removed.length, 2, 'оба узла удалены');
+`));
+
+// ── 46: getRespecsUsed возвращает журнал использований ──
+add(run('Тест 46: getRespecsUsed возвращает массив записей с branch/stage', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+LivingMarket.respecBranch('craft');
+const log = LivingMarket.getRespecsUsed();
+_eq(log.length, 1, '1 запись');
+_eq(log[0].branch, 'craft', 'branch');
+_eq(log[0].stage, 0, 'stage = 0 (Гараж)');
+_eq(log[0].refunded, 50, 'refunded = 50');
+_ok(Array.isArray(log[0].nodes) && log[0].nodes.includes('craft1'), 'nodes список содержит craft1');
+`));
+
+// ── 47: после респека снова можно купить ранее проданный узел ──
+add(run('Тест 47: после респека узел снова покупается', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+LivingMarket.respecBranch('craft');
+const r = LivingMarket.purchaseTreeNode('craft1');
+_ok(r.ok, 'покупка после респека работает');
+`));
+
+// ── 48: known limitation — флаг perkPenaltyShield не снимается ──
+// Это документированное ограничение: refcount по nodes не делается, чтобы
+// не сломать другие источники того же флага (мета-перки/runMap-бонусы).
+// Покупаем craft2 (выставляет perkPenaltyShield=true), респец — флаг
+// остаётся true. Тест явно фиксирует контракт.
+add(run('Тест 48: boolean флаг (perkPenaltyShield) после респека остаётся (known limitation)', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+_ok(!G.perkPenaltyShield, 'до покупки shield не выставлен');
+LivingMarket.purchaseTreeNode('craft2');
+_ok(G.perkPenaltyShield === true, 'после craft2 shield = true');
+LivingMarket.respecBranch('craft');
+_ok(G.perkPenaltyShield === true, 'после респека shield ОСТАЁТСЯ true (known limitation)');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);

@@ -45,7 +45,7 @@
   const LIVING_MARKET_ENABLED = true;
   if (!LIVING_MARKET_ENABLED) return;
 
-  const VERSION = 'v0.3';
+  const VERSION = 'v0.4';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -387,7 +387,18 @@
       // v0.2 (Фаза B): ★XP-валюта и купленные узлы древа 2.0
       xp:                    0,          // накопленный, доступный для покупки узлов
       xpEarned:              0,          // всего заработано за партию (для статистики)
-      tree2:                 { purchased: [] }, // [id, id, ...] купленных узлов
+      tree2:                 {
+        purchased:           [],         // [id, id, ...] купленных узлов
+        // v0.4 (Фаза B шаг 3): per-узловые дельты эффектов для респека
+        // Хранится { '<nodeId>': { caseQBonus: 5, perkPayoutMult: 0.05, ... } }
+        // Numeric → аддитивное число (просто разница); mul-каналы →
+        // { mul: 0.9 } (делим обратно); boolean → { setBool: true }
+        // (на респеке не снимаем — известное ограничение, см. respecBranch).
+        purchasedDetails:    {},
+        // v0.4: история респеков для лимита 1 на ветку на стадию.
+        // [{ stage: 1, branch: 'craft', ts, refunded: 200, nodes: ['craft1','craft2'] }]
+        respecsUsed:         [],
+      },
       _xpLog:                [],         // последние 10 начислений (для UI: «+15 ★ Первый найм»)
       _lastDeliveryCount:    0,          // трекер для diff-начисления XP за сдачи
     };
@@ -400,6 +411,10 @@
       // Back-compat: добиваем недостающие поля при загрузке старого сейва
       const d = _defaults();
       for (const k in d) if (!(k in G.living)) G.living[k] = d[k];
+      // v0.4: миграция tree2 — добавляем покапаленные поля purchasedDetails
+      // и respecsUsed, если их не было в старом сейве (v0.2/v0.3).
+      if (G.living.tree2 && !G.living.tree2.purchasedDetails) G.living.tree2.purchasedDetails = {};
+      if (G.living.tree2 && !G.living.tree2.respecsUsed)     G.living.tree2.respecsUsed     = [];
     }
   }
 
@@ -504,15 +519,84 @@
     return { ok: true, node: n };
   }
 
+  // v0.4 (Фаза B шаг 3): каналы G, которые tree 2.0 может мутировать.
+  // Снимок до/после apply() позволяет вычислить delta и инвертировать её
+  // при респеке.  Список — все каналы, упомянутые в `apply` любого узла.
+  const TREE_TRACKED_CHANNELS_NUM  = [
+    'caseQBonus', 'caseScoutBonus', 'caseRepBonus',
+    'speedUpgrades', 'perkPayoutMult', 'perkPrepayBonus',
+    'perkRecoveryBonus', 'portfolio', 'reputation',
+  ];
+  const TREE_TRACKED_CHANNELS_MUL  = ['scoutSalaryMult', 'perkFatigueMult'];
+  const TREE_TRACKED_CHANNELS_BOOL = ['perkPenaltyShield', 'perkInstantSpeed', 'perkEpicShortcut'];
+
+  function _snapshotTreeChannels(g) {
+    const snap = {};
+    TREE_TRACKED_CHANNELS_NUM.forEach(k  => { snap[k] = g[k] || 0; });
+    TREE_TRACKED_CHANNELS_MUL.forEach(k  => { snap[k] = (g[k] == null) ? 1 : g[k]; });
+    TREE_TRACKED_CHANNELS_BOOL.forEach(k => { snap[k] = !!g[k]; });
+    return snap;
+  }
+
+  // Вычисляет дельту между двумя снапшотами для хранения в purchasedDetails.
+  // Возвращает плоский объект с разными форматами на канал:
+  //   numeric: { caseQBonus: 5 }       (просто прибавили 5)
+  //   mul:     { scoutSalaryMult: { mul: 0.9 } }   (умножили на 0.9)
+  //   bool:    { perkPenaltyShield: { setBool: true } }   (изменили флаг)
+  function _computeTreeDelta(before, after) {
+    const delta = {};
+    TREE_TRACKED_CHANNELS_NUM.forEach(k => {
+      const d = (after[k] || 0) - (before[k] || 0);
+      if (Math.abs(d) > 1e-12) delta[k] = d;
+    });
+    TREE_TRACKED_CHANNELS_MUL.forEach(k => {
+      const b = before[k] == null ? 1 : before[k];
+      const a = after[k]  == null ? 1 : after[k];
+      if (Math.abs(a - b) > 1e-12 && b !== 0) {
+        delta[k] = { mul: a / b };
+      }
+    });
+    TREE_TRACKED_CHANNELS_BOOL.forEach(k => {
+      if (!!before[k] !== !!after[k]) {
+        delta[k] = { setBool: !!after[k] };
+      }
+    });
+    return delta;
+  }
+
+  // Обратная операция к delta: вычитает numeric, делит mul-каналы.
+  // Boolean-флаги НЕ снимаем — другие источники (мета-перки/runMap-бонусы/
+  // другие узлы древа) могут полагаться на тот же флаг.  Это известное
+  // ограничение респека; refcounting вынесен в потенциальный шаг 6.
+  function _applyInverseTreeDelta(g, delta) {
+    if (!g || !delta) return;
+    for (const k in delta) {
+      const v = delta[k];
+      if (typeof v === 'number') {
+        g[k] = (g[k] || 0) - v;
+      } else if (v && typeof v.mul === 'number' && v.mul !== 0) {
+        const cur = (g[k] == null) ? 1 : g[k];
+        g[k] = cur / v.mul;
+      }
+      // boolean — пропускаем (см. комментарий выше)
+    }
+  }
+
   function purchaseTreeNode(id) {
     const r = canPurchaseNode(id);
     if (!r.ok) return r;
     const n = r.node;
     G.xp = (G.xp || 0) - n.cost;
     G.living.xp = (G.living.xp || 0) - n.cost;
-    G.living.tree2 = G.living.tree2 || { purchased: [] };
+    G.living.tree2 = G.living.tree2 || { purchased: [], purchasedDetails: {}, respecsUsed: [] };
+    if (!G.living.tree2.purchasedDetails) G.living.tree2.purchasedDetails = {};
+    if (!G.living.tree2.respecsUsed)     G.living.tree2.respecsUsed     = [];
     G.living.tree2.purchased = (G.living.tree2.purchased || []).concat(id);
+    // v0.4: снимаем G до и после apply → сохраняем delta для респека
+    const before = _snapshotTreeChannels(G);
     try { n.apply(G); } catch (e) { try { console.warn('[livingmarket] node apply', n.id, e); } catch (_) {} }
+    const after = _snapshotTreeChannels(G);
+    G.living.tree2.purchasedDetails[id] = _computeTreeDelta(before, after);
     G.living.journal.push({
       id:   'tree_' + n.id,
       icon: n.icon,
@@ -530,6 +614,68 @@
       notify(n.icon + ' Куплен узел «' + n.name + '» — ' + n.desc, 'success');
     }
     return { ok: true, node: n };
+  }
+
+  // ── v0.4 (Фаза B шаг 3): Респец ветки ──────────────────────────────
+  // Раз в стадию игрок может бесплатно сбросить любую ветку — все купленные
+  // узлы возвращаются (XP-cost восстанавливается, эффекты инвертируются).
+  // Лимит: один респец на ветку на стадию.  Переход на следующую стадию
+  // снимает использование (можно снова сбросить ту же ветку).
+
+  function canRespecBranch(branchId) {
+    if (typeof G === 'undefined' || !G || !G.living) return { ok: false, reason: 'no_active_game' };
+    const owned = (G.living.tree2 && G.living.tree2.purchased) || [];
+    const branchOwned = owned.filter(id => {
+      const n = _getTreeNode(id);
+      return n && n.branch === branchId;
+    });
+    if (branchOwned.length === 0) return { ok: false, reason: 'no_nodes_owned' };
+    const stage = _stageIdx(G);
+    const usedAtStage = (G.living.tree2.respecsUsed || []).some(r => r.stage === stage && r.branch === branchId);
+    if (usedAtStage) return { ok: false, reason: 'already_used_at_stage', stage };
+    return { ok: true, nodes: branchOwned, stage };
+  }
+
+  function respecBranch(branchId) {
+    const r = canRespecBranch(branchId);
+    if (!r.ok) return r;
+    let refunded = 0;
+    const removed = r.nodes.slice();
+    removed.forEach(id => {
+      const n = _getTreeNode(id);
+      if (!n) return;
+      const delta = (G.living.tree2.purchasedDetails || {})[id];
+      _applyInverseTreeDelta(G, delta);
+      refunded += n.cost;
+      delete G.living.tree2.purchasedDetails[id];
+    });
+    G.living.tree2.purchased = (G.living.tree2.purchased || []).filter(id => removed.indexOf(id) === -1);
+    G.xp = (G.xp || 0) + refunded;
+    G.living.xp = (G.living.xp || 0) + refunded;
+    G.living.tree2.respecsUsed = (G.living.tree2.respecsUsed || []).concat({
+      stage:   r.stage,
+      branch:  branchId,
+      ts:      Date.now(),
+      refunded,
+      nodes:   removed,
+    });
+    G.living.journal.push({
+      id:   'respec_' + branchId + '_' + r.stage,
+      icon: '↺',
+      name: 'Респец ветки',
+      desc: 'Ветка «' + branchId + '» сброшена · возвращено ★' + refunded + ' (' + removed.length + ' узлов)',
+      tier: 'micro',
+      month: G.month || 0,
+      ts:   Date.now(),
+    });
+    if (typeof EventBus !== 'undefined' && EventBus.emit) {
+      EventBus.emit('tree_branch_respec', { branch: branchId, refunded, removed });
+      EventBus.emit('render');
+    }
+    if (typeof notify === 'function') {
+      notify('↺ Респец «' + branchId + '»: +★' + refunded + ' (' + removed.length + ' узлов)', 'success');
+    }
+    return { ok: true, refunded, removed, stage: r.stage };
   }
 
   // ── Подмена winCondition (главный спецэффект модуля) ─────────────────
@@ -814,14 +960,27 @@
           '<div style="font-size:20px;font-weight:800;color:#fbbf24">' + xpNow + '</div>' +
         '</div>' +
       '</div>';
-    // Заголовок-сетка веток
-    const branchHeads = TREE_BRANCHES.map(b =>
-      '<div style="text-align:center;padding:8px 4px;border-bottom:2px solid ' + b.color + '">' +
+    // Заголовок-сетка веток + кнопка респека (v0.4)
+    const branchHeads = TREE_BRANCHES.map(b => {
+      const r = canRespecBranch(b.id);
+      let respecBtn;
+      if (r.ok) {
+        respecBtn = '<button onclick="LivingMarket._doRespec(\'' + b.id + '\')" title="Сбросить ветку, вернуть ★XP" style="margin-top:4px;background:rgba(255,255,255,.04);border:1px solid ' + b.color + '44;color:' + b.color + ';font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;cursor:pointer;width:100%">↺ Респец</button>';
+      } else {
+        let title;
+        if (r.reason === 'no_nodes_owned')          title = 'Нет купленных узлов в этой ветке';
+        else if (r.reason === 'already_used_at_stage') title = 'Респец уже использован на этой стадии — следующий бесплатный со сменой стадии';
+        else if (r.reason === 'no_active_game')     title = 'Партия не запущена';
+        else title = r.reason;
+        respecBtn = '<button disabled title="' + title + '" style="margin-top:4px;background:rgba(255,255,255,.02);border:1px solid var(--border);color:var(--muted);font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;cursor:not-allowed;width:100%;opacity:.55">↺ Респец</button>';
+      }
+      return '<div style="text-align:center;padding:8px 4px;border-bottom:2px solid ' + b.color + '">' +
         '<div style="font-size:20px;line-height:1">' + b.icon + '</div>' +
         '<div style="font-size:11px;font-weight:700;color:' + b.color + ';margin-top:4px">' + b.name + '</div>' +
         '<div style="font-size:9px;color:var(--muted);margin-top:1px">' + b.sub + '</div>' +
-      '</div>'
-    ).join('');
+        respecBtn +
+      '</div>';
+    }).join('');
     // 5 ярусов, по 5 узлов в каждом ряду
     const rows = [];
     for (let tier = 1; tier <= 5; tier++) {
@@ -920,6 +1079,13 @@
     return r;
   }
 
+  // v0.4: inline-helper для кнопки респека в шапке ветки
+  function _doRespec(branchId) {
+    const r = respecBranch(branchId);
+    showTreeModal();
+    return r;
+  }
+
   // ── Подключаем обёртки ───────────────────────────────────────────────
 
   // 1) startGame: инициализация стейта + подмена winCondition.
@@ -998,9 +1164,15 @@
     canPurchaseNode,
     purchaseTreeNode,
     getConflictingTreeNodes,
+    // v0.4 (Фаза B шаг 3) — респец
+    canRespecBranch,
+    respecBranch,
+    getRespecsUsed:     () => ((G && G.living && G.living.tree2 && G.living.tree2.respecsUsed) || []).slice(),
+    getNodeDelta:       (id) => ((G && G.living && G.living.tree2 && G.living.tree2.purchasedDetails) || {})[id] || null,
     getPurchasedNodeIds:  () => ((G && G.living && G.living.tree2 && G.living.tree2.purchased) || []).slice(),
     showTreeModal,
     _buyNode,
+    _doRespec,
     _awardXp,                              // публичен для dev-вмешательства
     // dev/test
     _initLiving,
