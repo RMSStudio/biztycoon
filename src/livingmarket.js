@@ -45,7 +45,7 @@
   const LIVING_MARKET_ENABLED = true;
   if (!LIVING_MARKET_ENABLED) return;
 
-  const VERSION = 'v0.4';
+  const VERSION = 'v0.5';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -191,9 +191,12 @@
   const TREE_NODES = [
     // ── Ремесло ──
     { id: 'craft1', branch: 'craft', tier: 1, icon: '🛠', name: 'Инструментарий',     desc: '+2 к качеству от кейсов навсегда',                cost: 50,
+      upgradeAlias: ['tools_q'],
       apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 2; } },
     { id: 'craft2', branch: 'craft', tier: 2, icon: '📐', name: 'Дизайн-система',     desc: 'Штраф просрочки бьёт по репутации в два раза мягче',
-      cost: 150, apply: g => { g.perkPenaltyShield = true; } },
+      cost: 150,
+      upgradeAlias: ['standards_q'],
+      apply: g => { g.perkPenaltyShield = true; } },
     { id: 'craft3', branch: 'craft', tier: 3, icon: '🎨', name: 'Арт-директорат',     desc: '+5 к качеству от кейсов навсегда',                cost: 320,
       apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 5; } },
     { id: 'craft4',  branch: 'craft', tier: 4, icon: '🔬', name: 'R&D-лаборатория',    desc: '+10 к качеству от кейсов · потолок качества выше', cost: 700,
@@ -208,8 +211,10 @@
 
     // ── Производство ──
     { id: 'prod1', branch: 'production', tier: 1, icon: '🔁', name: 'Agile',         desc: '+5% к скорости команды',                          cost: 50,
+      upgradeAlias: ['agile'],
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.05; } },
     { id: 'prod2', branch: 'production', tier: 2, icon: '📑', name: 'Шаблоны',       desc: '+5% к скорости (стек) · быстрее instant-проекты',cost: 160,
+      upgradeAlias: ['scrum'],
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.05; g.perkInstantSpeed = true; } },
     { id: 'prod3', branch: 'production', tier: 3, icon: '🚀', name: 'Автоматизация', desc: '+10% к скорости команды',                         cost: 340,
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.10; } },
@@ -227,6 +232,7 @@
     { id: 'peop1', branch: 'people', tier: 1, icon: '💬', name: 'HR-бренд',          desc: 'Скаутинг кандидатов −10% к запрашиваемой зарплате', cost: 60,
       apply: g => { g.scoutSalaryMult = (g.scoutSalaryMult || 1) * 0.9; } },
     { id: 'peop2', branch: 'people', tier: 2, icon: '🌿', name: 'Менторство',        desc: '−10% усталости команды (умножитель)',             cost: 180,
+      upgradeAlias: ['mentorship'],
       apply: g => { g.perkFatigueMult = (g.perkFatigueMult || 1) * 0.9; } },
     { id: 'peop3', branch: 'people', tier: 3, icon: '📈', name: 'Опционы',           desc: '+10% к восстановлению от HR-действий',            cost: 350,
       apply: g => { g.perkRecoveryBonus = (g.perkRecoveryBonus || 0) + 0.10; } },
@@ -242,8 +248,10 @@
 
     // ── Рынок ──
     { id: 'mark1', branch: 'market', tier: 1, icon: '🌐', name: 'Портфолио-сайт',    desc: '+5 баллов портфолио',                             cost: 50,
+      upgradeAlias: ['portfolio_site'],
       apply: g => { g.portfolio = (g.portfolio || 0) + 5; } },
     { id: 'mark2', branch: 'market', tier: 2, icon: '📚', name: 'Кейс-стади',        desc: '+1 восстановление репутации/мес',                 cost: 160,
+      upgradeAlias: ['case_studies'],
       apply: g => { g.caseRepBonus = (g.caseRepBonus || 0) + 1; } },
     { id: 'mark3', branch: 'market', tier: 3, icon: '📣', name: 'PR-служба',         desc: '+1 лид при скаутинге · +1 восст. реп/мес',        cost: 340,
       apply: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 1; g.caseRepBonus = (g.caseRepBonus || 0) + 1; } },
@@ -259,8 +267,10 @@
 
     // ── Сделки ──
     { id: 'deal1', branch: 'deals', tier: 1, icon: '📝', name: 'Юр-шаблоны',         desc: '+5% к выплатам со всех сделок',                  cost: 60,
+      upgradeAlias: ['contracts'],
       apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.05; } },
     { id: 'deal2', branch: 'deals', tier: 2, icon: '🤝', name: 'Переговорщик',       desc: '+10% к шансу предоплаты',                         cost: 170,
+      upgradeAlias: ['negotiator'],
       apply: g => { g.perkPrepayBonus = (g.perkPrepayBonus || 0) + 0.10; } },
     { id: 'deal3', branch: 'deals', tier: 3, icon: '💳', name: 'Финдир',             desc: '+10% к выплатам (стек)',                          cost: 350,
       apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.10; } },
@@ -636,6 +646,71 @@
     return { ok: true, nodes: branchOwned, stage };
   }
 
+  // ── v0.5 (Фаза B шаги 2 lite + 7): осведомлённость о engine.UPGRADES ─
+  // и сводка эффектов tree 2.0 ─────────────────────────────────────────
+  // upgradeAlias — НЕинвазивная связка: узел tree 2.0 объявляет, какие
+  // существующие engine-апгрейды дают пересекающийся эффект. Покупка
+  // одного НЕ блокирует другое (старая прокачка остаётся отдельной
+  // системой) — UI просто показывает игроку «⚠ Дублирует X», чтобы
+  // выбор был осознанным.
+
+  function getDuplicatedEngineUpgrades(nodeId) {
+    const n = _getTreeNode(nodeId);
+    if (!n || !n.upgradeAlias || !n.upgradeAlias.length) return [];
+    if (typeof G === 'undefined' || !G || !G.upgrades) return [];
+    return n.upgradeAlias.filter(uid => !!G.upgrades[uid]);
+  }
+
+  // Суммарные эффекты от ВСЕХ купленных узлов tree 2.0. Используется в
+  // UI-блоке «Эффекты древа» и для дебага. Аккумулирует numeric (sum) и
+  // mul-каналы (произведение), boolean — список узлов-источников.
+  function getEffectsSummary() {
+    const summary = { numeric: {}, mul: {}, flags: {} };
+    if (typeof G === 'undefined' || !G || !G.living || !G.living.tree2) return summary;
+    const purchased = G.living.tree2.purchased || [];
+    const details   = G.living.tree2.purchasedDetails || {};
+    purchased.forEach(id => {
+      const n = _getTreeNode(id);
+      if (!n) return;
+      const delta = details[id];
+      if (!delta) return;
+      for (const k in delta) {
+        const v = delta[k];
+        if (typeof v === 'number') {
+          summary.numeric[k] = summary.numeric[k] || { total: 0, contributors: [] };
+          summary.numeric[k].total += v;
+          summary.numeric[k].contributors.push({ id, name: n.name, icon: n.icon, delta: v });
+        } else if (v && typeof v.mul === 'number') {
+          summary.mul[k] = summary.mul[k] || { total: 1, contributors: [] };
+          summary.mul[k].total *= v.mul;
+          summary.mul[k].contributors.push({ id, name: n.name, icon: n.icon, mul: v.mul });
+        } else if (v && 'setBool' in v) {
+          summary.flags[k] = summary.flags[k] || { value: !!v.setBool, contributors: [] };
+          summary.flags[k].contributors.push({ id, name: n.name, icon: n.icon });
+        }
+      }
+    });
+    return summary;
+  }
+
+  // Человекочитаемые названия каналов для UI Effects Summary.
+  const CHANNEL_LABELS = {
+    caseQBonus:        '🎯 Качество',
+    caseScoutBonus:    '🔍 Лиды/скаут',
+    caseRepBonus:      '⭐ Реп/мес',
+    speedUpgrades:     '🚀 Скорость',
+    perkPayoutMult:    '💰 Выплаты',
+    perkPrepayBonus:   '💳 Предоплата',
+    perkRecoveryBonus: '🌿 Восстановление',
+    portfolio:         '📚 Портфолио',
+    reputation:        '⭐ Репутация',
+    scoutSalaryMult:   '💼 Зарплата кандидатов',
+    perkFatigueMult:   '😴 Усталость команды',
+    perkPenaltyShield: '🛡 Штраф просрочки −50%',
+    perkInstantSpeed:  '⚡ Скорость instant-проектов',
+    perkEpicShortcut:  '⚙️ Epic −1 фаза',
+  };
+
   function respecBranch(branchId) {
     const r = canRespecBranch(branchId);
     if (!r.ok) return r;
@@ -999,14 +1074,58 @@
     }
     const grid = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;flex:1;overflow-y:auto;padding-right:4px">' + rows.join('') + '</div>';
 
+    // v0.5: блок «Эффекты древа» — суммарные мутации от всех купленных узлов
+    const summaryHtml = _renderEffectsSummaryHtml();
+
     return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:1000px;max-height:90vh;display:flex;flex-direction:column;width:96vw">' +
       head +
       '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:4px">' + branchHeads + '</div>' +
       grid +
-      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:center;align-items:center">' +
+      summaryHtml +
+      '<div style="display:flex;gap:8px;margin-top:8px;justify-content:center;align-items:center">' +
         '<div style="font-size:10px;color:var(--muted)">★XP начисляется за: сдачи проектов · майлстоуны · переходы стадий</div>' +
       '</div>' +
       '<button onclick="document.getElementById(\'lm-tree-modal\').style.display=\'none\'" style="margin-top:10px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;align-self:center">Закрыть</button>' +
+    '</div>';
+  }
+
+  // v0.5: компактная сводка суммарных эффектов tree 2.0 на каналы G.
+  // Скрыта если ничего не куплено — экономим место в модале.
+  function _renderEffectsSummaryHtml() {
+    const s = getEffectsSummary();
+    const numericKeys = Object.keys(s.numeric);
+    const mulKeys     = Object.keys(s.mul);
+    const flagKeys    = Object.keys(s.flags);
+    if (!numericKeys.length && !mulKeys.length && !flagKeys.length) return '';
+    const fmt = (n, ch) => {
+      // perkPayoutMult/perkPrepayBonus/perkRecoveryBonus/speedUpgrades — проценты
+      const pctCh = ['perkPayoutMult','perkPrepayBonus','perkRecoveryBonus','speedUpgrades'];
+      if (pctCh.indexOf(ch) !== -1) return (n >= 0 ? '+' : '') + Math.round(n * 100) + '%';
+      return (n >= 0 ? '+' : '') + (Math.round(n * 100) / 100);
+    };
+    const rows = [];
+    numericKeys.forEach(ch => {
+      const e = s.numeric[ch];
+      const label = CHANNEL_LABELS[ch] || ch;
+      const contribStr = e.contributors.map(c => c.icon + ' ' + c.name).join(' · ');
+      rows.push('<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:10px;border-bottom:1px dashed var(--border)"><span style="color:var(--text);font-weight:700">' + label + '</span><span style="color:var(--sub);font-weight:700">' + fmt(e.total, ch) + ' <span style="color:var(--muted);font-weight:500">· ' + contribStr + '</span></span></div>');
+    });
+    mulKeys.forEach(ch => {
+      const e = s.mul[ch];
+      const label = CHANNEL_LABELS[ch] || ch;
+      const contribStr = e.contributors.map(c => c.icon + ' ' + c.name + ' ×' + c.mul).join(' · ');
+      const pct = Math.round((e.total - 1) * 100);
+      rows.push('<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:10px;border-bottom:1px dashed var(--border)"><span style="color:var(--text);font-weight:700">' + label + '</span><span style="color:var(--sub);font-weight:700">×' + (Math.round(e.total * 100) / 100) + ' (' + (pct >= 0 ? '+' : '') + pct + '%) <span style="color:var(--muted);font-weight:500">· ' + contribStr + '</span></span></div>');
+    });
+    flagKeys.forEach(ch => {
+      const e = s.flags[ch];
+      const label = CHANNEL_LABELS[ch] || ch;
+      const contribStr = e.contributors.map(c => c.icon + ' ' + c.name).join(' · ');
+      rows.push('<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:10px;border-bottom:1px dashed var(--border)"><span style="color:var(--text);font-weight:700">' + label + '</span><span style="color:#86efac;font-weight:700">включён <span style="color:var(--muted);font-weight:500">· ' + contribStr + '</span></span></div>');
+    });
+    return '<div style="margin-top:10px;padding:10px 12px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.18);border-radius:8px">' +
+      '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">📊 Итоговые эффекты древа</div>' +
+      rows.join('') +
     '</div>';
   }
 
@@ -1064,10 +1183,24 @@
       }).join(' / ');
       conflictLine = '<div style="font-size:8px;color:var(--muted);margin-top:2px;line-height:1.3">⇄ ' + (owned || isExcluded ? '' : 'или ') + names + '</div>';
     }
+    // v0.5: подпись «дублирует engine-апгрейд», если игрок уже купил
+    // пересекающийся апгрейд в старой прокачке. Не блокирует покупку —
+    // только информационно, чтобы игрок осознавал, что эффекты сложатся.
+    let dupLine = '';
+    const duplicates = getDuplicatedEngineUpgrades(n.id);
+    if (duplicates.length && !owned) {
+      const dupNames = duplicates.map(uid => {
+        if (typeof UPGRADES === 'undefined' || !UPGRADES) return uid;
+        const u = UPGRADES.find(x => x.id === uid);
+        return u ? (u.icon || '') + ' ' + (u.name || uid) : uid;
+      }).join(' / ');
+      dupLine = '<div style="font-size:8px;color:#fbbf24;margin-top:2px;line-height:1.3" title="Эффекты сложатся — это не блокировка, просто предупреждение">⚠ Дублирует: ' + dupNames + '</div>';
+    }
     return '<div style="border:1px solid ' + borderColor + ';background:' + bg + ';border-radius:7px;padding:7px;display:flex;flex-direction:column;gap:4px;opacity:' + opacity + ';min-height:90px">' +
       '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:15px">' + n.icon + '</span><span style="font-size:10px;font-weight:700;color:var(--text)">' + n.name + '</span></div>' +
       descHtml +
       conflictLine +
+      dupLine +
       '<div style="margin-top:auto">' + statusHtml + '</div>' +
     '</div>';
   }
@@ -1169,6 +1302,10 @@
     respecBranch,
     getRespecsUsed:     () => ((G && G.living && G.living.tree2 && G.living.tree2.respecsUsed) || []).slice(),
     getNodeDelta:       (id) => ((G && G.living && G.living.tree2 && G.living.tree2.purchasedDetails) || {})[id] || null,
+    // v0.5 (Фаза B шаги 2 lite + 7)
+    getDuplicatedEngineUpgrades,
+    getEffectsSummary,
+    getChannelLabels:   () => Object.assign({}, CHANNEL_LABELS),
     getPurchasedNodeIds:  () => ((G && G.living && G.living.tree2 && G.living.tree2.purchased) || []).slice(),
     showTreeModal,
     _buyNode,

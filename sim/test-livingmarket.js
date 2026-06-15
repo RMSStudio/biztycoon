@@ -772,5 +772,114 @@ LivingMarket.respecBranch('craft');
 _ok(G.perkPenaltyShield === true, 'после респека shield ОСТАЁТСЯ true (known limitation)');
 `));
 
+// ══════════════════════════════════════════════════════════════════════
+//   v0.5 (Фаза B, шаги 2-lite + 7) — engine.UPGRADES awareness + Summary
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 49: API доступен ──
+add(run('Тест 49: API getDuplicatedEngineUpgrades + getEffectsSummary', `
+_ok(typeof LivingMarket.getDuplicatedEngineUpgrades === 'function', 'getDuplicatedEngineUpgrades есть');
+_ok(typeof LivingMarket.getEffectsSummary === 'function',           'getEffectsSummary есть');
+_ok(typeof LivingMarket.getChannelLabels === 'function',            'getChannelLabels есть');
+`));
+
+// ── 50: upgradeAlias объявлен у 10 узлов tier 1-2 ──
+add(run('Тест 50: узлы tier 1-2 имеют upgradeAlias к engine.UPGRADES', `
+const nodes = LivingMarket.getTreeNodes();
+const aliased = nodes.filter(n => n.upgradeAlias && n.upgradeAlias.length > 0);
+// Покрытие: craft1/craft2/prod1/prod2/peop2/mark1/mark2/deal1/deal2 — 9 узлов с алиасами
+_ok(aliased.length >= 8, 'минимум 8 узлов с upgradeAlias (' + aliased.length + ')');
+// Конкретные ожидаемые алиасы
+const byId = id => nodes.find(n => n.id === id);
+_ok(byId('craft1').upgradeAlias.includes('tools_q'),       'craft1 → tools_q');
+_ok(byId('prod1').upgradeAlias.includes('agile'),          'prod1 → agile');
+_ok(byId('mark1').upgradeAlias.includes('portfolio_site'), 'mark1 → portfolio_site');
+_ok(byId('deal1').upgradeAlias.includes('contracts'),      'deal1 → contracts');
+_ok(byId('deal2').upgradeAlias.includes('negotiator'),     'deal2 → negotiator');
+// tier 3-5 узлы НЕ имеют алиаса (на этой итерации маппится только 1-2)
+_ok(!byId('craft3').upgradeAlias || byId('craft3').upgradeAlias.length === 0, 'craft3 (tier 3) без alias');
+_ok(!byId('craft5').upgradeAlias || byId('craft5').upgradeAlias.length === 0, 'craft5 (tier 5) без alias');
+`));
+
+// ── 51: getDuplicatedEngineUpgrades — пусто если апгрейд не куплен ──
+add(run('Тест 51: getDuplicatedEngineUpgrades возвращает [] до покупки engine-апгрейда', `
+initState(); selectSpec('smm'); startGame();
+_eq(LivingMarket.getDuplicatedEngineUpgrades('craft1').length, 0, 'до покупки tools_q — пусто');
+// Имитируем покупку engine-апгрейда (минуя UI/checks)
+G.upgrades = G.upgrades || {};
+G.upgrades['tools_q'] = true;
+const dups = LivingMarket.getDuplicatedEngineUpgrades('craft1');
+_eq(dups.length, 1, 'после покупки tools_q — 1 дубль');
+_eq(dups[0], 'tools_q', 'дубль = tools_q');
+// Узел без alias — всегда []
+_eq(LivingMarket.getDuplicatedEngineUpgrades('craft3').length, 0, 'craft3 (без alias) — []');
+_eq(LivingMarket.getDuplicatedEngineUpgrades('unknown_id').length, 0, 'unknown — []');
+`));
+
+// ── 52: getEffectsSummary — пустой до покупок ──
+add(run('Тест 52: getEffectsSummary без покупок — пустые секции', `
+initState(); selectSpec('smm'); startGame();
+const s = LivingMarket.getEffectsSummary();
+_eq(Object.keys(s.numeric).length, 0, 'numeric пуст');
+_eq(Object.keys(s.mul).length, 0,     'mul пуст');
+_eq(Object.keys(s.flags).length, 0,   'flags пуст');
+`));
+
+// ── 53: getEffectsSummary — суммирует numeric ──
+add(run('Тест 53: getEffectsSummary numeric суммирует вклады нескольких узлов', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');  // +2 caseQBonus
+const s1 = LivingMarket.getEffectsSummary();
+_ok(s1.numeric.caseQBonus, 'caseQBonus присутствует');
+_eq(s1.numeric.caseQBonus.total, 2, 'caseQBonus total = 2');
+_eq(s1.numeric.caseQBonus.contributors.length, 1, '1 contributor');
+_eq(s1.numeric.caseQBonus.contributors[0].id, 'craft1', 'contributor = craft1');
+`));
+
+// ── 54: getEffectsSummary — mul-канал в произведении ──
+add(run('Тест 54: getEffectsSummary mul перемножает', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('peop1');  // scoutSalaryMult × 0.9
+const s = LivingMarket.getEffectsSummary();
+_ok(s.mul.scoutSalaryMult, 'mul.scoutSalaryMult присутствует');
+_ok(Math.abs(s.mul.scoutSalaryMult.total - 0.9) < 1e-9, 'total = 0.9');
+_eq(s.mul.scoutSalaryMult.contributors.length, 1, '1 contributor');
+`));
+
+// ── 55: getEffectsSummary — flags ──
+add(run('Тест 55: getEffectsSummary flags перечисляет узлы-источники', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft2');  // выставляет perkPenaltyShield
+const s = LivingMarket.getEffectsSummary();
+_ok(s.flags.perkPenaltyShield, 'flags.perkPenaltyShield присутствует');
+_eq(s.flags.perkPenaltyShield.value, true, 'value = true');
+_eq(s.flags.perkPenaltyShield.contributors.length, 1, '1 contributor');
+_eq(s.flags.perkPenaltyShield.contributors[0].id, 'craft2', 'contributor = craft2');
+`));
+
+// ── 56: после респека Effects Summary обновляется ──
+add(run('Тест 56: после респека ветки EffectsSummary очищается для её узлов', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+const sBefore = LivingMarket.getEffectsSummary();
+_ok(sBefore.numeric.caseQBonus, 'до респека есть caseQBonus');
+LivingMarket.respecBranch('craft');
+const sAfter = LivingMarket.getEffectsSummary();
+_ok(!sAfter.numeric.caseQBonus, 'после респека caseQBonus убран из summary');
+`));
+
+// ── 57: getChannelLabels возвращает русские названия каналов ──
+add(run('Тест 57: getChannelLabels — карта канал→русская подпись', `
+const labels = LivingMarket.getChannelLabels();
+_ok(labels.caseQBonus.includes('Качество'),     'caseQBonus → Качество');
+_ok(labels.perkPayoutMult.includes('Выплаты'),  'perkPayoutMult → Выплаты');
+_ok(labels.speedUpgrades.includes('Скорость'),  'speedUpgrades → Скорость');
+_ok(labels.perkPenaltyShield.includes('Штраф'), 'perkPenaltyShield упомянут');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);

@@ -1,5 +1,90 @@
 # BizTycoon — Changelog
 
+## v3.30 — Древо 2.0: осведомлённость о engine.UPGRADES + Effects Summary (Фаза B, шаги 2-lite + 7) (2026-06-15)
+
+Tree 2.0 теперь знает про существующую engine-прокачку (без её
+замены) и показывает игроку суммарные эффекты от купленных
+узлов. Шаг 2 lite — узлы tier 1–2 объявляют `upgradeAlias[]`
+с пересекающимися engine-апгрейдами; шаг 7 — UI-блок «Итоговые
+эффекты древа» в модале.
+
+**Тип архитектуры: A** — расширение `src/livingmarket.js` v0.4 → v0.5.
+Ядро не тронуто. Старая прокачка остаётся отдельной системой —
+решение «убирать ли её» откладывается (для шага 2 «полного» нужно
+решение Романа).
+
+### Шаг 2 lite — `upgradeAlias[]` на узлах tier 1–2
+
+9 узлов получили ссылку на пересекающийся engine-апгрейд:
+- `craft1` (+2 Q) → `tools_q` (+4 Q)
+- `craft2` (penaltyShield) → `standards_q`
+- `prod1` (+5% speed) → `agile` (+10%)
+- `prod2` (+5% speed + instant) → `scrum` (+15%)
+- `peop2` (fatigue × 0.9) → `mentorship`
+- `mark1` (+5 portfolio) → `portfolio_site`
+- `mark2` (+1 caseRepBonus) → `case_studies`
+- `deal1` (+5% payout) → `contracts`
+- `deal2` (+10% prepay) → `negotiator`
+
+API **`getDuplicatedEngineUpgrades(nodeId)`** → `string[]` из
+`G.upgrades`, которые узел "повторяет" (пересекается тематически,
+эффекты сложатся). Возвращает только реально купленные апгрейды.
+
+Покупка одного **не блокирует** другое — обе системы работают
+параллельно. UI просто предупреждает: «⚠ Дублирует: 🖥️
+Проф. инструментарий» под описанием узла, если соответствующий
+engine-апгрейд уже куплен.
+
+### Шаг 7 — Effects Summary
+
+API **`getEffectsSummary()`** → агрегат текущих эффектов tree 2.0:
+```
+{
+  numeric: { caseQBonus: { total: 12, contributors: [{id,name,icon,delta}] } },
+  mul:     { scoutSalaryMult: { total: 0.81, contributors: [...] } },
+  flags:   { perkPenaltyShield: { value: true, contributors: [...] } }
+}
+```
+
+В модале «Древо 2.0» под сеткой узлов появился блок
+«📊 Итоговые эффекты древа»:
+- Numeric каналы — итог + список узлов-источников (`+12 · 🛠 Инструментарий · 🎨 Школа арт-директорства`).
+- Mul-каналы — `×0.81 (-19%)` + источники с множителями.
+- Boolean флаги — `включён · 📐 Дизайн-система`.
+
+Проценты для `perkPayoutMult` / `perkPrepayBonus` / `perkRecoveryBonus` /
+`speedUpgrades` форматируются как `+N%`. Если ничего не куплено —
+блок скрыт.
+
+API **`getChannelLabels()`** → карта `channelKey → human-readable`
+(например `caseQBonus → '🎯 Качество'`) для переиспользования
+в других UI.
+
+### Валидация
+
+- `sim/test-livingmarket.js` 185 → **221/221** (тесты 49–57:
+  API доступен, 9 узлов tier 1–2 с `upgradeAlias`,
+  `getDuplicatedEngineUpgrades` пустой до покупки + список после,
+  `getEffectsSummary` пустой до покупок, numeric суммирует с
+  contributors, mul перемножает, flags перечисляет источники,
+  после respec ветки summary очищается, `getChannelLabels`
+  выдаёт русские подписи).
+- `sim/test-meta.js` 191/191, `sim/test-runes.js` 27/27,
+  `sim/test-storyarcs.js` 67/67, `sim/test-runmap.js` 136/136,
+  `sim/test-live-switch.js` 25/25, `sim/test-strategy.js` ✅,
+  `sim/test-outsource.js` 27/27.
+- `sim2-lc` agency 12 — 54 сдачи / 2 ухода / 0 ошибок;
+  bank 4 — 20 сдач / 2 ухода / 0 ошибок.
+- `build` multi 972.5 KB (+8.3 KB) / bank 857.0 KB (+8.3 KB).
+
+### По Фазе B осталось
+
+- **Шаг 2 полный** — собственно маппинг engine.UPGRADES в tree 2.0
+  с отключением старой прокачки. Требует решения Романа.
+- **Шаг 6 (опц.)** — refcount boolean-флагов для чистого респека.
+
+---
+
 ## v3.29 — Древо 2.0: респец ветки (Фаза B, шаг 3) (2026-06-15)
 
 Респец из дизайн-дока §4 («раз в стадию — один бесплатный
