@@ -54,7 +54,7 @@
   // engine-древо, buyUpgrade не блокируется, ничего больше не меняется.
   const USE_TREE2_PROGRESSION = true;
 
-  const VERSION = 'v0.6';
+  const VERSION = 'v0.7';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -205,6 +205,7 @@
     { id: 'craft2', branch: 'craft', tier: 2, icon: '📐', name: 'Дизайн-система',     desc: 'Штраф просрочки бьёт по репутации в два раза мягче',
       cost: 150,
       upgradeAlias: ['standards_q'],
+      flags: ['perkPenaltyShield'],
       apply: g => { g.perkPenaltyShield = true; } },
     { id: 'craft3', branch: 'craft', tier: 3, icon: '🎨', name: 'Арт-директорат',     desc: '+5 к качеству от кейсов навсегда',                cost: 320,
       apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 5; } },
@@ -224,11 +225,13 @@
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.05; } },
     { id: 'prod2', branch: 'production', tier: 2, icon: '📑', name: 'Шаблоны',       desc: '+5% к скорости (стек) · быстрее instant-проекты',cost: 160,
       upgradeAlias: ['scrum'],
+      flags: ['perkInstantSpeed'],
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.05; g.perkInstantSpeed = true; } },
     { id: 'prod3', branch: 'production', tier: 3, icon: '🚀', name: 'Автоматизация', desc: '+10% к скорости команды',                         cost: 340,
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.10; } },
     { id: 'prod4',  branch: 'production', tier: 4, icon: '⚙️', name: 'Конвейер',     desc: '+15% к скорости · −1 фазе у epic-цепочек',        cost: 720,
       excludes: ['prod4b'],
+      flags: ['perkEpicShortcut'],
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.15; g.perkEpicShortcut = true; } },
     { id: 'prod4b', branch: 'production', tier: 4, icon: '💎', name: 'Бутик-режим',
       desc: '+10 Q · +5% к восстановлению (медленно, но качественно вместо конвейера)', cost: 720,
@@ -285,6 +288,7 @@
       apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.10; } },
     { id: 'deal4',  branch: 'deals', tier: 4, icon: '🛡', name: 'Демпинг-защита',     desc: '+15% к шансу предоплаты (стек) · −штраф просрочки', cost: 720,
       excludes: ['deal4b'],
+      flags: ['perkPenaltyShield'],
       apply: g => { g.perkPrepayBonus = (g.perkPrepayBonus || 0) + 0.15; g.perkPenaltyShield = true; } },
     { id: 'deal4b', branch: 'deals', tier: 4, icon: '⚔️', name: 'Финансовый агрессор',
       desc: '+15% к выплатам со всех сделок (стек) — давим маржой вместо защиты',  cost: 720,
@@ -411,12 +415,22 @@
         // v0.4 (Фаза B шаг 3): per-узловые дельты эффектов для респека
         // Хранится { '<nodeId>': { caseQBonus: 5, perkPayoutMult: 0.05, ... } }
         // Numeric → аддитивное число (просто разница); mul-каналы →
-        // { mul: 0.9 } (делим обратно); boolean → { setBool: true }
-        // (на респеке не снимаем — известное ограничение, см. respecBranch).
+        // { mul: 0.9 } (делим обратно); boolean → { setBool: true }.
+        // v0.7 (Фаза B шаг 6): boolean-флаги теперь снимаются на респеке
+        // через refcounting tree2-источников + baseline-снимок.
         purchasedDetails:    {},
         // v0.4: история респеков для лимита 1 на ветку на стадию.
         // [{ stage: 1, branch: 'craft', ts, refunded: 200, nodes: ['craft1','craft2'] }]
         respecsUsed:         [],
+        // v0.7: refcount tree2-узлов, выставивших boolean-флаг.
+        // При покупке инкрементируем, при респеке декрементируем.
+        // { perkPenaltyShield: 2, perkInstantSpeed: 1, ... }
+        _flagRefcount:       {},
+        // v0.7: было ли значение флага true ДО ПЕРВОЙ tree2-покупки.
+        // Если true (мета-перк/runMap-бонус уже включил его) — на
+        // последнем респеке tree2 НЕ снимаем; если false — снимаем.
+        // { perkPenaltyShield: true|false }
+        _flagBaseline:       {},
       },
       _xpLog:                [],         // последние 10 начислений (для UI: «+15 ★ Первый найм»)
       _lastDeliveryCount:    0,          // трекер для diff-начисления XP за сдачи
@@ -451,6 +465,14 @@
       // и respecsUsed, если их не было в старом сейве (v0.2/v0.3).
       if (G.living.tree2 && !G.living.tree2.purchasedDetails) G.living.tree2.purchasedDetails = {};
       if (G.living.tree2 && !G.living.tree2.respecsUsed)     G.living.tree2.respecsUsed     = [];
+      // v0.7: миграция refcount/baseline. У сейвов до v0.7 их нет, но мы
+      // не пересчитываем по факту (G уже мутирован purchases раньше) —
+      // просто инициализируем пустыми. Это означает: респек узла, купленного
+      // ДО апгрейда до v0.7, не снимет boolean-флаг (нет данных о baseline).
+      // Это безопасный fallback — игрок не теряет эффекты, но при следующих
+      // покупках/респеках всё работает корректно.
+      if (G.living.tree2 && !G.living.tree2._flagRefcount) G.living.tree2._flagRefcount = {};
+      if (G.living.tree2 && !G.living.tree2._flagBaseline) G.living.tree2._flagBaseline = {};
       // v0.5: миграция yearly. У старых сейвов нет, инициализируем по факту
       // текущего G — если игрок уже играл 8 месяцев, год начнётся с этого
       // месяца как «базы» (не пересчитываем заднюю историю).
@@ -615,9 +637,8 @@
   }
 
   // Обратная операция к delta: вычитает numeric, делит mul-каналы.
-  // Boolean-флаги НЕ снимаем — другие источники (мета-перки/runMap-бонусы/
-  // другие узлы древа) могут полагаться на тот же флаг.  Это известное
-  // ограничение респека; refcounting вынесен в потенциальный шаг 6.
+  // Boolean-флаги обрабатываются ОТДЕЛЬНО через _releaseBoolFlags
+  // (refcounting tree2-источников + baseline-снимок).  См. v0.7.
   function _applyInverseTreeDelta(g, delta) {
     if (!g || !delta) return;
     for (const k in delta) {
@@ -628,8 +649,57 @@
         const cur = (g[k] == null) ? 1 : g[k];
         g[k] = cur / v.mul;
       }
-      // boolean — пропускаем (см. комментарий выше)
+      // boolean — обрабатывается в _releaseBoolFlags до этого вызова
     }
+  }
+
+  // v0.7 (Фаза B шаг 6): refcount boolean-флагов tree 2.0.
+  // Источник флагов — декларативное поле `node.flags = ['perkPenaltyShield', ...]`,
+  // а не delta. Причина: `_computeTreeDelta` не записывает setBool, если флаг
+  // уже был true к моменту apply (например, первый узел его выставил, и второй
+  // не «меняет» значения). Refcount должен считать все tree2-источники, поэтому
+  // используем явное объявление в узле.
+  //
+  // Вызывается ПОСЛЕ apply узла. beforeSnap — снимок каналов G до apply,
+  // нужен для baseline (был ли флаг включён ДО первой tree2-покупки).
+  function _acquireBoolFlags(node, beforeSnap) {
+    if (!G || !G.living || !G.living.tree2 || !node) return;
+    const flags = node.flags || [];
+    if (!flags.length) return;
+    const rc = G.living.tree2._flagRefcount = G.living.tree2._flagRefcount || {};
+    const bl = G.living.tree2._flagBaseline = G.living.tree2._flagBaseline || {};
+    flags.forEach(k => {
+      if ((rc[k] || 0) === 0) {
+        // Первый tree2-источник — фиксируем baseline (значение ДО apply).
+        // Если до tree2 он был true — другой источник его уже выставил,
+        // на финальном респеке tree2 не должен его снимать.
+        bl[k] = !!(beforeSnap || {})[k];
+      }
+      rc[k] = (rc[k] || 0) + 1;
+    });
+  }
+
+  // Вызывается в respecBranch для КАЖДОГО узла ДО _applyInverseTreeDelta.
+  // Декрементирует refcount; на 0, если baseline=false (флаг был выключен до tree2)
+  // — снимает флаг с G. Если baseline=true — оставляет (внешний источник).
+  function _releaseBoolFlags(g, node) {
+    if (!g || !g.living || !g.living.tree2 || !node) return;
+    const flags = node.flags || [];
+    if (!flags.length) return;
+    const rc = g.living.tree2._flagRefcount = g.living.tree2._flagRefcount || {};
+    const bl = g.living.tree2._flagBaseline = g.living.tree2._flagBaseline || {};
+    flags.forEach(k => {
+      rc[k] = Math.max(0, (rc[k] || 0) - 1);
+      if (rc[k] === 0) {
+        // Последний tree2-источник снят. Если до tree2 флаг был выключен —
+        // безопасно снимаем; если был включён извне — оставляем.
+        if (bl[k] === false) {
+          g[k] = false;
+        }
+        delete bl[k];
+        delete rc[k];
+      }
+    });
   }
 
   function purchaseTreeNode(id) {
@@ -638,15 +708,21 @@
     const n = r.node;
     G.xp = (G.xp || 0) - n.cost;
     G.living.xp = (G.living.xp || 0) - n.cost;
-    G.living.tree2 = G.living.tree2 || { purchased: [], purchasedDetails: {}, respecsUsed: [] };
+    G.living.tree2 = G.living.tree2 || { purchased: [], purchasedDetails: {}, respecsUsed: [], _flagRefcount: {}, _flagBaseline: {} };
     if (!G.living.tree2.purchasedDetails) G.living.tree2.purchasedDetails = {};
     if (!G.living.tree2.respecsUsed)     G.living.tree2.respecsUsed     = [];
+    if (!G.living.tree2._flagRefcount)   G.living.tree2._flagRefcount   = {};
+    if (!G.living.tree2._flagBaseline)   G.living.tree2._flagBaseline   = {};
     G.living.tree2.purchased = (G.living.tree2.purchased || []).concat(id);
     // v0.4: снимаем G до и после apply → сохраняем delta для респека
     const before = _snapshotTreeChannels(G);
     try { n.apply(G); } catch (e) { try { console.warn('[livingmarket] node apply', n.id, e); } catch (_) {} }
     const after = _snapshotTreeChannels(G);
-    G.living.tree2.purchasedDetails[id] = _computeTreeDelta(before, after);
+    const delta = _computeTreeDelta(before, after);
+    G.living.tree2.purchasedDetails[id] = delta;
+    // v0.7: фиксируем refcount + baseline для boolean-флагов (через node.flags,
+    // не через delta — delta не записывает setBool если флаг уже был true)
+    _acquireBoolFlags(n, before);
     G.living.journal.push({
       id:   'tree_' + n.id,
       icon: n.icon,
@@ -760,6 +836,9 @@
       const n = _getTreeNode(id);
       if (!n) return;
       const delta = (G.living.tree2.purchasedDetails || {})[id];
+      // v0.7: сначала отпускаем boolean-флаги (через node.flags, с учётом
+      // refcount), потом инвертируем numeric/mul.
+      _releaseBoolFlags(G, n);
       _applyInverseTreeDelta(G, delta);
       refunded += n.cost;
       delete G.living.tree2.purchasedDetails[id];
@@ -1664,6 +1743,9 @@
     respecBranch,
     getRespecsUsed:     () => ((G && G.living && G.living.tree2 && G.living.tree2.respecsUsed) || []).slice(),
     getNodeDelta:       (id) => ((G && G.living && G.living.tree2 && G.living.tree2.purchasedDetails) || {})[id] || null,
+    // v0.7 (Фаза B шаг 6) — refcount boolean-флагов
+    getFlagRefcount:    () => Object.assign({}, (G && G.living && G.living.tree2 && G.living.tree2._flagRefcount) || {}),
+    getFlagBaseline:    () => Object.assign({}, (G && G.living && G.living.tree2 && G.living.tree2._flagBaseline) || {}),
     // v0.5 (Фаза B шаги 2 lite + 7)
     getDuplicatedEngineUpgrades,
     getEffectsSummary,

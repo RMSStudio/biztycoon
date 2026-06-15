@@ -763,19 +763,23 @@ const r = LivingMarket.purchaseTreeNode('craft1');
 _ok(r.ok, 'покупка после респека работает');
 `));
 
-// ── 48: known limitation — флаг perkPenaltyShield не снимается ──
-// Это документированное ограничение: refcount по nodes не делается, чтобы
-// не сломать другие источники того же флага (мета-перки/runMap-бонусы).
-// Покупаем craft2 (выставляет perkPenaltyShield=true), респец — флаг
-// остаётся true. Тест явно фиксирует контракт.
-add(run('Тест 48: boolean флаг (perkPenaltyShield) после респека остаётся (known limitation)', `
+// ── 48: v0.7 — refcount снимает boolean-флаг при респеке последнего источника ──
+// До v0.7 флаг ОСТАВАЛСЯ после респека (known limitation). С v0.7 — если
+// до tree2-покупки флаг был false и tree2 — единственный источник,
+// респец снимает флаг чисто.
+add(run('Тест 48: boolean флаг снимается на респеке если tree2 — единственный источник (v0.7)', `
 initState(); selectSpec('smm'); startGame();
 LivingMarket._awardXp(500, 'dev');
 _ok(!G.perkPenaltyShield, 'до покупки shield не выставлен');
 LivingMarket.purchaseTreeNode('craft2');
 _ok(G.perkPenaltyShield === true, 'после craft2 shield = true');
+const rc = LivingMarket.getFlagRefcount();
+_eq(rc.perkPenaltyShield, 1, 'refcount perkPenaltyShield = 1');
+const bl = LivingMarket.getFlagBaseline();
+_eq(bl.perkPenaltyShield, false, 'baseline = false (был выключен до tree2)');
 LivingMarket.respecBranch('craft');
-_ok(G.perkPenaltyShield === true, 'после респека shield ОСТАЁТСЯ true (known limitation)');
+_eq(G.perkPenaltyShield, false, 'после респека shield снят (v0.7 refcount)');
+_eq((LivingMarket.getFlagRefcount().perkPenaltyShield || 0), 0, 'refcount обнулён');
 `));
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1091,6 +1095,106 @@ _ok(!window.openPerkModal.__livingMarketRedirected, 'openPerkModal без redire
 // buyUpgrade НЕ блокирован
 _ok(!window.buyUpgrade.__livingMarketBlocked, 'buyUpgrade без блока');
 `, { useTree2Off: true, preloadOpenPerkModal: true }));
+
+// ══════════════════════════════════════════════════════════════════════
+//   v0.7 (Фаза B, шаг 6) — refcount boolean-флагов
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 73: API refcount/baseline доступен ──
+add(run('Тест 73: API getFlagRefcount/getFlagBaseline', `
+_ok(typeof LivingMarket.getFlagRefcount === 'function', 'getFlagRefcount есть');
+_ok(typeof LivingMarket.getFlagBaseline === 'function', 'getFlagBaseline есть');
+initState(); selectSpec('smm'); startGame();
+_eq(Object.keys(LivingMarket.getFlagRefcount()).length, 0, 'refcount пуст до покупок');
+_eq(Object.keys(LivingMarket.getFlagBaseline()).length, 0, 'baseline пуст до покупок');
+`));
+
+// ── 74: два tree2-источника одного флага — refcount=2, respec одного оставляет флаг ──
+// craft2 и deal4 оба выставляют perkPenaltyShield. На стадии Агентство (idx 2)
+// открывается tier 4. Купим оба → refcount=2; респец craft → refcount=1, флаг остаётся;
+// респец deals → refcount=0, baseline=false → флаг снят.
+add(run('Тест 74: два источника perkPenaltyShield — респец оставляет флаг до последнего', `
+initState(); selectSpec('smm'); startGame();
+G.living.stage = 2;  // открываем tier 4
+LivingMarket._awardXp(3000, 'dev');
+LivingMarket.purchaseTreeNode('craft2');  // +shield (refcount 1)
+LivingMarket.purchaseTreeNode('deal4');   // +shield (refcount 2)
+_eq(G.perkPenaltyShield, true, 'shield включён');
+_eq(LivingMarket.getFlagRefcount().perkPenaltyShield, 2, 'refcount = 2');
+// Респец craft → refcount=1, флаг остаётся
+LivingMarket.respecBranch('craft');
+_eq(G.perkPenaltyShield, true, 'shield ОСТАЁТСЯ после первого респека (есть deal4)');
+_eq(LivingMarket.getFlagRefcount().perkPenaltyShield, 1, 'refcount = 1');
+// Респец deals → refcount=0, baseline=false → флаг снят
+LivingMarket.respecBranch('deals');
+_eq(G.perkPenaltyShield, false, 'shield снят после второго респека (последний источник ушёл)');
+_eq((LivingMarket.getFlagRefcount().perkPenaltyShield || 0), 0, 'refcount = 0');
+`));
+
+// ── 75: baseline=true (внешний источник флага) — респец НЕ снимает ──
+// Симулируем мета-перк или runMap-бонус, выставивший флаг ДО покупки tree2-узла.
+add(run('Тест 75: внешний источник флага (baseline=true) — респец НЕ снимает', `
+initState(); selectSpec('smm'); startGame();
+// «Внешний» источник: мета-перк включил perkPenaltyShield ДО tree2
+G.perkPenaltyShield = true;
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft2');  // должен записать baseline=true
+const bl = LivingMarket.getFlagBaseline();
+_eq(bl.perkPenaltyShield, true, 'baseline = true (был включён до tree2)');
+LivingMarket.respecBranch('craft');
+_eq(G.perkPenaltyShield, true, 'флаг ОСТАЁТСЯ — внешний источник всё ещё может на него полагаться');
+`));
+
+// ── 76: prod2 → perkInstantSpeed — снимается на респеке ──
+add(run('Тест 76: perkInstantSpeed снимается через refcount', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('prod2');   // выставляет perkInstantSpeed
+_eq(G.perkInstantSpeed, true, 'instant включён');
+LivingMarket.respecBranch('production');
+_eq(G.perkInstantSpeed, false, 'instant снят на респеке');
+`));
+
+// ── 77: prod4 → perkEpicShortcut — снимается на респеке ──
+add(run('Тест 77: perkEpicShortcut снимается через refcount', `
+initState(); selectSpec('smm'); startGame();
+G.living.stage = 2;
+LivingMarket._awardXp(2000, 'dev');
+LivingMarket.purchaseTreeNode('prod4');   // выставляет perkEpicShortcut + speed
+_eq(G.perkEpicShortcut, true, 'epic-shortcut включён');
+LivingMarket.respecBranch('production');
+_eq(G.perkEpicShortcut, false, 'epic-shortcut снят на респеке');
+`));
+
+// ── 78: миграция старого сейва — _flagRefcount/_flagBaseline инициализируются ──
+add(run('Тест 78: миграция сейва без _flagRefcount/_flagBaseline', `
+initState(); selectSpec('smm'); startGame();
+// Эмулируем сейв v0.4-v0.6 — нет refcount/baseline полей в tree2
+delete G.living.tree2._flagRefcount;
+delete G.living.tree2._flagBaseline;
+// _initLiving вызывается в обёртке advanceMonth — триггерим миграцию
+advanceMonth();
+_ok(G.living.tree2._flagRefcount, '_flagRefcount инициализирован');
+_ok(G.living.tree2._flagBaseline, '_flagBaseline инициализирован');
+_eq(Object.keys(G.living.tree2._flagRefcount).length, 0, 'refcount пуст после миграции');
+_eq(Object.keys(G.living.tree2._flagBaseline).length, 0, 'baseline пуст после миграции');
+`));
+
+// ── 79: повторная покупка после respec не дублирует refcount ──
+add(run('Тест 79: refcount корректен после respec → repurchase', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft2');
+_eq(LivingMarket.getFlagRefcount().perkPenaltyShield, 1, 'refcount=1');
+LivingMarket.respecBranch('craft');
+_eq((LivingMarket.getFlagRefcount().perkPenaltyShield || 0), 0, 'refcount обнулён');
+_eq(G.perkPenaltyShield, false, 'флаг снят');
+// Покупаем снова после смены стадии (чтобы респец разблокировался)
+G.living.stage = 1;
+LivingMarket.purchaseTreeNode('craft2');
+_eq(LivingMarket.getFlagRefcount().perkPenaltyShield, 1, 'refcount=1 снова');
+_eq(G.perkPenaltyShield, true, 'флаг включён снова');
+`));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);

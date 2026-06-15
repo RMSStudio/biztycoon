@@ -1,5 +1,108 @@
 # BizTycoon — Changelog
 
+## v3.33 — Refcount boolean-флагов на респеке (Фаза B, шаг 6 — финал) (2026-06-15)
+
+Закрытие Фазы B. Boolean-флаги (`perkPenaltyShield`,
+`perkInstantSpeed`, `perkEpicShortcut`) теперь корректно
+снимаются при респеке последнего tree2-источника, при этом
+не затрагивая внешние источники (мета-перки, runMap-бонусы).
+
+**Тип архитектуры: A** — расширение `src/livingmarket.js` v0.6 → v0.7.
+Ядро не тронуто.
+
+### Что было известным ограничением (с v0.4)
+
+Тест 48 раньше фиксировал: «после респека `craft2` (`perkPenaltyShield=true`)
+флаг ОСТАЁТСЯ true». Причина: на покупке `apply` мутировал G,
+на респеке inverse-apply не снимал boolean — другие источники
+могли полагаться на тот же флаг.
+
+### Что добавлено в v0.7
+
+**Refcount tree2-источников + baseline**:
+
+1. **Декларация `flags: ['perkPenaltyShield', ...]` на узлах** —
+   указывает, какие boolean-каналы узел устанавливает в `true`.
+   Помечены: `craft2` (perkPenaltyShield), `prod2` (perkInstantSpeed),
+   `prod4` (perkEpicShortcut), `deal4` (perkPenaltyShield).
+   Почему через декларацию, а не через delta: `_computeTreeDelta`
+   не записывает `setBool`, если флаг уже был true к моменту apply
+   (второй источник не «меняет» значение). Refcount должен считать
+   ВСЕ tree2-источники независимо.
+
+2. **`G.living.tree2._flagRefcount: {<channel>: N}`** — счётчик
+   купленных узлов, объявляющих этот флаг.
+
+3. **`G.living.tree2._flagBaseline: {<channel>: bool}`** — значение
+   флага ДО ПЕРВОЙ tree2-покупки. Снимается из снапшота `before`
+   и фиксируется только при `refcount: 0→1`.
+
+4. **`_acquireBoolFlags(node, beforeSnap)`** в `purchaseTreeNode`:
+   для каждого `node.flags[i]` — если refcount=0, baseline=`before[k]`,
+   затем `refcount++`.
+
+5. **`_releaseBoolFlags(g, node)`** в `respecBranch` (для каждого
+   узла перед inverse-apply): `refcount--`; если 0 и baseline=false
+   → `g[k]=false`, очищаем `bl[k]`/`rc[k]`. Если baseline=true —
+   оставляем флаг (внешний источник).
+
+### Семантика
+
+| Сценарий | Поведение |
+|---|---|
+| Купил craft2 → респец craft | `shield=false` (refcount=0, baseline=false) |
+| Купил craft2 + deal4 → респец craft | `shield=true` (refcount=1, deal4 ещё держит) |
+| Купил craft2 + deal4 → респец обоих | `shield=false` (refcount=0, baseline=false) |
+| Мета-перк включил shield, потом купил craft2 → респец craft | `shield=true` (baseline=true, не трогаем) |
+
+### API
+
+- **`getFlagRefcount()`** → копия `_flagRefcount` (для дебага/UI)
+- **`getFlagBaseline()`** → копия `_flagBaseline`
+
+### Стейт + миграция
+
+`G.living.tree2` расширен полями `_flagRefcount: {}` / `_flagBaseline: {}`.
+`_initLiving` мигрирует сейвы v0.2–v0.6 (поля отсутствуют) —
+инициализирует пустыми. Это означает: респец узла, купленного
+ДО апгрейда до v0.7, не снимет boolean-флаг (нет данных о baseline).
+Безопасный fallback — игрок не теряет эффекты, при следующих
+покупках/респеках всё работает корректно.
+
+### Валидация
+
+- `sim/test-livingmarket.js` 287 → **315/315** (тест 48 обновлён
+  под новое поведение; тесты 73–79: API доступен, два источника
+  perkPenaltyShield с разными refcount-значениями, baseline=true
+  при внешнем источнике, perkInstantSpeed/perkEpicShortcut
+  снимаются, миграция без полей, refcount корректен после
+  respec → repurchase).
+- `sim/test-meta.js` 191/191, `sim/test-runes.js` 27/27,
+  `sim/test-storyarcs.js` 67/67, `sim/test-runmap.js` 136/136,
+  `sim/test-live-switch.js` 25/25, `sim/test-strategy.js` ✅,
+  `sim/test-outsource.js` 27/27.
+- `sim2-lc` agency 12 — 54 сдачи / 3 ухода / 0 ошибок;
+  bank 4 — 35 сдач / 1 уход / 0 ошибок.
+- `build` multi 1001.5 KB (+5.3 KB) / bank 886.0 KB (+5.3 KB).
+
+### 🎉 Фаза B полностью закрыта
+
+| Шаг | Версия | Описание |
+|---|---|---|
+| 1 | v3.27 | Каркас tree 2.0 + ★XP, 25 узлов |
+| 2 lite | v3.30 | `upgradeAlias[]` awareness |
+| 2 полный | v3.32 | Tree 2.0 как основной канал |
+| 3 | v3.29 | Респец ветки |
+| 4 | v3.28 | Эксклюзивные пары tier 4 (a/b) |
+| 5 | v3.28 | Persistence (тест) |
+| 6 | v3.33 | Refcount boolean-флагов (это) |
+| 7 | v3.30 | Effects Summary |
+
+Следующая логичная веха — **Фаза C (живые конкуренты)**, которая
+откроет tier 5 узлов tree 2.0 и стадии 4–6 (Сеть/Холдинг/Империя).
+
+---
+
 ## v3.32 — Tree 2.0 → основной канал прогрессии (Фаза B, шаг 2 полный) (2026-06-15)
 
 Tree 2.0 становится **основной системой прокачки**, старая
