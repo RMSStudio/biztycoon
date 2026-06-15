@@ -317,8 +317,11 @@
     <div class="panel-title">Инсайты прогона</div>
     <div id="r-insights"></div>
   </div>
-  <div style="text-align:center;">
-    <button class="btn btn-primary" onclick="resetGame()">Играть снова</button>
+  <div style="text-align:center;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <button id="btn-continue-run" class="btn btn-primary" onclick="continueRun()" style="display:none">
+      Продолжить ран →
+    </button>
+    <button class="btn btn-ghost" onclick="resetGame()" style="border:1px solid var(--border)">Завершить и начать заново</button>
   </div>
 </div>
 

@@ -59,6 +59,13 @@ function _snap() {
 function _restore(snapshot) {
   Object.keys(snapshot.G).forEach(k => { G[k] = snapshot.G[k]; });
   DECISIONS = (snapshot.DECISIONS || []).slice();
+  // п.31: старые сейвы могут содержать money > winCondition без флага.
+  // Ставим флаг чтобы не показывать победный экран повторно при загрузке.
+  const wc = (typeof SCENARIO !== 'undefined') && SCENARIO?.settings?.winCondition;
+  const atEndgame = (G.runMap?.stageIdx ?? 0) >= 4;
+  if (wc != null && atEndgame && (G.money || 0) >= wc) {
+    G._wonAlreadyCelebrated = true;
+  }
 }
 
 // ── Run management ────────────────────────────────────

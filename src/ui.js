@@ -1418,15 +1418,27 @@ function showEvent(ev) {
 // ══════════════════════════════════════════════════════
 //  END / DASHBOARD
 // ══════════════════════════════════════════════════════
-function endGame(won) { buildDashboard(won); _uiNavigate('screen-results'); }
+function endGame(won) {
+  buildDashboard(won);
+  // Кнопка «Продолжить ран» — только на победном экране
+  const contBtn = document.getElementById('btn-continue-run');
+  if (contBtn) contBtn.style.display = won ? '' : 'none';
+  _uiNavigate('screen-results');
+}
+
+// Вернуться в игру из экрана победы без сброса партии
+function continueRun() {
+  EventBus.emit('render');
+  _uiNavigate('screen-game');
+}
 
 function buildDashboard(won) {
   const spec=SPECS[G.spec];
   document.getElementById('r-icon').textContent=won?'🏆':'💸';
-  document.getElementById('r-title').textContent=won?`Цель ${fmtK(SCENARIO.settings.winCondition)} достигнута!`:'Деньги кончились';
+  document.getElementById('r-title').textContent=won?'Компания вышла на эндгейм!':'Деньги кончились';
   document.getElementById('r-title').style.color=won?'var(--green)':'var(--red)';
   document.getElementById('r-sub').textContent=won
-    ?`${spec.name} — ${G.monthsPlayed} мес. Инвесторы уже звонят.`
+    ?`${spec.name} — ${G.monthsPlayed} мес. · ${fmtK(G.money)} в банке. Можно продолжить или зафиксировать результат.`
     :G.monthsPlayed<4?'Кассовый разрыв: расходы съели стартовый капитал до появления стабильных проектов.'
     :'Рынок суров. NPS деградировал, клиенты ушли раньше, чем выросла выручка.';
 

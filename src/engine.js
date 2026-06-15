@@ -156,7 +156,7 @@ function startGame() {
   if (!G.spec) return;
   if (typeof startRun === 'function') startRun(); // saves.js: открыть новый ран
   G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[]; G.candidatePool=[];
-  G.tempDiscount=0; G.monthsPlayed=0; G._endGameFired=false;
+  G.tempDiscount=0; G.monthsPlayed=0; G._endGameFired=false; G._wonAlreadyCelebrated=false;
   G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
@@ -1555,11 +1555,13 @@ function advanceMonth() {
   if (typeof autoSave === 'function') autoSave();
 
   // Win / Lose
-  // v3.26: возвращена оригинальная проверка win-условия. Модуль
-  // «Живой рынок» (src/livingmarket.js, Тип A) при включённом флаге
-  // выставляет SCENARIO.settings.winCondition = Infinity — этого
-  // достаточно, чтобы партия стала бесконечной, не трогая engine.
-  if (G.money>=SCENARIO.settings.winCondition){ _emitRender(); _emitEndGame(true); return; }
+  // v3.26: Модуль «Живой рынок» выставляет winCondition = Infinity → бесконечная партия.
+  // v2.2.2: Победа = достижение стадии «Эндгейм» (stageIdx ≥ 4) И money ≥ winCondition.
+  //   Флаг _wonAlreadyCelebrated предотвращает повторный триггер при загрузке сейвов.
+  const _atEndgame = (G.runMap?.stageIdx ?? 0) >= 4;
+  if (!G._wonAlreadyCelebrated && _atEndgame && G.money>=SCENARIO.settings.winCondition){
+    G._wonAlreadyCelebrated = true; _emitRender(); _emitEndGame(true); return;
+  }
   if (G.money<=0)       { _emitRender(); _emitEndGame(false); return; }
 
   // Случайное событие (40%, пропуск 1-го месяца; не когда идёт событие ИИ)
