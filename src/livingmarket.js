@@ -1,7 +1,8 @@
 'use strict';
 // ══════════════════════════════════════════════════════════════════════
 //   src/livingmarket.js — Живой рынок: бесконечная прогрессия
-//   v0.1 (2026-06-15) · Тип A · Фаза A первый шаг (см. design_living_market.md)
+//   v0.5 (2026-06-15) · Тип A · Фаза A шаг 2 — годовые итоги M12/M24/…
+//   (см. design_living_market.md §6, ответ §9.6)
 //
 //   Опциональный модуль БАЗОВОГО геймплея, актуальный для всех версий.
 //   Не DLC — управляется обычным const-флагом, как outsource (v3.8.1).
@@ -30,7 +31,6 @@
 //      ближайшего гейта (например «2/3 сдач · 1/2 штат · …»).
 //
 //   Чего НЕ делает (запланировано на следующие шаги):
-//   • Годовые итоги M12/M24/… — отдельная итерация (этот шаг — каркас).
 //   • Живые конкуренты / рейтинг / награды — Фаза C дизайн-дока.
 //   • Древо 2.0 (★XP, 5 веток) — Фаза B.
 //   • Активы (офисы, саббренды) и M&A — Фаза E.
@@ -45,7 +45,16 @@
   const LIVING_MARKET_ENABLED = true;
   if (!LIVING_MARKET_ENABLED) return;
 
-  const VERSION = 'v0.5';
+  // v0.6 (Фаза B, шаг 2 полный): tree 2.0 как ОСНОВНОЙ канал прогрессии.
+  // При ON — старая engine-прокачка скрывается из UI и блокируется на
+  // покупку.  Оба варианта остаются в коде — откат к старой прокачке
+  // требует одной правки (поставить false и перезагрузить).
+  //
+  // Откат: USE_TREE2_PROGRESSION = false → openPerkModal снова показывает
+  // engine-древо, buyUpgrade не блокируется, ничего больше не меняется.
+  const USE_TREE2_PROGRESSION = true;
+
+  const VERSION = 'v0.6';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -411,6 +420,23 @@
       },
       _xpLog:                [],         // последние 10 начислений (для UI: «+15 ★ Первый найм»)
       _lastDeliveryCount:    0,          // трекер для diff-начисления XP за сдачи
+      // v0.5 (Фаза A шаг 2): годовые итоги M12/M24/…
+      // yearly — рантайм-снапшот текущего «незакрытого» года (база сравнения).
+      // yearlyReports[] — собранные итоги: триггерится каждые 12 месяцев,
+      // запись хранит цифры выручки/сдач/команды/тиров за период и выводится
+      // модалом-церемонией «Год N завершён». Все отчёты переоткрываются
+      // из журнала прогресса (компактный список карточек).
+      yearly:                {
+        yearIdx:                0,        // сколько лет уже закрыто (0 — ещё нет)
+        yearStartMonth:         0,        // G.month на момент начала текущего года
+        yearStartMoney:         0,
+        yearStartStaffIds:      [],
+        yearStartCompletedLen:  0,
+        yearStartStage:         0,
+        yearStartReputation:    0,
+        yearStartPortfolio:     0,
+      },
+      yearlyReports:         [],
     };
   }
 
@@ -425,6 +451,20 @@
       // и respecsUsed, если их не было в старом сейве (v0.2/v0.3).
       if (G.living.tree2 && !G.living.tree2.purchasedDetails) G.living.tree2.purchasedDetails = {};
       if (G.living.tree2 && !G.living.tree2.respecsUsed)     G.living.tree2.respecsUsed     = [];
+      // v0.5: миграция yearly. У старых сейвов нет, инициализируем по факту
+      // текущего G — если игрок уже играл 8 месяцев, год начнётся с этого
+      // месяца как «базы» (не пересчитываем заднюю историю).
+      if (!G.living.yearly) {
+        G.living.yearly = d.yearly;
+        G.living.yearly.yearStartMonth = (G.month || 0);
+        G.living.yearly.yearStartMoney = (G.money || 0);
+        G.living.yearly.yearStartStaffIds = (G.staff || []).map(s => s && s.id).filter(Boolean);
+        G.living.yearly.yearStartCompletedLen = (G.completedProjects || []).length;
+        G.living.yearly.yearStartStage = (typeof G.living.stage === 'number' ? G.living.stage : 0);
+        G.living.yearly.yearStartReputation = (G.reputation || 0);
+        G.living.yearly.yearStartPortfolio = (G.portfolio || 0);
+      }
+      if (!G.living.yearlyReports) G.living.yearlyReports = [];
     }
   }
 
@@ -753,6 +793,224 @@
     return { ok: true, refunded, removed, stage: r.stage };
   }
 
+  // ── v0.5 (Фаза A шаг 2): Годовые итоги ──────────────────────────────
+  // Раз в 12 игровых месяцев — модал-церемония «Год N завершён» с цифрами
+  // за прошедший период. После закрытия отчёт остаётся в G.living.yearlyReports
+  // и доступен из журнала прогресса (компактные карточки с переоткрытием).
+  //
+  // Подход без помесячного трекинга: храним только снимок «начала года»
+  // (yearStartMoney/Staff/CompletedLen/Stage/Rep/Portfolio), а на момент
+  // триггера агрегируем дельту по фактическому G и по
+  // `G.completedProjects.slice(yearStartCompletedLen)` — это даёт срез сдач
+  // именно за этот год без необходимости месяц за месяцем дублировать данные.
+  //
+  // Триггер ровно когда (G.month − yearStartMonth) ≥ 12.  После сборки
+  // отчёта база сдвигается на текущий месяц, чтобы следующая церемония
+  // случилась снова через 12 тиков.
+
+  function _yearlyEnsureStart() {
+    if (!G || !G.living) return;
+    if (!G.living.yearly) {
+      G.living.yearly = _defaults().yearly;
+      G.living.yearly.yearStartMonth         = G.month || 0;
+      G.living.yearly.yearStartMoney         = G.money || 0;
+      G.living.yearly.yearStartStaffIds      = (G.staff || []).map(s => s && s.id).filter(Boolean);
+      G.living.yearly.yearStartCompletedLen  = (G.completedProjects || []).length;
+      G.living.yearly.yearStartStage         = _stageIdx(G);
+      G.living.yearly.yearStartReputation    = G.reputation || 0;
+      G.living.yearly.yearStartPortfolio     = G.portfolio || 0;
+    }
+    if (!G.living.yearlyReports) G.living.yearlyReports = [];
+  }
+
+  function _buildYearlyReport(y) {
+    const cp = G.completedProjects || [];
+    const yearDeliveries = cp.slice(y.yearStartCompletedLen || 0);
+    const success = yearDeliveries.filter(d => !d.failed);
+    const failed  = yearDeliveries.filter(d => d.failed);
+    const yearRevenue = success.reduce((s, d) => s + (d.revenue || 0), 0);
+    const byTier = {};
+    success.forEach(d => {
+      const t = d.tier || 1;
+      byTier[t] = (byTier[t] || 0) + 1;
+    });
+    const tierKeys = Object.keys(byTier).map(Number).sort((a, b) => a - b);
+    const topTier  = tierKeys.length ? tierKeys[tierKeys.length - 1] : 0;
+    const bestProject = success.slice().sort((a, b) => (b.revenue || 0) - (a.revenue || 0))[0] || null;
+    // Staff diff
+    const curStaffIds = (G.staff || []).map(s => s && s.id).filter(Boolean);
+    const startSet = new Set(y.yearStartStaffIds || []);
+    const curSet   = new Set(curStaffIds);
+    const hires    = curStaffIds.filter(id => !startSet.has(id)).length;
+    const leaves   = (y.yearStartStaffIds || []).filter(id => !curSet.has(id)).length;
+    // Майлстоуны/стадии этого года (без узлов древа/респеков/самих year_-записей)
+    const newMilestones = (G.living.journal || [])
+      .filter(j => (j.month || 0) > (y.yearStartMonth || 0) && (j.month || 0) <= (G.month || 0))
+      .filter(j => {
+        const id = String(j.id || '');
+        return !id.startsWith('respec_') && !id.startsWith('tree_') && !id.startsWith('year_');
+      })
+      .map(j => ({ id: j.id, icon: j.icon, name: j.name, tier: j.tier, month: j.month }));
+    return {
+      yearIdx:          (y.yearIdx || 0) + 1,
+      monthFrom:        (y.yearStartMonth || 0) + 1,
+      monthTo:          G.month || 0,
+      startMoney:       y.yearStartMoney || 0,
+      endMoney:         G.money || 0,
+      netDelta:         (G.money || 0) - (y.yearStartMoney || 0),
+      revenue:          yearRevenue,
+      deliveries:       success.length,
+      failed:           failed.length,
+      byTier,
+      topTier,
+      bestProject:      bestProject ? {
+        name:    bestProject.name || 'Проект',
+        tier:    bestProject.tier || 1,
+        revenue: bestProject.revenue || 0,
+        icon:    bestProject.icon || '🏁',
+      } : null,
+      hires,
+      leaves,
+      startStaff:       (y.yearStartStaffIds || []).length,
+      endStaff:         curStaffIds.length,
+      startStage:       y.yearStartStage || 0,
+      endStage:         _stageIdx(G),
+      startReputation:  y.yearStartReputation || 0,
+      endReputation:    G.reputation || 0,
+      startPortfolio:   y.yearStartPortfolio || 0,
+      endPortfolio:     G.portfolio || 0,
+      newMilestones,
+      ts:               Date.now(),
+    };
+  }
+
+  function _maybeTriggerYearly() {
+    if (!G || !G.living) return;
+    _yearlyEnsureStart();
+    const y   = G.living.yearly;
+    const cur = G.month || 0;
+    const elapsed = cur - (y.yearStartMonth || 0);
+    if (elapsed < 12) return;
+    const report = _buildYearlyReport(y);
+    G.living.yearlyReports.push(report);
+    // Запись в journal — компактная, без дублирования цифр модала
+    G.living.journal.push({
+      id:    'year_' + report.yearIdx,
+      icon:  '📅',
+      name:  'Год ' + report.yearIdx + ' завершён',
+      desc:  'Выручка ' + _formatMoneyShort(report.revenue) + ' · ' + report.deliveries + ' сдач · команда ' + report.endStaff + ' чел.',
+      tier:  'large',
+      month: cur,
+      ts:    Date.now(),
+    });
+    // Сдвиг базы на следующий год
+    y.yearIdx                 = report.yearIdx;
+    y.yearStartMonth          = cur;
+    y.yearStartMoney          = G.money || 0;
+    y.yearStartStaffIds       = (G.staff || []).map(s => s && s.id).filter(Boolean);
+    y.yearStartCompletedLen   = (G.completedProjects || []).length;
+    y.yearStartStage          = _stageIdx(G);
+    y.yearStartReputation     = G.reputation || 0;
+    y.yearStartPortfolio      = G.portfolio || 0;
+    // EventBus + UI
+    if (typeof EventBus !== 'undefined' && EventBus.emit) {
+      EventBus.emit('yearly_report', { report });
+    }
+    if (typeof notify === 'function') {
+      notify('📅 Год ' + report.yearIdx + ' завершён · выручка ' + _formatMoneyShort(report.revenue), 'success');
+    }
+    if (typeof addLog === 'function') {
+      addLog('📅 Год ' + report.yearIdx + ': выручка ' + _formatMoneyShort(report.revenue) + ', сдач ' + report.deliveries, 'amber');
+    }
+    _showYearlyReportModal(report);
+  }
+
+  // ── UI: модал годового итога ─────────────────────────────────────────
+  function _showYearlyReportModal(report) {
+    if (typeof document === 'undefined' || !report) return;
+    let m = document.getElementById('lm-yearly-modal');
+    if (!m) {
+      m = document.createElement('div');
+      m.id = 'lm-yearly-modal';
+      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:345;display:flex;align-items:center;justify-content:center';
+      m.onclick = e => { if (e.target === m) m.style.display = 'none'; };
+      document.body.appendChild(m);
+    }
+    const r = report;
+    const sign     = r.netDelta >= 0 ? '+' : '−';
+    const netStr   = sign + _formatMoneyShort(Math.abs(r.netDelta));
+    const netColor = r.netDelta >= 0 ? '#86efac' : '#fca5a5';
+    const tierKeys = Object.keys(r.byTier || {}).sort((a, b) => +b - +a);
+    const tierRows = tierKeys.length
+      ? tierKeys.map(t => '<span style="display:inline-block;padding:2px 7px;border:1px solid var(--border);border-radius:999px;font-size:10px;font-weight:700;color:var(--text);background:rgba(255,255,255,.04);margin:2px 4px 2px 0">T' + t + ' ×' + r.byTier[t] + '</span>').join('')
+      : '<span style="font-size:10px;color:var(--muted);font-style:italic">нет сдач</span>';
+    const bestStr = r.bestProject
+      ? '<div style="margin-top:8px;font-size:11px;color:var(--sub)">Лучший проект: <b style="color:var(--text)">' + r.bestProject.icon + ' ' + r.bestProject.name + '</b> · T' + r.bestProject.tier + ' · ' + _formatMoneyShort(r.bestProject.revenue) + '</div>'
+      : '<div style="margin-top:8px;font-size:11px;color:var(--muted);font-style:italic">В этом году сдач не было</div>';
+    const milestonesHtml = (r.newMilestones || []).length
+      ? '<div style="margin-top:12px"><div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px">Достижения года</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px">' +
+          r.newMilestones.slice(0, 8).map(mm =>
+            '<span style="font-size:10px;border:1px solid var(--border);border-radius:6px;padding:3px 7px;color:var(--text);background:rgba(255,255,255,.03)" title="' + mm.name + '">' + mm.icon + ' ' + mm.name + '</span>'
+          ).join('') +
+          (r.newMilestones.length > 8 ? '<span style="font-size:10px;color:var(--muted);align-self:center;margin-left:4px">+' + (r.newMilestones.length - 8) + '</span>' : '') +
+        '</div></div>'
+      : '';
+    m.innerHTML =
+      '<div style="background:var(--panel);border:2px solid #fbbf24;border-radius:14px;padding:26px;max-width:560px;width:90vw;box-shadow:0 0 60px rgba(251,191,36,.25)">' +
+        '<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">' +
+          '<div style="font-size:46px;line-height:1">📅</div>' +
+          '<div>' +
+            '<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.13em;text-transform:uppercase">Годовой итог</div>' +
+            '<div style="font-size:24px;font-weight:800;color:#fbbf24;line-height:1.1">Год ' + r.yearIdx + '</div>' +
+            '<div style="font-size:10px;color:var(--sub);margin-top:2px">M' + r.monthFrom + ' — M' + r.monthTo + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
+          '<div style="border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:8px;padding:10px 12px">' +
+            '<div style="font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Выручка</div>' +
+            '<div style="font-size:18px;font-weight:800;color:var(--text);margin-top:2px">' + _formatMoneyShort(r.revenue) + '</div>' +
+          '</div>' +
+          '<div style="border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:8px;padding:10px 12px">' +
+            '<div style="font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">Чистая дельта</div>' +
+            '<div style="font-size:18px;font-weight:800;color:' + netColor + ';margin-top:2px">' + netStr + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="border:1px solid var(--border);background:rgba(255,255,255,.02);border-radius:8px;padding:10px 12px;margin-bottom:10px">' +
+          '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub)">' +
+            '<span>📦 Сдач: <b style="color:var(--text)">' + r.deliveries + '</b>' + (r.failed ? ' · <span style="color:#fca5a5">провалов: ' + r.failed + '</span>' : '') + '</span>' +
+            '<span>Топ-тир: <b style="color:var(--text)">T' + r.topTier + '</b></span>' +
+          '</div>' +
+          '<div style="margin-top:6px">' + tierRows + '</div>' +
+          bestStr +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<div style="border:1px solid var(--border);background:rgba(255,255,255,.02);border-radius:8px;padding:10px 12px">' +
+            '<div style="font-size:10px;color:var(--muted);font-weight:700">👥 Команда</div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--text);margin-top:3px">' + r.startStaff + ' → ' + r.endStaff + ' чел.</div>' +
+            '<div style="font-size:10px;color:var(--sub);margin-top:2px">+' + r.hires + ' найм · −' + r.leaves + ' ушли</div>' +
+          '</div>' +
+          '<div style="border:1px solid var(--border);background:rgba(255,255,255,.02);border-radius:8px;padding:10px 12px">' +
+            '<div style="font-size:10px;color:var(--muted);font-weight:700">⭐ Реп. / Портфолио</div>' +
+            '<div style="font-size:13px;font-weight:700;color:var(--text);margin-top:3px">' + r.startReputation + ' → ' + r.endReputation + ' · ' + r.startPortfolio + ' → ' + r.endPortfolio + '</div>' +
+          '</div>' +
+        '</div>' +
+        milestonesHtml +
+        '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px">' +
+          '<button onclick="document.getElementById(\'lm-yearly-modal\').style.display=\'none\'" style="background:#fbbf24;border:none;color:#111;font-weight:700;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:12px">Продолжить</button>' +
+        '</div>' +
+      '</div>';
+    m.style.display = 'flex';
+  }
+
+  function showYearlyReport(idx) {
+    const reports = (G && G.living && G.living.yearlyReports) || [];
+    if (!reports.length) return null;
+    const i = (idx == null) ? reports.length - 1 : Math.max(0, Math.min(reports.length - 1, idx | 0));
+    _showYearlyReportModal(reports[i]);
+    return reports[i];
+  }
+
   // ── Подмена winCondition (главный спецэффект модуля) ─────────────────
   // Сохраняем оригинал в G.living.originalWinCondition (для майлстоуна
   // «Старый порог»), затем выставляем Infinity в SCENARIO.settings.
@@ -988,6 +1246,51 @@
         '</div>' +
         '<button onclick="LivingMarket.showTreeModal()" style="background:#fbbf24;border:none;color:#111;font-weight:700;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">Древо 2.0 →</button>' +
       '</div>';
+
+    // v0.5 (Фаза A шаг 2): блок «Годовые итоги» — список карточек по годам.
+    // Если ни один год ещё не закрыт, показываем прогресс-индикатор текущего.
+    const yReports = (G.living && G.living.yearlyReports) || [];
+    const yProgress = (function () {
+      const y = G.living && G.living.yearly;
+      if (!y) return null;
+      const cur = G.month || 0;
+      const elapsed = Math.max(0, cur - (y.yearStartMonth || 0));
+      return { elapsed: Math.min(12, elapsed), left: Math.max(0, 12 - elapsed) };
+    })();
+    let yearlyBlock = '';
+    if (yReports.length) {
+      const cards = yReports.slice().reverse().slice(0, 6).map((r, idx) => {
+        // idx считаем от конца. Чтобы передать realIdx, восстановим (length-1-idx)
+        const realIdx = yReports.length - 1 - idx;
+        const netColor = r.netDelta >= 0 ? '#86efac' : '#fca5a5';
+        const sign = r.netDelta >= 0 ? '+' : '−';
+        return '<button onclick="LivingMarket.showYearlyReport(' + realIdx + ')" style="text-align:left;background:rgba(255,255,255,.03);border:1px solid var(--border);border-left:3px solid #fbbf24;border-radius:7px;padding:8px 11px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text);font-family:inherit">' +
+          '<span style="font-size:18px">📅</span>' +
+          '<div style="min-width:0;flex:1">' +
+            '<div style="font-size:11px;font-weight:700">Год ' + r.yearIdx + ' · M' + r.monthFrom + '–M' + r.monthTo + '</div>' +
+            '<div style="font-size:10px;color:var(--sub);margin-top:1px">' + _formatMoneyShort(r.revenue) + ' выручки · ' + r.deliveries + ' сдач · T-топ ' + r.topTier + '</div>' +
+          '</div>' +
+          '<span style="font-size:11px;font-weight:700;color:' + netColor + ';white-space:nowrap">' + sign + _formatMoneyShort(Math.abs(r.netDelta)) + '</span>' +
+        '</button>';
+      }).join('');
+      const more = yReports.length > 6 ? '<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px;font-style:italic">показаны последние 6 из ' + yReports.length + '</div>' : '';
+      const progressLine = yProgress
+        ? '<div style="font-size:10px;color:var(--sub);margin-top:6px;text-align:center">Текущий год: ' + yProgress.elapsed + '/12 мес. · до итога ' + yProgress.left + ' мес.</div>'
+        : '';
+      yearlyBlock =
+        '<div style="margin:0 0 12px;padding:10px 13px;border:1px solid rgba(251,191,36,.22);background:rgba(251,191,36,.03);border-radius:8px">' +
+          '<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">📅 Годовые итоги (' + yReports.length + ')</div>' +
+          '<div style="display:flex;flex-direction:column;gap:5px">' + cards + '</div>' +
+          more +
+          progressLine +
+        '</div>';
+    } else if (yProgress && yProgress.elapsed > 0) {
+      yearlyBlock =
+        '<div style="margin:0 0 12px;padding:9px 12px;border:1px dashed var(--border);background:rgba(255,255,255,.02);border-radius:8px;display:flex;align-items:center;gap:10px">' +
+          '<span style="font-size:18px;opacity:.7">📅</span>' +
+          '<div style="font-size:10px;color:var(--sub)">Первый годовой итог через <b style="color:var(--text)">' + yProgress.left + ' мес.</b> (' + yProgress.elapsed + '/12)</div>' +
+        '</div>';
+    }
     return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:540px;max-height:80vh;display:flex;flex-direction:column;width:90vw">' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
         '<span style="font-size:24px">' + st.icon + '</span>' +
@@ -996,6 +1299,7 @@
       '</div>' +
       '<div style="font-size:11px;color:var(--sub);margin-bottom:12px">' + st.sub + '</div>' +
       xpBlock +
+      yearlyBlock +
       nextHtml +
       '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:14px 0 6px">Достижения (' + journal.length + ')</div>' +
       '<div style="display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1">' + (rows || empty) + '</div>' +
@@ -1256,6 +1560,7 @@
         _awardDeliveryXp();
         _tickStages();
         _tickMilestones();
+        _maybeTriggerYearly();
         _renderStagePill();
       } catch (e) { try { console.warn('[livingmarket] advanceMonth wrap', e); } catch (_) {} }
       return r;
@@ -1276,10 +1581,67 @@
     });
   }
 
+  // ── v0.6 (Фаза B, шаг 2 полный): tree 2.0 как основной канал ────────
+  // Перехватываем openPerkModal — вместо engine-древа открываем модал
+  // tree 2.0.  Если USE_TREE2_PROGRESSION = false — пропускаем, старое
+  // поведение остаётся.
+  //
+  // Также блокируем buyUpgrade, чтобы старые апгрейды нельзя было купить
+  // даже из консоли/сейвов.  Купленные ДО переключения флага остаются
+  // активными (G.upgrades сохраняется в сейве как есть).  Это безопасно:
+  // их эффекты не дублируются с tree 2.0 (см. v3.30 upgradeAlias).
+
+  if (USE_TREE2_PROGRESSION) {
+    // 1) openPerkModal → showTreeModal
+    if (typeof window.openPerkModal === 'function' && !window.openPerkModal.__livingMarketRedirected) {
+      const _origOpenPerk = window.openPerkModal;
+      window.openPerkModal = function () {
+        try { showTreeModal(); } catch (e) {
+          // На случай если tree-модал почему-то не открылся —
+          // fallback на старое поведение (чтобы UI не пропал).
+          try { _origOpenPerk.apply(this, arguments); } catch (_) {}
+        }
+      };
+      window.openPerkModal.__livingMarketRedirected = true;
+    }
+    // 2) buyUpgrade → блокируем + notify (старые апгрейды нельзя купить)
+    if (typeof window.buyUpgrade === 'function' && !window.buyUpgrade.__livingMarketBlocked) {
+      const _origBuy = window.buyUpgrade;
+      window.buyUpgrade = function (id) {
+        if (typeof notify === 'function') {
+          notify('🌳 Прокачка переехала в Древо 2.0 — открой модал «Древо»', 'error');
+        }
+        if (typeof EventBus !== 'undefined' && EventBus.emit) {
+          EventBus.emit('living_market_blocked_old_upgrade', { id });
+        }
+        return null;   // покупка не происходит
+      };
+      // Сохраняем оригинал для дебага и для возможного отката
+      window.buyUpgrade.__livingMarketBlocked = true;
+      window.buyUpgrade.__original           = _origBuy;
+    }
+    // 3) Обновляем подпись в кнопке «Дерево навыков» на mode-screen,
+    // чтобы было ясно: это новое древо 2.0. Подписка на render — UI
+    // вызывает render() очень часто, и она перехватит actual-state.
+    if (typeof EventBus !== 'undefined' && EventBus.on) {
+      EventBus.on('render', () => {
+        try {
+          const sub = document.getElementById('perk-btn-sub');
+          if (sub) {
+            const xp        = Math.floor((G && G.xp) || 0);
+            const owned     = ((G && G.living && G.living.tree2 && G.living.tree2.purchased) || []).length;
+            sub.textContent = '🌳 Древо 2.0 · ★' + xp + ' · ' + owned + '/30 узлов';
+          }
+        } catch (e) {}
+      });
+    }
+  }
+
   // ── Публичный API (для тестов и UI-кнопок) ──────────────────────────
   window.LivingMarket = {
     version:           VERSION,
     enabled:           LIVING_MARKET_ENABLED,
+    useTree2Progression: USE_TREE2_PROGRESSION,
     getStages:         () => STAGES.slice(),
     getCurrentStage:   () => STAGES[_stageIdx(G)],
     getNextStage:      () => STAGES[_stageIdx(G) + 1] || null,
@@ -1311,11 +1673,30 @@
     _buyNode,
     _doRespec,
     _awardXp,                              // публичен для dev-вмешательства
+    // v0.5 (Фаза A шаг 2) — годовые итоги M12/M24/…
+    getYearlyReports:   () => ((G && G.living && G.living.yearlyReports) || []).slice(),
+    getCurrentYearProgress: () => {
+      if (!G || !G.living || !G.living.yearly) return null;
+      const y = G.living.yearly;
+      const cur = G.month || 0;
+      const elapsed = cur - (y.yearStartMonth || 0);
+      return {
+        yearIdx:        y.yearIdx || 0,
+        yearStartMonth: y.yearStartMonth || 0,
+        currentMonth:   cur,
+        monthsElapsed:  Math.max(0, elapsed),
+        monthsLeft:     Math.max(0, 12 - elapsed),
+      };
+    },
+    showYearlyReport,
     // dev/test
     _initLiving,
     _suppressWin,
     _tickStages,
     _tickMilestones,
+    _maybeTriggerYearly,
+    _yearlyEnsureStart,
+    _buildYearlyReport,
     _awardDeliveryXp,
     _countDeliveries,
     _countStaff,

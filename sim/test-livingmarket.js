@@ -881,5 +881,164 @@ _ok(labels.speedUpgrades.includes('Скорость'),  'speedUpgrades → Ск�
 _ok(labels.perkPenaltyShield.includes('Штраф'), 'perkPenaltyShield упомянут');
 `));
 
+// ══════════════════════════════════════════════════════════════════════
+//   v0.5 (Фаза A, шаг 2) — Годовые итоги M12/M24/…
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 58: API годовых итогов доступен ──
+add(run('Тест 58: API годовых итогов', `
+_ok(typeof LivingMarket.getYearlyReports === 'function', 'getYearlyReports есть');
+_ok(typeof LivingMarket.getCurrentYearProgress === 'function', 'getCurrentYearProgress есть');
+_ok(typeof LivingMarket.showYearlyReport === 'function', 'showYearlyReport есть');
+_ok(typeof LivingMarket._maybeTriggerYearly === 'function', '_maybeTriggerYearly есть');
+_ok(typeof LivingMarket._buildYearlyReport === 'function', '_buildYearlyReport есть');
+`));
+
+// ── 59: триггер ровно на M12 — 1 отчёт в массиве ──
+add(run('Тест 59: триггер ровно на M12 — 1 отчёт', `
+initState(); selectSpec('smm'); startGame();
+_eq(LivingMarket.getYearlyReports().length, 0, 'до тиков — 0 отчётов');
+for (let i = 0; i < 11; i++) advanceMonth();
+_eq(LivingMarket.getYearlyReports().length, 0, 'после 11 тиков — всё ещё 0');
+advanceMonth(); // M12
+_eq(LivingMarket.getYearlyReports().length, 1, 'после 12 тиков — 1 отчёт');
+const r = LivingMarket.getYearlyReports()[0];
+_eq(r.yearIdx, 1, 'yearIdx = 1');
+_eq(r.monthFrom, 1, 'monthFrom = 1');
+_eq(r.monthTo, 12, 'monthTo = 12');
+`));
+
+// ── 60: за год корректно агрегируются сдачи (по slice yearStartCompletedLen) ──
+add(run('Тест 60: revenue/deliveries фильтруются срезом completedProjects', `
+initState(); selectSpec('smm'); startGame();
+for (let i = 0; i < 5; i++) advanceMonth();
+G.completedProjects.push({ id:'pY1_1', name:'Брендинг', icon:'🎨', revenue: 1200000, tier: 2, finalNPS: 80, monthCompleted: G.month, failed:false });
+for (let i = 0; i < 4; i++) advanceMonth();
+G.completedProjects.push({ id:'pY1_2', name:'Лендинг', icon:'🌐', revenue: 3000000, tier: 3, finalNPS: 75, monthCompleted: G.month, failed:false });
+while ((G.month || 0) < 12) advanceMonth();
+const reports = LivingMarket.getYearlyReports();
+_eq(reports.length, 1, '1 отчёт');
+const r = reports[0];
+_eq(r.deliveries, 2, '2 сдачи');
+_eq(r.revenue, 4200000, 'выручка 1.2M + 3M = 4.2M');
+_eq(r.byTier[2], 1, 'T2 ×1');
+_eq(r.byTier[3], 1, 'T3 ×1');
+_eq(r.topTier, 3, 'top-tier 3');
+_ok(r.bestProject && r.bestProject.name === 'Лендинг', 'best project = Лендинг (3M > 1.2M)');
+`));
+
+// ── 61: staff diff — найм + увольнение между year-start и end ──
+add(run('Тест 61: hires/leaves считаются через diff staff.ids', `
+initState(); selectSpec('smm'); startGame();
+_eq(G.staff.length, 0, 'на старте 0 сотрудников');
+G.staff.push({ id:'sA' });
+G.staff.push({ id:'sB' });
+G.staff.push({ id:'sC' });
+for (let i = 0; i < 6; i++) advanceMonth();
+G.staff = G.staff.filter(s => s.id !== 'sA');
+while ((G.month || 0) < 12) advanceMonth();
+const r = LivingMarket.getYearlyReports()[0];
+_eq(r.startStaff, 0, 'startStaff = 0 (M0 yearStartStaffIds был пуст)');
+_eq(r.endStaff, 2, 'endStaff = 2 (sB+sC)');
+_eq(r.hires, 2, 'hires = 2 (новые id не было в начале года)');
+_eq(r.leaves, 0, 'leaves = 0 (sA не было в начале года)');
+`));
+
+// ── 62: не дублируется на M13, следующий ровно на M24 ──
+add(run('Тест 62: после M12 — следующий ровно на M24', `
+initState(); selectSpec('smm'); startGame();
+for (let i = 0; i < 12; i++) advanceMonth();
+_eq(LivingMarket.getYearlyReports().length, 1, 'на M12 — 1 отчёт');
+advanceMonth(); // M13
+_eq(LivingMarket.getYearlyReports().length, 1, 'на M13 — всё ещё 1');
+for (let i = 0; i < 10; i++) advanceMonth();  // → M23
+_eq(LivingMarket.getYearlyReports().length, 1, 'на M23 — 1');
+advanceMonth(); // M24
+_eq(LivingMarket.getYearlyReports().length, 2, 'на M24 — 2 отчёта');
+const r2 = LivingMarket.getYearlyReports()[1];
+_eq(r2.yearIdx, 2, 'второй yearIdx = 2');
+_eq(r2.monthFrom, 13, 'monthFrom = 13');
+_eq(r2.monthTo, 24, 'monthTo = 24');
+`));
+
+// ── 63: getCurrentYearProgress показывает прогресс текущего года ──
+add(run('Тест 63: getCurrentYearProgress отдаёт monthsElapsed/Left', `
+initState(); selectSpec('smm'); startGame();
+const p0 = LivingMarket.getCurrentYearProgress();
+_eq(p0.monthsElapsed, 0, 'до тиков elapsed = 0');
+_eq(p0.monthsLeft, 12, 'до тиков осталось 12 мес');
+for (let i = 0; i < 5; i++) advanceMonth();
+const p5 = LivingMarket.getCurrentYearProgress();
+_eq(p5.monthsElapsed, 5, 'после 5 тиков elapsed = 5');
+_eq(p5.monthsLeft, 7, 'осталось 7');
+for (let i = 0; i < 7; i++) advanceMonth();
+const p12 = LivingMarket.getCurrentYearProgress();
+_eq(p12.monthsElapsed, 0, 'после триггера база сдвинулась — elapsed=0');
+_eq(p12.monthsLeft, 12, 'до следующего отчёта 12');
+`));
+
+// ── 64: yearlyReports переживают save+restore (контракт persistence) ──
+add(run('Тест 64: G.living.yearlyReports переживает save+restore', `
+initState(); selectSpec('smm'); startGame();
+for (let i = 0; i < 12; i++) advanceMonth();
+const before = JSON.stringify(LivingMarket.getYearlyReports());
+const snap = JSON.parse(JSON.stringify(G));
+initState();
+Object.keys(snap).forEach(k => { G[k] = snap[k]; });
+const after = JSON.stringify(LivingMarket.getYearlyReports());
+_eq(after, before, 'отчёты идентичны после restore');
+_eq(LivingMarket.getYearlyReports().length, 1, '1 отчёт сохранился');
+`));
+
+// ── 65: back-compat — старый сейв без G.living.yearly мигрирует ──
+add(run('Тест 65: миграция старого сейва без yearly/yearlyReports', `
+initState(); selectSpec('smm'); startGame();
+delete G.living.yearly;
+delete G.living.yearlyReports;
+LivingMarket._initLiving();
+_ok(!!G.living.yearly, 'yearly восстановлен');
+_ok(Array.isArray(G.living.yearlyReports), 'yearlyReports = []');
+_eq(G.living.yearlyReports.length, 0, 'отчётов 0');
+advanceMonth();
+advanceMonth();
+_eq(G.living.yearlyReports.length, 0, 'пока 0 (не прошло 12 мес.)');
+`));
+
+// ── 66: newMilestones содержит только обычные milestone, фильтрует tree_/respec_/year_ ──
+add(run('Тест 66: newMilestones содержит milestone, не содержит tree_/respec_/year_', `
+initState(); selectSpec('smm'); startGame();
+for (let i = 0; i < 2; i++) advanceMonth();
+G.completedProjects.push({ id:'p1', revenue: 100000, tier:1, failed:false });
+advanceMonth();
+_ok(G.living.milestonesFired.includes('first_delivery'), 'first_delivery зафиксирован');
+LivingMarket._awardXp(200, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+while ((G.month || 0) < 12) advanceMonth();
+const r = LivingMarket.getYearlyReports()[0];
+_ok(Array.isArray(r.newMilestones), 'newMilestones — массив');
+_ok(r.newMilestones.some(m => m.id === 'first_delivery'), 'first_delivery в годовых');
+_ok(!r.newMilestones.some(m => String(m.id).startsWith('tree_')),  'tree_* НЕ попал');
+_ok(!r.newMilestones.some(m => String(m.id).startsWith('year_')),  'year_* НЕ попал');
+`));
+
+// ── 67: showYearlyReport безопасен на пустом списке ──
+add(run('Тест 67: showYearlyReport возвращает null если отчётов нет', `
+initState(); selectSpec('smm'); startGame();
+const r = LivingMarket.showYearlyReport();
+_ok(r === null, 'возвращает null когда отчётов нет');
+`));
+
+// ── 68: запись 'year_N' добавляется в journal при триггере ──
+add(run('Тест 68: триггер пишет компактную запись year_N в journal', `
+initState(); selectSpec('smm'); startGame();
+for (let i = 0; i < 12; i++) advanceMonth();
+const j = LivingMarket.getJournal();
+const yearEntry = j.find(x => x.id === 'year_1');
+_ok(!!yearEntry, 'year_1 запись в журнале');
+_eq(yearEntry.icon, '📅', 'icon 📅');
+_eq(yearEntry.tier, 'large', 'tier large');
+_eq(yearEntry.month, 12, 'month = 12');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);

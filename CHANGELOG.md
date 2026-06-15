@@ -1,5 +1,53 @@
 # BizTycoon — Changelog
 
+## v3.31 — Живой рынок: годовые итоги M12/M24/… (Фаза A, шаг 2) (2026-06-15)
+
+Раз в 12 игровых месяцев игра останавливается на короткую церемонию
+с цифрами за прошедший год. Без помесячного трекинга — храним
+снимок «начала года», агрегируем на момент триггера через срез
+`completedProjects` и diff `staff.id`.
+
+### Что внутри
+- **Триггер**: обёртка `advanceMonth` после `_tickMilestones` вызывает
+  `_maybeTriggerYearly()`. Условие — `(G.month − yearStartMonth) ≥ 12`.
+  Срабатывает ровно на M12, M24, M36 и т.д. (тесты 59, 62).
+- **Сборщик `_buildYearlyReport(y)`**:
+  - выручка/сдачи/byTier/topTier/bestProject — `G.completedProjects.slice(yearStartCompletedLen)`
+  - hires/leaves — diff `staff.id` между снимком начала года и текущим
+  - newMilestones — фильтр `G.living.journal` за интервал, без `tree_*`/`respec_*`/`year_*`
+  - стейдж/репутация/портфолио — before→after
+- **Модал-церемония** (золотистая рамка #fbbf24): год N, M-диапазон,
+  2 KPI-плитки (выручка / чистая δ), блок сдач с T-чипами и лучшим
+  проектом, 2 плитки (команда start→end ±hires/leaves, реп/портфолио),
+  чипы достижений (до 8 + счётчик).
+- **Блок в журнале прогресса**: «📅 Годовые итоги (N)» — список карточек
+  по последним 6 годам, клик → переоткрытие отчёта. Под списком —
+  «Текущий год: X/12 мес.». Если нет ни одного итога, но месяцы идут,
+  рендерится placeholder «Первый годовой итог через X мес.».
+- **API**: `getYearlyReports()`, `getCurrentYearProgress()` →
+  `{yearIdx, currentMonth, monthsElapsed, monthsLeft}`, `showYearlyReport(idx?)`.
+- **Persistence**: `yearlyReports[]` + `G.living.yearly` переживают
+  стандартный save→restore (тест 64 фиксирует контракт).
+- **Back-compat**: миграция в `_initLiving` — если у сейва нет yearly,
+  инициализируем по текущему `G.month`/`money`/`staff` (заднюю
+  историю не пересчитываем; тест 65).
+
+### Валидация
+- test-livingmarket 221 → **273/273** (тесты 58–68)
+- test-meta 191/191, test-runes 27/27, test-storyarcs 67/67,
+  test-runmap 136/136, test-live-switch 25/25, test-strategy ✅,
+  test-outsource 27/27
+- sim2-lc agency 12: 50 сдач / 6 уходов / 0 ошибок
+- sim2-lc bank 4: 29 сдач / 2 ухода / 0 ошибок
+- build multi 992.3 KB (+19.8 KB), bank 876.8 KB (+19.8 KB)
+
+### Тип архитектуры
+**A** — опциональная подсистема ядра, расширение `src/livingmarket.js`.
+Engine/staff/projects/ui не модифицированы. Открыть/закрыть всю
+систему — один флаг `LIVING_MARKET_ENABLED` в начале файла.
+
+---
+
 ## v3.30 — Древо 2.0: осведомлённость о engine.UPGRADES + Effects Summary (Фаза B, шаги 2-lite + 7) (2026-06-15)
 
 Tree 2.0 теперь знает про существующую engine-прокачку (без её
