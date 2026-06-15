@@ -45,7 +45,7 @@
   const LIVING_MARKET_ENABLED = true;
   if (!LIVING_MARKET_ENABLED) return;
 
-  const VERSION = 'v0.1';
+  const VERSION = 'v0.2';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -144,6 +144,110 @@
       unlocks: 'T7, престиж-цели, режим «легаси»',
       requiresMarket: true,
     },
+  ];
+
+  // ── Древо 2.0 (Фаза B, шаг 1 — v0.2) ────────────────────────────────
+  // 5 веток × 5 ярусов = 25 узлов.  Каждая ветка — отдельная тема:
+  // Ремесло (Q), Производство (скорость/мощность), Люди (найм/лояльность),
+  // Рынок (репутация/лиды/награды), Сделки (деньги/переговоры).  Ярус —
+  // ступень сложности, гейтится стадией компании:
+  //   tier 1: открыт со старта (стадия 0 — Гараж)
+  //   tier 2: открыт со старта
+  //   tier 3: со стадии Студия (idx 1)
+  //   tier 4: со стадии Агентство (idx 2)
+  //   tier 5: со стадии Сеть (idx 3) — недоступно до Фазы C (требует
+  //           модуля конкурентов).  Объявлены, но не покупаются.
+  //
+  // Эффекты применяются к G через те же каналы, что уже используют другие
+  // системы (qualityBonus, perkPayoutMult, caseScoutBonus, …).  Это
+  // позволяет суммироваться с runMap-бонусами и мета-перками без двойного
+  // учёта.  В сейве хранятся только id купленных узлов
+  // (G.living.tree2.purchased[]) — эффекты переприменяются при загрузке.
+  //
+  // ── Эффект-DSL (минимальный) ───────────────────────────────────────
+  // Каждый узел задаёт `apply: g => { ... }` — чистую мутацию G.
+  // Мутации простые и идемпотентные относительно факта владения; если
+  // покупка повторится (что заблокировано purchaseTreeNode), эффект
+  // тоже сложится — но purchase API гарантирует одну покупку на узел.
+  //
+  // ⚠ Маппинг существующих 16 перков из engine.UPGRADES в узлы tree 2.0
+  // ОТЛОЖЕН на следующую итерацию.  Сейчас деревья сосуществуют: старая
+  // прокачка остаётся доступной, новое древо — дополнительный канал.
+
+  const TREE_BRANCHES = [
+    { id: 'craft',      name: 'Ремесло',     icon: '🎯', color: '#22d3ee', sub: 'Качество, ревью, R&D' },
+    { id: 'production', name: 'Производство',icon: '⚡', color: '#facc15', sub: 'Скорость, мощность, фазы' },
+    { id: 'people',     name: 'Люди',        icon: '🤝', color: '#a78bfa', sub: 'Найм, лояльность, усталость' },
+    { id: 'market',     name: 'Рынок',       icon: '📣', color: '#f59e0b', sub: 'Репутация, лиды, награды' },
+    { id: 'deals',      name: 'Сделки',      icon: '💼', color: '#86efac', sub: 'Деньги, переговоры' },
+  ];
+
+  // Гейт яруса по стадии компании. Доступ — стадия ≥ requiresStage.
+  const TIER_STAGE_GATES = [0, 0, 1, 2, 3]; // tier 1..5 → stage idx ≥ N
+
+  // Узлы. Tier 5 в этом шаге не покупаются (нет конкурентов из Фазы C).
+  // Цены растут от 50 ★XP (tier 1) до 800 (tier 4); tier 5 — 1200, но
+  // заблокированы гейтом стадии «Сеть» (requiresMarket).
+  const TREE_NODES = [
+    // ── Ремесло ──
+    { id: 'craft1', branch: 'craft', tier: 1, icon: '🛠', name: 'Инструментарий',     desc: '+2 к качеству от кейсов навсегда',                cost: 50,
+      apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 2; } },
+    { id: 'craft2', branch: 'craft', tier: 2, icon: '📐', name: 'Дизайн-система',     desc: 'Штраф просрочки бьёт по репутации в два раза мягче',
+      cost: 150, apply: g => { g.perkPenaltyShield = true; } },
+    { id: 'craft3', branch: 'craft', tier: 3, icon: '🎨', name: 'Арт-директорат',     desc: '+5 к качеству от кейсов навсегда',                cost: 320,
+      apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 5; } },
+    { id: 'craft4', branch: 'craft', tier: 4, icon: '🔬', name: 'R&D-лаборатория',    desc: '+10 к качеству от кейсов · потолок качества выше', cost: 700,
+      apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 10; } },
+    { id: 'craft5', branch: 'craft', tier: 5, icon: '🎓', name: 'Школа студии',       desc: '(Фаза C) Junior растёт в Middle автоматически',   cost: 1200,
+      apply: g => { /* эффект подключается в Фазе C — без модуля рынка пока no-op */ } },
+
+    // ── Производство ──
+    { id: 'prod1', branch: 'production', tier: 1, icon: '🔁', name: 'Agile',         desc: '+5% к скорости команды',                          cost: 50,
+      apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.05; } },
+    { id: 'prod2', branch: 'production', tier: 2, icon: '📑', name: 'Шаблоны',       desc: '+5% к скорости (стек) · быстрее instant-проекты',cost: 160,
+      apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.05; g.perkInstantSpeed = true; } },
+    { id: 'prod3', branch: 'production', tier: 3, icon: '🚀', name: 'Автоматизация', desc: '+10% к скорости команды',                         cost: 340,
+      apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.10; } },
+    { id: 'prod4', branch: 'production', tier: 4, icon: '⚙️', name: 'Конвейер',     desc: '+15% к скорости · −1 фазе у epic-цепочек',        cost: 720,
+      apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.15; g.perkEpicShortcut = true; } },
+    { id: 'prod5', branch: 'production', tier: 5, icon: '🏗', name: 'Параллельные треки', desc: '(Фаза C) +1 слот мощности по умолчанию',   cost: 1200,
+      apply: g => { /* подключается в Фазе C */ } },
+
+    // ── Люди ──
+    { id: 'peop1', branch: 'people', tier: 1, icon: '💬', name: 'HR-бренд',          desc: 'Скаутинг кандидатов −10% к запрашиваемой зарплате', cost: 60,
+      apply: g => { g.scoutSalaryMult = (g.scoutSalaryMult || 1) * 0.9; } },
+    { id: 'peop2', branch: 'people', tier: 2, icon: '🌿', name: 'Менторство',        desc: '−10% усталости команды (умножитель)',             cost: 180,
+      apply: g => { g.perkFatigueMult = (g.perkFatigueMult || 1) * 0.9; } },
+    { id: 'peop3', branch: 'people', tier: 3, icon: '📈', name: 'Опционы',           desc: '+10% к восстановлению от HR-действий',            cost: 350,
+      apply: g => { g.perkRecoveryBonus = (g.perkRecoveryBonus || 0) + 0.10; } },
+    { id: 'peop4', branch: 'people', tier: 4, icon: '🪪', name: 'Кадровый резерв',   desc: '+1 кандидат при скаутинге',                       cost: 720,
+      apply: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 1; } },
+    { id: 'peop5', branch: 'people', tier: 5, icon: '👑', name: 'Культ компании',    desc: '(Фаза C) Иммунитет к хантингу звёзд',             cost: 1200,
+      apply: g => { /* подключается в Фазе C */ } },
+
+    // ── Рынок ──
+    { id: 'mark1', branch: 'market', tier: 1, icon: '🌐', name: 'Портфолио-сайт',    desc: '+5 баллов портфолио',                             cost: 50,
+      apply: g => { g.portfolio = (g.portfolio || 0) + 5; } },
+    { id: 'mark2', branch: 'market', tier: 2, icon: '📚', name: 'Кейс-стади',        desc: '+1 восстановление репутации/мес',                 cost: 160,
+      apply: g => { g.caseRepBonus = (g.caseRepBonus || 0) + 1; } },
+    { id: 'mark3', branch: 'market', tier: 3, icon: '📣', name: 'PR-служба',         desc: '+1 лид при скаутинге · +1 восст. реп/мес',        cost: 340,
+      apply: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 1; g.caseRepBonus = (g.caseRepBonus || 0) + 1; } },
+    { id: 'mark4', branch: 'market', tier: 4, icon: '🏅', name: 'Премии',            desc: '+10 баллов портфолио · +5 репутации',             cost: 720,
+      apply: g => { g.portfolio = (g.portfolio || 0) + 10; g.reputation = Math.min(100, (g.reputation || 0) + 5); } },
+    { id: 'mark5', branch: 'market', tier: 5, icon: '🎤', name: 'Лидер мнений',      desc: '(Фаза C) T5+ офферы появляются чаще',             cost: 1200,
+      apply: g => { /* подключается в Фазе C */ } },
+
+    // ── Сделки ──
+    { id: 'deal1', branch: 'deals', tier: 1, icon: '📝', name: 'Юр-шаблоны',         desc: '+5% к выплатам со всех сделок',                  cost: 60,
+      apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.05; } },
+    { id: 'deal2', branch: 'deals', tier: 2, icon: '🤝', name: 'Переговорщик',       desc: '+10% к шансу предоплаты',                         cost: 170,
+      apply: g => { g.perkPrepayBonus = (g.perkPrepayBonus || 0) + 0.10; } },
+    { id: 'deal3', branch: 'deals', tier: 3, icon: '💳', name: 'Финдир',             desc: '+10% к выплатам (стек)',                          cost: 350,
+      apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.10; } },
+    { id: 'deal4', branch: 'deals', tier: 4, icon: '🛡', name: 'Демпинг-защита',     desc: '+15% к шансу предоплаты (стек) · −штраф просрочки', cost: 720,
+      apply: g => { g.perkPrepayBonus = (g.perkPrepayBonus || 0) + 0.15; g.perkPenaltyShield = true; } },
+    { id: 'deal5', branch: 'deals', tier: 5, icon: '🏭', name: 'M&A-отдел',          desc: '(Фаза C) Поглощения конкурентов дешевле',          cost: 1200,
+      apply: g => { /* подключается в Фазе C */ } },
   ];
 
   // ── Майлстоуны (встроенный пул v0.1) ────────────────────────────────
@@ -255,6 +359,12 @@
       journal:               [],         // [{ id, icon, name, desc, tier, month, ts }]
       milestonesFired:       [],         // id зафиксированных майлстоунов (быстрая проверка)
       originalWinCondition:  null,       // запоминаем до подмены, для майлстоуна
+      // v0.2 (Фаза B): ★XP-валюта и купленные узлы древа 2.0
+      xp:                    0,          // накопленный, доступный для покупки узлов
+      xpEarned:              0,          // всего заработано за партию (для статистики)
+      tree2:                 { purchased: [] }, // [id, id, ...] купленных узлов
+      _xpLog:                [],         // последние 10 начислений (для UI: «+15 ★ Первый найм»)
+      _lastDeliveryCount:    0,          // трекер для diff-начисления XP за сдачи
     };
   }
 
@@ -276,6 +386,107 @@
     if (typeof G === 'undefined' || !G || !G.living) return;
     const m = G.money || 0;
     if (G.living._peakMoney == null || m > G.living._peakMoney) G.living._peakMoney = m;
+  }
+
+  // ── ★XP-валюта (Фаза B) ──────────────────────────────────────────────
+  // Источники начисления:
+  //   • Завершение проекта: 10 × tier ★XP (tier из completedProjects[i].tier)
+  //   • Майлстоун: 15 (микро) / 40 (средние) / 120 (крупные) ★XP
+  //   • Переход стадии: 200 + (idx × 100) ★XP (Студия 300, Агентство 400, ...)
+  // Покупка узла древа списывает XP — не даёт перерасхода, не возвращается.
+
+  function _awardXp(amount, sourceLabel) {
+    if (typeof G === 'undefined' || !G || !G.living) return;
+    if (!amount || amount <= 0) return;
+    G.xp = (G.xp || 0) + amount;
+    G.living.xp      = (G.living.xp      || 0) + amount;
+    G.living.xpEarned = (G.living.xpEarned || 0) + amount;
+    // _xpLog — короткий fifo последних 10 для UI-всплывашек
+    G.living._xpLog = G.living._xpLog || [];
+    G.living._xpLog.push({ amount, source: sourceLabel || '', month: G.month || 0, ts: Date.now() });
+    if (G.living._xpLog.length > 10) G.living._xpLog = G.living._xpLog.slice(-10);
+    if (typeof EventBus !== 'undefined' && EventBus.emit) {
+      EventBus.emit('xp_awarded', { amount, source: sourceLabel });
+    }
+  }
+
+  // diff-награды за завершённые проекты с прошлого тика. Tier берётся
+  // из completedProjects[i].tier (fallback 1). При первом вызове в
+  // партии trackedCount стоит на текущей длине — стартовые «пустышки»
+  // из debug-сценариев не дадут лишнего XP.
+  function _awardDeliveryXp() {
+    if (!G || !G.living || !Array.isArray(G.completedProjects)) return;
+    const len = G.completedProjects.length;
+    const prev = G.living._lastDeliveryCount || 0;
+    if (len <= prev) {
+      G.living._lastDeliveryCount = len;
+      return;
+    }
+    let sum = 0;
+    for (let i = prev; i < len; i++) {
+      const t = (G.completedProjects[i].tier || 1);
+      sum += 10 * t;
+    }
+    G.living._lastDeliveryCount = len;
+    if (sum > 0) _awardXp(sum, '🏁 Сдач: ' + (len - prev));
+  }
+
+  // ── Древо 2.0 — публичный API ────────────────────────────────────────
+
+  function _getTreeNode(id) { return TREE_NODES.find(n => n.id === id); }
+
+  function _isNodeOwned(id) {
+    if (!G || !G.living || !G.living.tree2) return false;
+    return (G.living.tree2.purchased || []).indexOf(id) !== -1;
+  }
+
+  // Доступен ли узел: стадия игрока удовлетворяет requiresStage яруса,
+  // и не помечен ли как «требует Фазу C» (tier 5 = требует конкурентов).
+  function isNodeUnlocked(id) {
+    const n = _getTreeNode(id);
+    if (!n) return false;
+    const requiresStage = TIER_STAGE_GATES[n.tier - 1] || 0;
+    if (_stageIdx(G) < requiresStage) return false;
+    if (n.tier === 5) return false;     // Фаза C
+    return true;
+  }
+
+  // Можно ли купить сейчас: открыт + не куплен + хватает XP.
+  function canPurchaseNode(id) {
+    const n = _getTreeNode(id);
+    if (!n) return { ok: false, reason: 'unknown_node' };
+    if (_isNodeOwned(id))         return { ok: false, reason: 'already_owned', node: n };
+    if (!isNodeUnlocked(id))      return { ok: false, reason: 'locked',        node: n };
+    if ((G.xp || 0) < n.cost)     return { ok: false, reason: 'not_enough_xp', node: n };
+    return { ok: true, node: n };
+  }
+
+  function purchaseTreeNode(id) {
+    const r = canPurchaseNode(id);
+    if (!r.ok) return r;
+    const n = r.node;
+    G.xp = (G.xp || 0) - n.cost;
+    G.living.xp = (G.living.xp || 0) - n.cost;
+    G.living.tree2 = G.living.tree2 || { purchased: [] };
+    G.living.tree2.purchased = (G.living.tree2.purchased || []).concat(id);
+    try { n.apply(G); } catch (e) { try { console.warn('[livingmarket] node apply', n.id, e); } catch (_) {} }
+    G.living.journal.push({
+      id:   'tree_' + n.id,
+      icon: n.icon,
+      name: 'Узел: ' + n.name,
+      desc: n.desc,
+      tier: 'micro',
+      month: G.month || 0,
+      ts:   Date.now(),
+    });
+    if (typeof EventBus !== 'undefined' && EventBus.emit) {
+      EventBus.emit('tree_node_purchased', { node: n });
+      EventBus.emit('render');
+    }
+    if (typeof notify === 'function') {
+      notify(n.icon + ' Куплен узел «' + n.name + '» — ' + n.desc, 'success');
+    }
+    return { ok: true, node: n };
   }
 
   // ── Подмена winCondition (главный спецэффект модуля) ─────────────────
@@ -326,6 +537,9 @@
     if (!G.living.milestonesFired.includes('stage_' + st.id)) {
       G.living.milestonesFired.push('stage_' + st.id);
     }
+    // v0.2 (Фаза B): ★XP-награда за стадию — масштабируется по индексу.
+    // Гараж (idx 0) — стартовая, без XP; дальше 300/400/500/600/700.
+    if (st.idx > 0) _awardXp(200 + st.idx * 100, st.icon + ' Стадия: ' + st.name);
     // EventBus + UI
     if (typeof EventBus !== 'undefined' && EventBus.emit) {
       EventBus.emit('stage_reached', { stage: st, entry });
@@ -358,6 +572,9 @@
         month: G.month || 0,
         ts:    Date.now(),
       });
+      // v0.2 (Фаза B): ★XP по эшелону майлстоуна — 15/40/120.
+      const xpByTier = { micro: 15, middle: 40, large: 120 };
+      _awardXp(xpByTier[m.tier] || 15, m.icon + ' ' + m.name);
       if (typeof EventBus !== 'undefined' && EventBus.emit) {
         EventBus.emit('milestone_reached', { milestone: m });
       }
@@ -406,7 +623,9 @@
     } else {
       nextStr = ' · финальная стадия';
     }
-    pill.innerHTML = '<span style="color:' + st.color + '">' + st.icon + '</span> ' + st.name + '<span style="color:var(--muted);font-weight:500">' + nextStr + '</span>';
+    // v0.2: ★XP-баланс справа от прогресса (если XP > 0)
+    const xpStr = (G.xp || 0) > 0 ? ' · <span style="color:#fbbf24;font-weight:700">★' + Math.floor(G.xp) + '</span>' : '';
+    pill.innerHTML = '<span style="color:' + st.color + '">' + st.icon + '</span> ' + st.name + '<span style="color:var(--muted);font-weight:500">' + nextStr + xpStr + '</span>';
   }
 
   // ── UI: модал церемонии при достижении стадии ────────────────────────
@@ -492,6 +711,19 @@
     }
 
     const empty = rows ? '' : '<div style="font-size:11px;color:var(--muted);text-align:center;padding:24px;font-style:italic">Журнал пуст. Первые записи появятся при сдаче проектов, найме команды и росте репутации.</div>';
+    // v0.2: ★XP-блок + кнопка «Древо 2.0»
+    const xpNow     = Math.floor(G.xp || 0);
+    const xpEarned  = Math.floor((G.living && G.living.xpEarned) || 0);
+    const treeOwned = (G.living && G.living.tree2 && G.living.tree2.purchased.length) || 0;
+    const xpBlock =
+      '<div style="display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:10px 13px;border:1px solid rgba(251,191,36,.3);background:rgba(251,191,36,.06);border-radius:8px">' +
+        '<span style="font-size:22px">⭐</span>' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">★XP Опыт студии</div>' +
+          '<div style="font-size:16px;font-weight:800;color:#fbbf24">' + xpNow + ' доступно <span style="color:var(--sub);font-size:11px;font-weight:500">(' + xpEarned + ' всего · ' + treeOwned + '/25 узлов куплено)</span></div>' +
+        '</div>' +
+        '<button onclick="LivingMarket.showTreeModal()" style="background:#fbbf24;border:none;color:#111;font-weight:700;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">Древо 2.0 →</button>' +
+      '</div>';
     return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:540px;max-height:80vh;display:flex;flex-direction:column;width:90vw">' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
         '<span style="font-size:24px">' + st.icon + '</span>' +
@@ -499,11 +731,126 @@
         '<div style="font-size:18px;font-weight:800;color:' + st.color + '">' + st.name + ' · M' + (G.month || 0) + '</div></div>' +
       '</div>' +
       '<div style="font-size:11px;color:var(--sub);margin-bottom:12px">' + st.sub + '</div>' +
+      xpBlock +
       nextHtml +
       '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:14px 0 6px">Достижения (' + journal.length + ')</div>' +
       '<div style="display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1">' + (rows || empty) + '</div>' +
       '<button onclick="document.getElementById(\'lm-journal-modal\').style.display=\'none\'" style="margin-top:14px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;align-self:center">Закрыть</button>' +
     '</div>';
+  }
+
+  // ── UI: модал «Древо 2.0» ────────────────────────────────────────────
+
+  function showTreeModal() {
+    if (typeof document === 'undefined') return;
+    let m = document.getElementById('lm-tree-modal');
+    if (!m) {
+      m = document.createElement('div');
+      m.id = 'lm-tree-modal';
+      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:335;display:flex;align-items:center;justify-content:center';
+      m.onclick = e => { if (e.target === m) m.style.display = 'none'; };
+      document.body.appendChild(m);
+    }
+    m.innerHTML = _renderTreeHtml();
+    m.style.display = 'flex';
+  }
+
+  function _renderTreeHtml() {
+    const xpNow = Math.floor(G.xp || 0);
+    const stageIdx = _stageIdx(G);
+    // Заголовок
+    const head =
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">' +
+        '<span style="font-size:30px">🌳</span>' +
+        '<div style="flex:1">' +
+          '<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase">Древо прокачки 2.0</div>' +
+          '<div style="font-size:17px;font-weight:800;color:var(--text)">5 веток · 5 ярусов · 25 узлов</div>' +
+        '</div>' +
+        '<div style="text-align:right">' +
+          '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">★XP доступно</div>' +
+          '<div style="font-size:20px;font-weight:800;color:#fbbf24">' + xpNow + '</div>' +
+        '</div>' +
+      '</div>';
+    // Заголовок-сетка веток
+    const branchHeads = TREE_BRANCHES.map(b =>
+      '<div style="text-align:center;padding:8px 4px;border-bottom:2px solid ' + b.color + '">' +
+        '<div style="font-size:20px;line-height:1">' + b.icon + '</div>' +
+        '<div style="font-size:11px;font-weight:700;color:' + b.color + ';margin-top:4px">' + b.name + '</div>' +
+        '<div style="font-size:9px;color:var(--muted);margin-top:1px">' + b.sub + '</div>' +
+      '</div>'
+    ).join('');
+    // 5 ярусов, по 5 узлов в каждом ряду
+    const rows = [];
+    for (let tier = 1; tier <= 5; tier++) {
+      const requiresStage = TIER_STAGE_GATES[tier - 1] || 0;
+      const tierLocked    = stageIdx < requiresStage;
+      const tierLabel     = tier === 5
+        ? 'Ярус 5 · 🔒 требуется модуль «Живой рынок» (Фаза C)'
+        : (tierLocked ? 'Ярус ' + tier + ' · 🔒 откроется со стадии «' + STAGES[requiresStage].name + '»' : 'Ярус ' + tier);
+      const tierLabelHtml =
+        '<div style="grid-column:1/-1;font-size:10px;color:' + (tierLocked || tier === 5 ? 'var(--muted)' : 'var(--sub)') + ';font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin:8px 0 4px;padding-bottom:2px;border-bottom:1px dashed var(--border)">' + tierLabel + '</div>';
+      const cells = TREE_BRANCHES.map(b => {
+        const n = TREE_NODES.find(x => x.branch === b.id && x.tier === tier);
+        return n ? _renderNodeCell(n, b) : '<div></div>';
+      }).join('');
+      rows.push(tierLabelHtml + cells);
+    }
+    const grid = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;flex:1;overflow-y:auto;padding-right:4px">' + rows.join('') + '</div>';
+
+    return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:1000px;max-height:90vh;display:flex;flex-direction:column;width:96vw">' +
+      head +
+      '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:4px">' + branchHeads + '</div>' +
+      grid +
+      '<div style="display:flex;gap:8px;margin-top:14px;justify-content:center;align-items:center">' +
+        '<div style="font-size:10px;color:var(--muted)">★XP начисляется за: сдачи проектов · майлстоуны · переходы стадий</div>' +
+      '</div>' +
+      '<button onclick="document.getElementById(\'lm-tree-modal\').style.display=\'none\'" style="margin-top:10px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;align-self:center">Закрыть</button>' +
+    '</div>';
+  }
+
+  function _renderNodeCell(n, b) {
+    const owned    = _isNodeOwned(n.id);
+    const unlocked = isNodeUnlocked(n.id);
+    const can      = canPurchaseNode(n.id);
+    // Цветовая разметка по состоянию
+    let borderColor, bg, statusHtml, opacity;
+    if (owned) {
+      borderColor = 'rgba(34,211,238,.5)';
+      bg          = 'rgba(34,211,238,.07)';
+      opacity     = '1';
+      statusHtml  = '<div style="font-size:9px;color:#22d3ee;font-weight:700">✓ Куплен</div>';
+    } else if (!unlocked) {
+      borderColor = 'var(--border)';
+      bg          = 'rgba(255,255,255,.015)';
+      opacity     = '.45';
+      statusHtml  = '<div style="font-size:9px;color:var(--muted);font-weight:700">🔒 Заблокирован</div>';
+    } else if (!can.ok) {
+      borderColor = 'var(--border)';
+      bg          = 'rgba(255,255,255,.025)';
+      opacity     = '.8';
+      statusHtml  = '<button disabled style="background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--muted);padding:3px 8px;border-radius:5px;font-size:9px;font-weight:700;cursor:not-allowed;width:100%">★' + n.cost + ' (не хватает)</button>';
+    } else {
+      borderColor = b.color + '55';
+      bg          = 'rgba(255,255,255,.03)';
+      opacity     = '1';
+      statusHtml  = '<button onclick="LivingMarket._buyNode(\'' + n.id + '\')" style="background:' + b.color + ';border:none;color:#0a0a0a;padding:3px 8px;border-radius:5px;font-size:9px;font-weight:700;cursor:pointer;width:100%">Купить · ★' + n.cost + '</button>';
+    }
+    // Силуэт для locked: имя + иконка приглушены, описание скрыто
+    const descHtml = (!unlocked && !owned)
+      ? '<div style="font-size:9px;color:var(--muted);line-height:1.3;font-style:italic">…</div>'
+      : '<div style="font-size:9px;color:var(--sub);line-height:1.3">' + n.desc + '</div>';
+    return '<div style="border:1px solid ' + borderColor + ';background:' + bg + ';border-radius:7px;padding:7px;display:flex;flex-direction:column;gap:4px;opacity:' + opacity + ';min-height:90px">' +
+      '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:15px">' + n.icon + '</span><span style="font-size:10px;font-weight:700;color:var(--text)">' + n.name + '</span></div>' +
+      descHtml +
+      '<div style="margin-top:auto">' + statusHtml + '</div>' +
+    '</div>';
+  }
+
+  // Хелпер для inline-onclick: купить + перерисовать модал
+  function _buyNode(id) {
+    const r = purchaseTreeNode(id);
+    showTreeModal();
+    return r;
   }
 
   // ── Подключаем обёртки ───────────────────────────────────────────────
@@ -530,6 +877,8 @@
   // значение, которое могло быть выше до списания overhead/зарплат) и
   // повторно ПОСЛЕ (на случай поступления денег внутри тика — события,
   // milestone-выплаты, переходы по фазам lifecycle).
+  // XP за сдачи начисляем ПОСЛЕ оригинала — finishDelivery работает внутри
+  // tick'а через projects.js и пушит в completedProjects.
   if (typeof window.advanceMonth === 'function' && !window.advanceMonth.__livingMarketWrapped) {
     const _orig = window.advanceMonth;
     window.advanceMonth = function () {
@@ -538,6 +887,7 @@
       try {
         _initLiving();
         _updateMoneyPeak();
+        _awardDeliveryXp();
         _tickStages();
         _tickMilestones();
         _renderStagePill();
@@ -571,16 +921,30 @@
     getMilestones:     () => _milestones(G || {}),
     getFiredMilestoneIds: () => ((G && G.living && G.living.milestonesFired) || []).slice(),
     showJournalModal,
+    // v0.2 (Фаза B) — древо 2.0 + XP
+    getXp:                () => Math.floor((G && G.xp) || 0),
+    getXpEarned:          () => Math.floor((G && G.living && G.living.xpEarned) || 0),
+    getTreeBranches:      () => TREE_BRANCHES.slice(),
+    getTreeNodes:         () => TREE_NODES.slice(),
+    getTierStageGates:    () => TIER_STAGE_GATES.slice(),
+    isNodeUnlocked,
+    canPurchaseNode,
+    purchaseTreeNode,
+    getPurchasedNodeIds:  () => ((G && G.living && G.living.tree2 && G.living.tree2.purchased) || []).slice(),
+    showTreeModal,
+    _buyNode,
+    _awardXp,                              // публичен для dev-вмешательства
     // dev/test
     _initLiving,
     _suppressWin,
     _tickStages,
     _tickMilestones,
+    _awardDeliveryXp,
     _countDeliveries,
     _countStaff,
     _cumulativeRevenue,
     _formatMoneyShort,
   };
 
-  try { console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий (3 живых, 3 требуют модуль рынка)'); } catch (e) {}
+  try { console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий (3 живых, 3 требуют модуль рынка), древо 2.0: ' + TREE_NODES.length + ' узлов'); } catch (e) {}
 })();

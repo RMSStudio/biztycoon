@@ -328,5 +328,189 @@ _ok( stage1.gate(make(3, 2, 2000000)).ok, '3+2+2M → ok');
 _ok( stage1.gate(make(5, 5, 5000000)).ok, 'все с запасом → ok');
 `));
 
-console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
+// ══════════════════════════════════════════════════════════════════════
+//   v0.2 (Фаза B, шаг 1) — Древо 2.0 + ★XP
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 18: API древа доступно ──
+add(run('Тест 18: API древа 2.0 + XP', `
+_ok(typeof LivingMarket.getXp === 'function', 'getXp есть');
+_ok(typeof LivingMarket.getTreeNodes === 'function', 'getTreeNodes есть');
+_ok(typeof LivingMarket.getTreeBranches === 'function', 'getTreeBranches есть');
+_ok(typeof LivingMarket.isNodeUnlocked === 'function', 'isNodeUnlocked есть');
+_ok(typeof LivingMarket.canPurchaseNode === 'function', 'canPurchaseNode есть');
+_ok(typeof LivingMarket.purchaseTreeNode === 'function', 'purchaseTreeNode есть');
+_ok(typeof LivingMarket.showTreeModal === 'function', 'showTreeModal есть');
+_eq(LivingMarket.getTreeBranches().length, 5, '5 веток');
+_eq(LivingMarket.getTreeNodes().length, 25, '25 узлов (5×5)');
+const branchIds = LivingMarket.getTreeBranches().map(b => b.id);
+['craft','production','people','market','deals'].forEach(id => {
+  _ok(branchIds.includes(id), 'ветка ' + id);
+});
+`));
+
+// ── 19: tier-гейты по стадии ──
+add(run('Тест 19: tier 1-2 открыты со старта, tier 3 — со стадии Студия', `
+initState(); selectSpec('smm'); startGame();
+_eq(G.living.stage, 0, 'стартовая стадия = гараж');
+// Tier 1 — открыт
+_ok(LivingMarket.isNodeUnlocked('craft1'), 'craft1 (tier 1) открыт');
+_ok(LivingMarket.isNodeUnlocked('prod1'),  'prod1 (tier 1) открыт');
+// Tier 2 — тоже открыт со старта
+_ok(LivingMarket.isNodeUnlocked('craft2'), 'craft2 (tier 2) открыт');
+// Tier 3 — заблокирован до Студии
+_ok(!LivingMarket.isNodeUnlocked('craft3'), 'craft3 (tier 3) заблокирован на гараже');
+// Tier 4 — до Агентства
+_ok(!LivingMarket.isNodeUnlocked('craft4'), 'craft4 (tier 4) заблокирован на гараже');
+// Tier 5 — всегда заблокирован (Фаза C)
+_ok(!LivingMarket.isNodeUnlocked('craft5'), 'craft5 (tier 5) заблокирован — Фаза C');
+`));
+
+// ── 20: после достижения Студии открывается tier 3 ──
+add(run('Тест 20: tier 3 узлы открываются на стадии Студия', `
+initState(); selectSpec('smm'); startGame();
+// Дотягиваем до Студии
+G.completedProjects = [
+  { id:'p1', revenue: 700000, tier: 1 },
+  { id:'p2', revenue: 800000, tier: 1 },
+  { id:'p3', revenue: 700000, tier: 1 },
+];
+G.staff = [{}, {}];
+advanceMonth();
+_eq(G.living.stage, 1, 'студия достигнута');
+_ok(LivingMarket.isNodeUnlocked('craft3'), 'craft3 (tier 3) теперь открыт');
+_ok(!LivingMarket.isNodeUnlocked('craft4'), 'craft4 (tier 4) пока заблокирован');
+`));
+
+// ── 21: XP начисляется за стадии (Студия = 300) ──
+add(run('Тест 21: переход на стадию Студия начисляет 300 ★XP', `
+initState(); selectSpec('smm'); startGame();
+const xp0 = G.xp || 0;
+G.completedProjects = [
+  { id:'p1', revenue: 700000, tier: 1 },
+  { id:'p2', revenue: 800000, tier: 1 },
+  { id:'p3', revenue: 700000, tier: 1 },
+];
+G.staff = [{}, {}];
+advanceMonth();
+// Сдачи (3×10×tier 1=30) + милстоуны + стадия Студия (300)
+_ok(G.xp >= 300, 'XP >= 300 после стадии (' + G.xp + ')');
+_ok(G.living.xpEarned > 0, 'xpEarned > 0');
+`));
+
+// ── 22: XP за майлстоуны (15/40/120 по эшелонам) ──
+add(run('Тест 22: майлстоуны дают XP по эшелонам', `
+initState(); selectSpec('smm'); startGame();
+const xp0 = G.xp || 0;
+// Первая сдача — first_delivery (micro=15) + five_deliveries не сработает за 1 сдачу
+G.completedProjects = [{ id:'p1', revenue: 200000, tier: 1 }];
+advanceMonth();
+// Прибавка >= 15 (first_delivery микро) + 10 за саму сдачу (tier 1 × 10)
+const gain = (G.xp || 0) - xp0;
+_ok(gain >= 25, 'gain >= 25 (15 first_delivery + 10 delivery) — фактически ' + gain);
+`));
+
+// ── 23: XP за сдачу зависит от tier (10×tier) ──
+add(run('Тест 23: XP за сдачи = 10 × tier', `
+initState(); selectSpec('smm'); startGame();
+const xp0 = G.xp || 0;
+// Подкидываем сдачу tier 3 → +30 XP
+G.completedProjects = [{ id:'p1', revenue: 5000000, tier: 3 }];
+advanceMonth();
+const gain1 = (G.xp || 0) - xp0;
+// 30 за сдачу + милстоун first_delivery (15) + first_million (15, money>=1M) — НЕ сработает, money всё равно низкий
+// Точная сверка тяжела (зависит от triggered milestones), но >=30 проверяем
+_ok(gain1 >= 30, 'tier 3 сдача даёт ≥30 XP (фактически ' + gain1 + ')');
+`));
+
+// ── 24: покупка узла tier 1 — успех ──
+add(run('Тест 24: покупка craft1 (50 XP) списывает XP и применяет эффект', `
+initState(); selectSpec('smm'); startGame();
+// Накачиваем XP вручную через _awardXp (некоторые стартовые милстоуны могли
+// уже выдать XP — first_million/reputation_50, — поэтому сверяем дельту).
+LivingMarket._awardXp(100, 'dev');
+const xpBefore = LivingMarket.getXp();
+_ok(xpBefore >= 100, 'XP пополнен (' + xpBefore + ')');
+const qBonusBefore = G.caseQBonus || 0;
+const r = LivingMarket.purchaseTreeNode('craft1');
+_ok(r.ok, 'purchase ok');
+_eq(r.node.id, 'craft1', 'узел craft1');
+_eq(LivingMarket.getXp(), xpBefore - 50, 'XP = before - 50');
+_ok(LivingMarket.getPurchasedNodeIds().includes('craft1'), 'узел в purchased');
+// Эффект применился: caseQBonus прибавил 2
+_eq(G.caseQBonus, qBonusBefore + 2, 'caseQBonus +2 (эффект craft1)');
+`));
+
+// ── 25: повторная покупка — already_owned ──
+add(run('Тест 25: вторая покупка того же узла — already_owned', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+const r2 = LivingMarket.purchaseTreeNode('craft1');
+_ok(!r2.ok, 'отказ');
+_eq(r2.reason, 'already_owned', 'причина: already_owned');
+`));
+
+// ── 26: покупка заблокированного узла — locked ──
+add(run('Тест 26: покупка tier 3 на гараже — locked', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(1000, 'dev');
+const r = LivingMarket.purchaseTreeNode('craft3');
+_ok(!r.ok, 'отказ');
+_eq(r.reason, 'locked', 'причина: locked');
+`));
+
+// ── 27: tier 5 заблокирован даже при огромной стадии и XP ──
+add(run('Тест 27: tier 5 (Фаза C) недоступен даже с гипотетической стадией Сеть', `
+initState(); selectSpec('smm'); startGame();
+// Принудительно поднимем стадию (минуя гейт) и навалим XP
+G.living.stage = 3;  // Сеть
+LivingMarket._awardXp(5000, 'dev');
+_ok(!LivingMarket.isNodeUnlocked('craft5'), 'craft5 (tier 5) НЕ открыт даже на стадии Сеть');
+const r = LivingMarket.purchaseTreeNode('craft5');
+_ok(!r.ok, 'отказ');
+_eq(r.reason, 'locked', 'причина: locked');
+`));
+
+// ── 28: not_enough_xp ──
+add(run('Тест 28: покупка без XP — not_enough_xp', `
+initState(); selectSpec('smm'); startGame();
+G.xp = 10;
+const r = LivingMarket.purchaseTreeNode('craft1');
+_ok(!r.ok, 'отказ');
+_eq(r.reason, 'not_enough_xp', 'причина: not_enough_xp');
+`));
+
+// ── 29: эффекты узлов корректно мутируют G ──
+add(run('Тест 29: эффекты узлов разных веток корректно применяются', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(5000, 'dev');
+// prod1: +0.05 к speedUpgrades
+const speed0 = G.speedUpgrades || 0;
+LivingMarket.purchaseTreeNode('prod1');
+_ok(Math.abs((G.speedUpgrades || 0) - (speed0 + 0.05)) < 1e-9, 'speedUpgrades +0.05');
+// peop1: scoutSalaryMult × 0.9
+const m0 = G.scoutSalaryMult || 1;
+LivingMarket.purchaseTreeNode('peop1');
+_ok(Math.abs((G.scoutSalaryMult || 0) - (m0 * 0.9)) < 1e-9, 'scoutSalaryMult × 0.9');
+// mark1: portfolio +5
+const pf0 = G.portfolio || 0;
+LivingMarket.purchaseTreeNode('mark1');
+_eq(G.portfolio, pf0 + 5, 'portfolio +5');
+// deal1: perkPayoutMult +0.05
+const pm0 = G.perkPayoutMult || 0;
+LivingMarket.purchaseTreeNode('deal1');
+_ok(Math.abs((G.perkPayoutMult || 0) - (pm0 + 0.05)) < 1e-9, 'perkPayoutMult +0.05');
+`));
+
+// ── 30: журнал получает запись о покупке узла ──
+add(run('Тест 30: покупка узла пишется в journal', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(500, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+const j = LivingMarket.getJournal();
+_ok(j.some(x => x.id === 'tree_craft1'), 'journal содержит tree_craft1');
+`));
+
+console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);
