@@ -109,6 +109,19 @@
     { id: 'wise_consult',   icon: '🧠', name: 'Стартовая экспертиза',
       desc: '+3 Q к стартовой команде (опыт переносится между ранами)',
       cost: 200, effects: { startQBonus: 3 } },
+
+    // ── v0.5 (2026-06-15): дерево выбора — взаимоисключения ──
+    // early_advance vs seed_money — два разных пути «как стартовать»:
+    //   либо +100K кэшем (seed_money), либо +30% к шансу предоплаты
+    //   (early_advance) — оба разом ломают баланс старта.
+    { id: 'early_advance',  icon: '🏦', name: 'Стартовый аванс',
+      desc: '+30% к шансу предоплаты с самого старта (вместо +100К капитала)',
+      cost: 350, effects: { startPrepayBonus: 0.30 }, excludes: ['seed_money'] },
+    // solo_genius vs wise_consult — «помощь команде vs гений-основатель».
+    // wise_consult усиливает наёмных, solo_genius — самого основателя.
+    { id: 'solo_genius',    icon: '🧙', name: 'Гений-основатель',
+      desc: '+5 Q от основателя (qualityBonus) — растёт без команды (вместо стартовой экспертизы)',
+      cost: 300, effects: { startQualityBonus: 5 }, excludes: ['wise_consult'] },
   ];
 
   // ── Ачивки ────────────────────────────────────────────
@@ -197,6 +210,25 @@
     // no_milestones: победа без выбора ни одного бонуса на Run Map milestone (choicesTaken пуст).
     { id: 'no_milestones',    icon: '🚫', name: 'Без подсказок',     desc: 'Победить, не взяв ни одного бонуса на milestone Run Map', shards: 200,
       check: ctx => ctx.run.won && (ctx.run.choicesTaken === 0) },
+
+    // ── v0.5 (2026-06-15): третья волна комбо-ачивок ──
+    // scenario_master: победа в обоих сценариях (agency И bank).
+    { id: 'scenario_master',  icon: '🌐', name: 'Мастер сценариев',  desc: 'Победа в обоих сценариях (agency и bank)', shards: 300,
+      check: ctx => {
+        const won = new Set(ctx.meta.wonScenarios || []);
+        return won.has('agency') && won.has('bank');
+      },
+      progress: ctx => {
+        const won = new Set(ctx.meta.wonScenarios || []);
+        const cur = ['agency','bank'].filter(s => won.has(s)).length;
+        return { cur, max: 2 };
+      } },
+    // debt_free: победа без кредита (G._loanTakenEver не выставлялся).
+    { id: 'debt_free',        icon: '💸', name: 'Без долгов',        desc: 'Победить, ни разу не взяв кредит за всю партию', shards: 150,
+      check: ctx => ctx.run.won && !ctx.run.loanTaken },
+    // minimalist: победа с командой не больше 1 сотрудника (или вообще без).
+    { id: 'minimalist',       icon: '👤', name: 'Минималист',        desc: 'Победить с командой не более 1 сотрудника', shards: 200,
+      check: ctx => ctx.run.won && (ctx.run.staffCount <= 1) },
   ];
 
   // ── Загрузка/сохранение ──────────────────────────────
@@ -216,7 +248,9 @@
       metaPerks:      [],
       // v0.3: сложности, на которых уже была победа (для difficulty_master)
       wonDifficulties:[],
-      history:        [],   // [{ won, bankrupt, monthsPlayed, stageReached, runeId, finalMoney, peakMoney, lowestMoney, finalReputation, difficulty, ts }]
+      // v0.5: сценарии, в которых уже была победа (для scenario_master)
+      wonScenarios:   [],
+      history:        [],   // [{ won, bankrupt, monthsPlayed, stageReached, runeId, finalMoney, peakMoney, lowestMoney, finalReputation, difficulty, scenarioId, loanTaken, ts }]
     };
   }
 
@@ -288,16 +322,32 @@
       .reduce((s, p) => s + ((p.effects && p.effects.bonusRerolls) || 0), 0);
   }
   // Покупка перка: списывает shards, добавляет id. Возвращает { ok, reason, perk, meta }.
+  // v0.5: учитываем взаимоисключения через perk.excludes[].
   function purchaseMetaPerk(id) {
     const perk = META_PERKS.find(p => p.id === id);
     if (!perk) return { ok: false, reason: 'unknown_perk' };
     const meta = _loadMeta();
     if ((meta.metaPerks || []).includes(id)) return { ok: false, reason: 'already_owned' };
     if ((meta.shards || 0) < perk.cost)       return { ok: false, reason: 'not_enough_shards' };
-    meta.shards   = (meta.shards || 0) - perk.cost;
+    // v0.5: дерево выбора — если уже куплен взаимоисключающий — нельзя
+    const owned = new Set(meta.metaPerks || []);
+    const blocker = (perk.excludes || []).find(x => owned.has(x));
+    if (blocker) return { ok: false, reason: 'excluded_by', blocker };
+    // Двунаправленность: если этот перк перечислен в чьём-то excludes — тоже блокируем
+    const inverse = META_PERKS.find(p => owned.has(p.id) && (p.excludes || []).includes(id));
+    if (inverse) return { ok: false, reason: 'excluded_by', blocker: inverse.id };
+    meta.shards    = (meta.shards || 0) - perk.cost;
     meta.metaPerks = (meta.metaPerks || []).concat(id);
     _saveMeta(meta);
     return { ok: true, perk, meta };
+  }
+  // v0.5: вернуть массив id перков, конфликтующих с указанным (по обеим сторонам)
+  function getConflictingPerks(id) {
+    const perk = META_PERKS.find(p => p.id === id);
+    if (!perk) return [];
+    const direct = (perk.excludes || []).slice();
+    const inverse = META_PERKS.filter(p => (p.excludes || []).includes(id)).map(p => p.id);
+    return Array.from(new Set(direct.concat(inverse)));
   }
   // Применить эффекты перков к стартовому состоянию (вызывается из обёртки startGame).
   function _applyMetaPerksToG(g) {
@@ -313,13 +363,19 @@
         acc.startScoutBonus   += (fx.startScoutBonus || 0);
         acc.startQBonus       += (fx.startQBonus     || 0);
         acc.startPenaltyShield = acc.startPenaltyShield || !!fx.startPenaltyShield;
+        // v0.5: «дерево» — startPrepayBonus (early_advance) и startQualityBonus (solo_genius)
+        acc.startPrepayBonus  += (fx.startPrepayBonus  || 0);
+        acc.startQualityBonus += (fx.startQualityBonus || 0);
         return acc;
-      }, { startMoney: 0, startRep: 0, startScoutBonus: 0, startQBonus: 0, startPenaltyShield: false });
-    if (totals.startMoney)        g.money            = (g.money || 0) + totals.startMoney;
-    if (totals.startRep)          g.reputation       = (g.reputation || 0) + totals.startRep;
-    if (totals.startScoutBonus)   g.caseScoutBonus   = (g.caseScoutBonus || 0) + totals.startScoutBonus;
-    if (totals.startQBonus)       g.caseQBonus       = (g.caseQBonus || 0) + totals.startQBonus;
+      }, { startMoney: 0, startRep: 0, startScoutBonus: 0, startQBonus: 0, startPenaltyShield: false,
+           startPrepayBonus: 0, startQualityBonus: 0 });
+    if (totals.startMoney)         g.money            = (g.money || 0) + totals.startMoney;
+    if (totals.startRep)           g.reputation       = (g.reputation || 0) + totals.startRep;
+    if (totals.startScoutBonus)    g.caseScoutBonus   = (g.caseScoutBonus || 0) + totals.startScoutBonus;
+    if (totals.startQBonus)        g.caseQBonus       = (g.caseQBonus || 0) + totals.startQBonus;
     if (totals.startPenaltyShield) g.perkPenaltyShield = true;
+    if (totals.startPrepayBonus)   g.perkPrepayBonus  = Math.round(((g.perkPrepayBonus || 0) + totals.startPrepayBonus) * 100) / 100;
+    if (totals.startQualityBonus)  g.qualityBonus     = (g.qualityBonus || 0) + totals.startQualityBonus;
   }
 
   // ── v0.3: Текущая сложность партии — для трекинга difficulty_master ──
@@ -328,6 +384,15 @@
       if (typeof localStorage === 'undefined') return null;
       const d = localStorage.getItem('bt_difficulty_v1');
       return d || 'normal';   // дефолт — normal (если ещё не выбирали)
+    } catch (e) { return null; }
+  }
+  // ── v0.5: Текущий сценарий — для трекинга scenario_master ──
+  function _currentScenarioId() {
+    try {
+      if (typeof SCENARIO !== 'undefined' && SCENARIO && SCENARIO.id) return SCENARIO.id;
+      if (typeof localStorage === 'undefined') return null;
+      const s = localStorage.getItem('bt_scenario_v1');
+      return s || 'agency';   // дефолт — agency
     } catch (e) { return null; }
   }
 
@@ -352,6 +417,12 @@
       meta.wonDifficulties = (meta.wonDifficulties || []).slice();
       if (!meta.wonDifficulties.includes(difficulty)) meta.wonDifficulties.push(difficulty);
     }
+    // v0.5: трекинг победных сценариев (для ачивки scenario_master)
+    const scenarioId = _currentScenarioId();
+    if (won && scenarioId) {
+      meta.wonScenarios = (meta.wonScenarios || []).slice();
+      if (!meta.wonScenarios.includes(scenarioId)) meta.wonScenarios.push(scenarioId);
+    }
 
     // v0.2: коллекционер рун — копим список всех использованных рун
     if (runeId) {
@@ -375,6 +446,9 @@
       // v0.4: трекеры для комбо-ачивок solo_win / no_milestones
       staffCount:      Array.isArray(g.staff) ? g.staff.length : 0,
       choicesTaken:    (g.runMap && Array.isArray(g.runMap.choicesTaken)) ? g.runMap.choicesTaken.length : 0,
+      // v0.5: трекеры для scenario_master / debt_free
+      scenarioId:      scenarioId || null,
+      loanTaken:       !!g._loanTakenEver,
       ts: Date.now(),
     };
 
@@ -422,6 +496,9 @@
     const m = g.money || 0;
     if (g._runMaxMoney == null || m > g._runMaxMoney) g._runMaxMoney = m;
     if (g._runMinMoney == null || m < g._runMinMoney) g._runMinMoney = m;
+    // v0.5: трекинг был ли вообще кредит. G.loan === null → нет; объект → есть.
+    // Поднимаем флаг once-and-for-all (для ачивки debt_free).
+    if (g.loan) g._loanTakenEver = true;
   }
   if (typeof window.advanceMonth === 'function' && !window.advanceMonth.__metaWrapped) {
     const _origAdv = window.advanceMonth;
@@ -618,24 +695,45 @@
     </div>`;
   }
 
-  // v0.3: рендер мета-перков в модале
+  // v0.3 + v0.5: рендер мета-перков. v0.5 показывает статус «заблокирован
+  // другим перком» если куплен взаимоисключающий + список конфликтов.
   function _renderMetaPerksHtml(meta) {
     const owned = new Set(meta.metaPerks || []);
     return META_PERKS.map(p => {
       const isOwned = owned.has(p.id);
-      const canBuy  = !isOwned && (meta.shards || 0) >= p.cost;
-      const button = isOwned
-        ? `<span style="font-size:10px;font-weight:700;color:#22d3ee;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);border-radius:6px;padding:4px 9px;white-space:nowrap">✓ Куплен</span>`
-        : `<button onclick="RogueMeta._buyPerk('${p.id}')"
+      const conflicts = getConflictingPerks(p.id);
+      const blocker = conflicts.find(x => owned.has(x));
+      const isBlocked = !isOwned && !!blocker;
+      const canBuy  = !isOwned && !isBlocked && (meta.shards || 0) >= p.cost;
+      let button;
+      if (isOwned) {
+        button = `<span style="font-size:10px;font-weight:700;color:#22d3ee;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);border-radius:6px;padding:4px 9px;white-space:nowrap">✓ Куплен</span>`;
+      } else if (isBlocked) {
+        const bp = META_PERKS.find(x => x.id === blocker);
+        const bIcon = bp ? bp.icon : '⛔';
+        button = `<span title="Заблокирован: ${bp ? bp.name : blocker}" style="font-size:10px;font-weight:700;color:#fca5a5;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:6px;padding:4px 9px;white-space:nowrap">${bIcon} Заблокирован</span>`;
+      } else {
+        button = `<button onclick="RogueMeta._buyPerk('${p.id}')"
             ${canBuy ? '' : 'disabled style="opacity:.45;cursor:not-allowed"'}
             style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fbbf24;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:${canBuy ? 'pointer' : 'not-allowed'};white-space:nowrap">
             Купить · ${p.cost} ✦
           </button>`;
-      return `<div style="border:1px solid ${isOwned ? 'rgba(34,211,238,.25)' : 'var(--border)'};background:${isOwned ? 'rgba(34,211,238,.06)' : 'rgba(255,255,255,.02)'};border-radius:8px;padding:9px 11px;display:flex;align-items:center;gap:10px">
+      }
+      // v0.5: подпись о конфликтах под описанием (только если есть)
+      let conflictLine = '';
+      if (conflicts.length) {
+        const names = conflicts.map(id => {
+          const cp = META_PERKS.find(x => x.id === id);
+          return cp ? cp.icon + ' ' + cp.name : id;
+        }).join(' · ');
+        conflictLine = `<div style="font-size:9px;color:var(--muted);margin-top:3px">⛔ Несовместимо: ${names}</div>`;
+      }
+      return `<div style="border:1px solid ${isOwned ? 'rgba(34,211,238,.25)' : (isBlocked ? 'rgba(248,81,73,.18)' : 'var(--border)')};background:${isOwned ? 'rgba(34,211,238,.06)' : (isBlocked ? 'rgba(248,81,73,.03)' : 'rgba(255,255,255,.02)')};border-radius:8px;padding:9px 11px;display:flex;align-items:center;gap:10px;${isBlocked ? 'opacity:.65' : ''}">
         <span style="font-size:22px;filter:${isOwned ? 'none' : 'grayscale(.3)'}">${p.icon}</span>
         <div style="min-width:0;flex:1">
           <div style="font-size:12px;font-weight:700;color:var(--text)">${p.name}</div>
           <div style="font-size:10px;color:var(--sub);margin-top:2px;line-height:1.4">${p.desc}</div>
+          ${conflictLine}
         </div>
         ${button}
       </div>`;
@@ -720,6 +818,8 @@
     // v0.3: мета-перки
     getMetaPerks, isMetaPerkUnlocked, getUnlockedMetaPerkIds,
     purchaseMetaPerk, getBonusRerolls,
+    // v0.5: взаимоисключения
+    getConflictingPerks,
     // Запись (через игровой цикл)
     awardAtEndGame,
     reset,
@@ -731,5 +831,5 @@
     _buyPerk,
   };
 
-  console.log('[meta] v0.4 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок, ' + META_PERKS.length + ' мета-перков · текущие ✦ ' + getShards());
+  console.log('[meta] v0.5 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок, ' + META_PERKS.length + ' мета-перков · текущие ✦ ' + getShards());
 })();

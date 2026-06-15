@@ -164,11 +164,14 @@ _ok(s.meta.history.length === 1 && s.meta.history[0].bankrupt === true, 'ист�
 
 // ── 3: первая победа → +stageBonus, +first_win + millionaire (v0.2) + v0.4 комбо ──
 // Финал 9M ≥ 5M → millionaire (+150 ✦). FakeG без staff/runMap.choicesTaken →
-// staffCount=0, choicesTaken=0 → v0.4 ачивки solo_win (+250) и no_milestones (+200)
-// тоже срабатывают. Передаём staff:[{}] и runMap.choicesTaken:['x'] чтобы
-// заблокировать комбо-ачивки в этом тесте (фокус — базовые ачивки + millionaire).
+// staffCount=0, choicesTaken=0 → v0.4 ачивки solo_win/no_milestones срабатывают.
+// v0.5: staffCount=0 ещё и triggerит minimalist; отсутствие _loanTakenEver triggerит
+// debt_free. Чтобы тест держал ту же сумму 540, блокируем все комбо: staff:[{},{}]
+// (length 2 — НЕ minimalist, НЕ solo_win), choicesTaken:['x'] (НЕ no_milestones)
+// и _loanTakenEver:true (НЕ debt_free). Сценарий agency, побед в bank нет —
+// scenario_master тоже не выпадает.
 add(run('Тест 3: первая победа на endgame → base+stageBonus+ачивки', `
-const fakeG = { money: 9000000, monthsPlayed: 28, staff: [{}], runMap: { stageIdx: 4, choicesTaken: ['x'] } };
+const fakeG = { money: 9000000, monthsPlayed: 28, staff: [{},{}], _loanTakenEver: true, runMap: { stageIdx: 4, choicesTaken: ['x'] } };
 const s = RogueMeta.awardAtEndGame(true, fakeG);
 _eq(s.base, 100, 'базовая награда 100 за победу');
 _eq(s.stageBonus, 80, 'stageBonus = 4×20 (cap 80)');
@@ -176,8 +179,11 @@ _ok(s.newAchievements.some(a => a.id === 'first_run'), 'засчитан first_r
 _ok(s.newAchievements.some(a => a.id === 'first_win'), 'засчитан first_win');
 _ok(s.newAchievements.some(a => a.id === 'endgame_reached'), 'засчитан endgame_reached');
 _ok(s.newAchievements.some(a => a.id === 'millionaire'), 'засчитан millionaire (peakMoney фолбэк = 9M ≥ 5M)');
-_ok(!s.newAchievements.some(a => a.id === 'solo_win'),       'solo_win НЕ засчитан (staff.length=1)');
+_ok(!s.newAchievements.some(a => a.id === 'solo_win'),       'solo_win НЕ засчитан (staff.length=2)');
 _ok(!s.newAchievements.some(a => a.id === 'no_milestones'),  'no_milestones НЕ засчитан (choicesTaken=1)');
+_ok(!s.newAchievements.some(a => a.id === 'minimalist'),     'v0.5: minimalist НЕ засчитан (staff.length=2)');
+_ok(!s.newAchievements.some(a => a.id === 'debt_free'),      'v0.5: debt_free НЕ засчитан (_loanTakenEver=true)');
+_ok(!s.newAchievements.some(a => a.id === 'scenario_master'),'v0.5: scenario_master НЕ засчитан (только agency)');
 // 100 + 80 + 50 (first_run) + 100 (first_win) + 60 (endgame_reached) + 150 (millionaire) = 540
 _eq(s.award, 540, 'суммарное начисление 540');
 _eq(s.meta.shards, 540, 'shards = 540');
@@ -416,20 +422,23 @@ _ok(G._runMaxMoney >= peakBefore + 500000 || G._runMaxMoney >= G.money,
     '_runMaxMoney обновлён после роста');
 `, { withRunes: true }));
 
-// ── 23: v0.3/v0.4 мета-перки — API доступно, дефолт пуст ──
-add(run('Тест 23: META_PERKS — API и дефолтное состояние (3 v0.3 + 3 v0.4 = 6)', `
+// ── 23: v0.3/v0.4/v0.5 мета-перки — API доступно, дефолт пуст ──
+add(run('Тест 23: META_PERKS — API и дефолтное состояние (3 v0.3 + 3 v0.4 + 2 v0.5 = 8)', `
 _ok(typeof RogueMeta.getMetaPerks === 'function',        'API getMetaPerks есть');
 _ok(typeof RogueMeta.purchaseMetaPerk === 'function',    'API purchaseMetaPerk есть');
 _ok(typeof RogueMeta.isMetaPerkUnlocked === 'function',  'API isMetaPerkUnlocked есть');
 _ok(typeof RogueMeta.getBonusRerolls === 'function',     'API getBonusRerolls есть');
+_ok(typeof RogueMeta.getConflictingPerks === 'function', 'v0.5: API getConflictingPerks есть');
 const perks = RogueMeta.getMetaPerks();
-_eq(perks.length, 6, 'в пуле 6 мета-перков (3 v0.3 + 3 v0.4)');
+_eq(perks.length, 8, 'в пуле 8 мета-перков (3 v0.3 + 3 v0.4 + 2 v0.5)');
 _ok(perks.some(p => p.id === 'extra_reroll'),   'v0.3: extra_reroll');
 _ok(perks.some(p => p.id === 'seed_money'),     'v0.3: seed_money');
 _ok(perks.some(p => p.id === 'brand_starter'),  'v0.3: brand_starter');
 _ok(perks.some(p => p.id === 'penalty_grace'),  'v0.4: penalty_grace');
 _ok(perks.some(p => p.id === 'signature_lead'), 'v0.4: signature_lead');
 _ok(perks.some(p => p.id === 'wise_consult'),   'v0.4: wise_consult');
+_ok(perks.some(p => p.id === 'early_advance'),  'v0.5: early_advance');
+_ok(perks.some(p => p.id === 'solo_genius'),    'v0.5: solo_genius');
 _eq(RogueMeta.getBonusRerolls(), 0, 'по дефолту bonusRerolls = 0');
 _eq(RogueMeta.getUnlockedMetaPerkIds().length, 0, 'по дефолту перки не куплены');
 `));
@@ -635,6 +644,162 @@ localStorage.setItem('bt_difficulty_v1', 'hard');
 RogueMeta.awardAtEndGame(true, { money: 8000000, runMap: { stageIdx: 4 } });
 const p1 = a.progress({ meta: RogueMeta.getMeta() });
 _eq(p1.cur, 2, 'после 2 разных сложностей: cur=2');
+`));
+
+// ═════════════════════════════════════════════════════
+//   v0.5 (2026-06-15): дерево выбора мета-перков
+//   (взаимоисключения) + третья волна комбо-ачивок
+// ═════════════════════════════════════════════════════
+
+// ── 41: getConflictingPerks отдаёт корректный список конфликтов ──
+add(run('Тест 41: getConflictingPerks — двунаправленность excludes', `
+// early_advance объявлен с excludes:['seed_money'] → прямой конфликт
+const cEarly = RogueMeta.getConflictingPerks('early_advance');
+_ok(cEarly.includes('seed_money'), 'early_advance конфликтует с seed_money (direct)');
+// seed_money сам не указывает excludes, но inverse-search должен его найти
+const cSeed = RogueMeta.getConflictingPerks('seed_money');
+_ok(cSeed.includes('early_advance'), 'seed_money конфликтует с early_advance (inverse)');
+// solo_genius vs wise_consult аналогично
+const cGenius = RogueMeta.getConflictingPerks('solo_genius');
+_ok(cGenius.includes('wise_consult'), 'solo_genius конфликтует с wise_consult (direct)');
+const cWise = RogueMeta.getConflictingPerks('wise_consult');
+_ok(cWise.includes('solo_genius'), 'wise_consult конфликтует с solo_genius (inverse)');
+// Перки без excludes — пустой список
+_eq(RogueMeta.getConflictingPerks('extra_reroll').length, 0, 'extra_reroll без конфликтов');
+_eq(RogueMeta.getConflictingPerks('brand_starter').length, 0, 'brand_starter без конфликтов');
+// Несуществующий id → пустой список
+_eq(RogueMeta.getConflictingPerks('nonexistent_perk').length, 0, 'unknown perk → []');
+`));
+
+// ── 42: попытка купить взаимоисключающий перк → excluded_by ──
+add(run('Тест 42: покупка взаимоисключающего перка блокируется', `
+// Накопим достаточно ✦ для обоих покупок
+for (let i = 0; i < 30; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r1 = RogueMeta.purchaseMetaPerk('seed_money');
+_ok(r1.ok, 'seed_money куплен');
+// Попытка купить early_advance — должна быть отклонена
+const r2 = RogueMeta.purchaseMetaPerk('early_advance');
+_ok(!r2.ok, 'early_advance отклонён');
+_eq(r2.reason, 'excluded_by', 'причина: excluded_by');
+_eq(r2.blocker, 'seed_money', 'blocker = seed_money');
+// Обратное направление: попробуем сценарий solo_genius → wise_consult
+RogueMeta.reset();
+for (let i = 0; i < 30; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r3 = RogueMeta.purchaseMetaPerk('wise_consult');
+_ok(r3.ok, 'wise_consult куплен');
+const r4 = RogueMeta.purchaseMetaPerk('solo_genius');
+_ok(!r4.ok, 'solo_genius отклонён (inverse-блок)');
+_eq(r4.reason, 'excluded_by', 'причина: excluded_by');
+_eq(r4.blocker, 'wise_consult', 'blocker = wise_consult (через inverse-поиск)');
+`));
+
+// ── 43: early_advance применяется в startGame → +0.30 к perkPrepayBonus ──
+add(run('Тест 43: early_advance перк → +0.30 к G.perkPrepayBonus с старта', `
+initState(); selectSpec('smm'); startGame();
+const baseBonus = G.perkPrepayBonus || 0;
+for (let i = 0; i < 16; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r = RogueMeta.purchaseMetaPerk('early_advance');
+_ok(r.ok, 'early_advance куплен');
+initState(); selectSpec('smm'); startGame();
+const after = G.perkPrepayBonus || 0;
+_ok(Math.abs(after - (baseBonus + 0.30)) < 0.001,
+    'после early_advance: perkPrepayBonus = base + 0.30 (' + baseBonus + ' → ' + after + ')');
+`));
+
+// ── 44: solo_genius применяется в startGame → +5 к qualityBonus ──
+add(run('Тест 44: solo_genius перк → +5 к G.qualityBonus с старта', `
+initState(); selectSpec('smm'); startGame();
+const qBase = G.qualityBonus || 0;
+for (let i = 0; i < 14; i++) RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 0 } });
+const r = RogueMeta.purchaseMetaPerk('solo_genius');
+_ok(r.ok, 'solo_genius куплен');
+initState(); selectSpec('smm'); startGame();
+_eq(G.qualityBonus, qBase + 5, '+5 к qualityBonus');
+`));
+
+// ── 45: scenario_master — победа в agency + bank ──
+add(run('Тест 45: scenario_master — победа в обоих сценариях', `
+// agency-сценарий: после загрузки SCENARIO.id = 'agency' (HARNESS гидрирует agency.data.js)
+// Победа на agency
+const sA = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, staff: [{},{}], _loanTakenEver: true, runMap: { stageIdx: 4, choicesTaken: ['x'] } });
+_ok(!sA.newAchievements.some(a => a.id === 'scenario_master'), 'после 1 победы на agency scenario_master НЕ выдан');
+let m = RogueMeta.getMeta();
+_ok((m.wonScenarios || []).includes('agency'), 'agency записан в wonScenarios');
+// Симулируем bank — подмена localStorage
+localStorage.setItem('bt_scenario_v1', 'bank');
+// Также обновим SCENARIO.id, чтобы _currentScenarioId предпочёл его (но он защищён try/catch)
+try { SCENARIO.id = 'bank'; } catch (e) {}
+const sB = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, staff: [{},{}], _loanTakenEver: true, runMap: { stageIdx: 4, choicesTaken: ['x'] } });
+_ok(sB.newAchievements.some(a => a.id === 'scenario_master'), 'после bank-победы scenario_master выдан');
+m = RogueMeta.getMeta();
+_eq((m.wonScenarios || []).length, 2, 'wonScenarios = 2');
+_ok((m.achievements || []).includes('scenario_master'), 'ачивка в achievements');
+`));
+
+// ── 46: scenario_master.progress отражает wonScenarios ──
+add(run('Тест 46: scenario_master.progress → {cur, max:2}', `
+const a = RogueMeta.getAchievements().find(x => x.id === 'scenario_master');
+_ok(typeof a.progress === 'function', 'progress API у scenario_master');
+const p0 = a.progress({ meta: RogueMeta.getMeta() });
+_eq(p0.cur, 0, 'до побед: cur=0');
+_eq(p0.max, 2, 'максимум: 2 сценария');
+// Победа на agency
+RogueMeta.awardAtEndGame(true, { money: 8000000, runMap: { stageIdx: 4 } });
+const p1 = a.progress({ meta: RogueMeta.getMeta() });
+_eq(p1.cur, 1, 'после agency-победы: cur=1');
+`));
+
+// ── 47: debt_free — победа без кредита ──
+add(run('Тест 47: debt_free — победа с loanTaken=false', `
+// Победа без кредита: _loanTakenEver не выставлен → loanTaken=false → ачивка
+const s1 = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] } });
+_ok(s1.newAchievements.some(a => a.id === 'debt_free'), 'без кредита debt_free засчитан');
+// Контр-пример: с _loanTakenEver=true ачивка не выдаётся
+RogueMeta.reset();
+const s2 = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, staff: [{},{}], _loanTakenEver: true, runMap: { stageIdx: 4, choicesTaken: ['x'] } });
+_ok(!s2.newAchievements.some(a => a.id === 'debt_free'), 'с кредитом (_loanTakenEver=true) debt_free НЕ засчитан');
+const m = RogueMeta.getMeta();
+const last = m.history[m.history.length - 1];
+_eq(last.loanTaken, true, 'в history.loanTaken записан флаг');
+`));
+
+// ── 48: _updateMoneyTrack выставляет _loanTakenEver при наличии G.loan ──
+add(run('Тест 48: обёртка advanceMonth выставляет _loanTakenEver при g.loan', `
+initState(); selectSpec('smm'); startGame();
+_ok(!G._loanTakenEver, 'после startGame _loanTakenEver отсутствует');
+// Симулируем взятие кредита: ставим G.loan = объект и вызываем advanceMonth
+G.loan = { amount: 50000, rate: 0.20, monthsLeft: 6 };
+advanceMonth();
+_ok(G._loanTakenEver === true, 'после advanceMonth с g.loan: _loanTakenEver=true');
+// Даже если кредит позже погасили, флаг остаётся (once-and-for-all)
+G.loan = null;
+advanceMonth();
+_ok(G._loanTakenEver === true, '_loanTakenEver не сбрасывается после погашения');
+`, { withRunes: true }));
+
+// ── 49: minimalist — победа с командой ≤1 ──
+add(run('Тест 49: minimalist — победа с staff.length ≤ 1', `
+// staffCount=0 → minimalist
+const s1 = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, staff: [], _loanTakenEver: true, runMap: { stageIdx: 4, choicesTaken: ['x'] } });
+_ok(s1.newAchievements.some(a => a.id === 'minimalist'), 'staff=[] → minimalist засчитан');
+// staffCount=1 → тоже minimalist
+RogueMeta.reset();
+const s2 = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, staff: [{}], _loanTakenEver: true, runMap: { stageIdx: 4, choicesTaken: ['x'] } });
+_ok(s2.newAchievements.some(a => a.id === 'minimalist'), 'staff.length=1 → minimalist засчитан');
+// staffCount=2 → НЕ minimalist
+RogueMeta.reset();
+const s3 = RogueMeta.awardAtEndGame(true, { money: 8000000, monthsPlayed: 25, staff: [{},{}], _loanTakenEver: true, runMap: { stageIdx: 4, choicesTaken: ['x'] } });
+_ok(!s3.newAchievements.some(a => a.id === 'minimalist'), 'staff.length=2 → minimalist НЕ засчитан');
+`));
+
+// ── 50: scenarioId записан в history ──
+add(run('Тест 50: scenarioId записывается в каждую запись history', `
+localStorage.setItem('bt_scenario_v1', 'bank');
+try { SCENARIO.id = 'bank'; } catch (e) {}
+RogueMeta.awardAtEndGame(false, { money: 0, runMap: { stageIdx: 1 } });
+const m = RogueMeta.getMeta();
+const last = m.history[m.history.length - 1];
+_eq(last.scenarioId, 'bank', 'последняя запись history.scenarioId = bank');
 `));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
