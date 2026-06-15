@@ -1,5 +1,59 @@
 # BizTycoon — Changelog
 
+## v3.34 — Перенос пула майлстоунов в данные сценария (Фаза A, шаг 3) (2026-06-15)
+
+Майлстоуны Живого рынка теперь объявляются в `scenarios/<id>.data.js`
+через декларативный DSL (Тип C). Engine.UPGRADES и встроенный пул
+оставлены fallback'ом ради back-compat: если у сценария нет
+`milestones[]`, используется прежний хардкод.
+
+### DSL операторов в `when`
+- `deliveriesAtLeast: N` — кол-во `G.completedProjects`
+- `staffAtLeast: N` — кол-во сотрудников
+- `moneyAtLeast: N | 'originalWin'` — текущий `G.money` (псевдоним
+  `'originalWin'`/`'winCondition'` тянет `G.living.originalWinCondition`)
+- `peakMoneyAtLeast: N | 'originalWin'` — пик кассы за партию
+- `revenueAtLeast: N` — накопленная выручка по `completedProjects`
+- `reputationAtLeast: N` — `G.reputation`
+- `portfolioAtLeast: N` — `G.portfolio`
+- `stageAtLeast: N` — индекс стадии в STAGES (Гараж=0, Студия=1, …)
+
+Логическое **AND**: если в `when` несколько ключей, срабатывает только
+когда выполнены все. Токен `$win` в `desc` подставляет
+`_formatMoneyShort(originalWinCondition)` — число хранится в одном
+месте (`settings.winCondition`).
+
+### Контент
+- **Агентство**: 11 милстоунов перенесены 1-в-1 (first_delivery,
+  reputation_50, first_hire, first_million, five_deliveries, team_5,
+  revenue_5m, portfolio_25, original_win, stage_studio, stage_agency).
+- **Банк**: тематический набор под профиль 9M/85K — названия и
+  пороги пересмотрены (team_8 вместо team_5, revenue_7m, portfolio_30
+  + банковская терминология). `original_win` использует
+  `peakMoneyAtLeast: 'originalWin'` → автоматом тянется 9M.
+
+### API
+- `getScenarioMilestones()` — data-вью без компиляции `cond`.
+- `compileMilestoneWhen(when)` → `function(g) → bool`.
+- `resolveMilestoneDesc(desc, g)` — публично для dev/UI.
+- `_milestones(g)` / `_milestonesBuiltin(g)` / `_scenarioMilestones(g)` —
+  dev/test точки.
+
+### Валидация
+- test-livingmarket 357 → **364/364** (тесты DSL.1–DSL.7)
+- test-meta 191, test-runes 27, test-storyarcs 67, test-runmap 136,
+  test-live-switch 25, test-strategy ✅, test-outsource 27 — всё зелёное
+- sim2-lc agency 12: 47 сдач / 3 ухода / 0 ошибок
+- sim2-lc bank 4: 25 сдач / 1 уход / 0 ошибок
+- build multi 1010.7 KB (+18.4 KB), bank 892.2 KB (+15.4 KB)
+
+### Тип архитектуры
+**A** (минимальные правки `src/livingmarket.js` v0.7 → v0.8) +
+**C** (данные `scenarios/agency.data.js` и `scenarios/bank.data.js`).
+Engine/staff/projects/ui не модифицированы.
+
+---
+
 ## v3.33 — Refcount boolean-флагов на респеке (Фаза B, шаг 6 — финал) (2026-06-15)
 
 Закрытие Фазы B. Boolean-флаги (`perkPenaltyShield`,

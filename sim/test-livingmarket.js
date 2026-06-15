@@ -1196,5 +1196,124 @@ _eq(LivingMarket.getFlagRefcount().perkPenaltyShield, 1, 'refcount=1 снова'
 _eq(G.perkPenaltyShield, true, 'флаг включён снова');
 `));
 
+// ══════════════════════════════════════════════════════════════════════
+//   v0.8 (Фаза A, шаг 3) — DSL милстоунов в данных сценария
+// ══════════════════════════════════════════════════════════════════════
+
+// ── DSL: компилятор условий ──
+add(run('Тест DSL.1: compileMilestoneWhen — все операторы AND', `
+const c = LivingMarket.compileMilestoneWhen;
+const fakeG = {
+  completedProjects: [{revenue:100}, {revenue:200}, {revenue:300}],
+  staff: [{},{}],
+  money: 1500000,
+  reputation: 55,
+  portfolio: 12,
+  living: { _peakMoney: 9999999, originalWinCondition: 7500000, stage: 1 },
+};
+_ok(c({deliveriesAtLeast: 3})(fakeG), 'deliveriesAtLeast: 3 ✓');
+_ok(!c({deliveriesAtLeast: 4})(fakeG), 'deliveriesAtLeast: 4 ✗');
+_ok(c({staffAtLeast: 2})(fakeG), 'staffAtLeast: 2 ✓');
+_ok(!c({staffAtLeast: 3})(fakeG), 'staffAtLeast: 3 ✗');
+_ok(c({moneyAtLeast: 1000000})(fakeG), 'moneyAtLeast: 1M ✓');
+_ok(!c({moneyAtLeast: 2000000})(fakeG), 'moneyAtLeast: 2M ✗');
+_ok(c({reputationAtLeast: 50})(fakeG), 'reputationAtLeast: 50 ✓');
+_ok(!c({reputationAtLeast: 60})(fakeG), 'reputationAtLeast: 60 ✗');
+_ok(c({portfolioAtLeast: 10})(fakeG), 'portfolioAtLeast: 10 ✓');
+_ok(!c({portfolioAtLeast: 20})(fakeG), 'portfolioAtLeast: 20 ✗');
+_ok(c({stageAtLeast: 1})(fakeG), 'stageAtLeast: 1 ✓');
+_ok(!c({stageAtLeast: 2})(fakeG), 'stageAtLeast: 2 ✗');
+_ok(c({revenueAtLeast: 600})(fakeG), 'revenueAtLeast: 600 ✓ (100+200+300)');
+_ok(!c({revenueAtLeast: 700})(fakeG), 'revenueAtLeast: 700 ✗');
+// peakMoneyAtLeast: 'originalWin' → 7.5M, peak 9.999M
+_ok(c({peakMoneyAtLeast: 'originalWin'})(fakeG), 'peakMoneyAtLeast: originalWin ✓');
+// AND: всё выполнено
+_ok(c({deliveriesAtLeast: 2, reputationAtLeast: 50, moneyAtLeast: 1000000})(fakeG), 'AND всех условий ✓');
+// AND: одно сломано
+_ok(!c({deliveriesAtLeast: 2, reputationAtLeast: 99, moneyAtLeast: 1000000})(fakeG), 'AND с одним промахом ✗');
+// Пустой when → всегда false
+_ok(!c(null)(fakeG), 'null when → false');
+`));
+
+// ── $win-токен в desc ──
+add(run('Тест DSL.2: $win-токен заменяется на форматированный originalWinCondition', `
+const r = LivingMarket.resolveMilestoneDesc;
+const g = { living: { originalWinCondition: 7500000 } };
+const out = r('Достичь $win', g);
+_ok(out.includes('₽'), 'результат содержит ₽');
+_ok(!out.includes('$win'), 'токен $win заменён');
+_ok(out.includes('7') && (out.includes('M') || out.includes('K')), 'число подставлено');
+// Без токена — возвращается как есть
+_eq(r('Просто текст', g), 'Просто текст', 'без токена — без изменений');
+// Не строка — обрабатывается безопасно
+_eq(r(null, g), '', 'null → пустая строка');
+`));
+
+// ── Сценарные милстоуны: agency.data.js теперь содержит SCENARIO.milestones ──
+add(run('Тест DSL.3: SCENARIO.milestones есть в данных и используется', `
+const sm = LivingMarket.getScenarioMilestones();
+_ok(Array.isArray(sm), 'SCENARIO.milestones — массив');
+_ok(sm.length >= 11, 'минимум 11 милстоунов (' + sm.length + ')');
+const ids = sm.map(m => m.id);
+['first_delivery','reputation_50','first_hire','first_million','five_deliveries','original_win','stage_studio','stage_agency']
+  .forEach(id => _ok(ids.includes(id), 'есть ' + id));
+// _milestones берёт из сценария когда есть
+initState(); selectSpec('smm'); startGame();
+const m = LivingMarket._milestones(G);
+_eq(m.length, sm.length, '_milestones длина = SCENARIO.milestones длина');
+// Структура совпадает (id + tier)
+_eq(m[0].id, sm[0].id, 'первый id совпадает');
+// cond — функция
+_ok(typeof m[0].cond === 'function', 'cond — функция');
+`));
+
+// ── DSL.4: триггерится корректно из сценария ──
+add(run('Тест DSL.4: first_delivery срабатывает через DSL-cond, пишется в journal', `
+initState(); selectSpec('smm'); startGame();
+G.completedProjects = [{ id:'p1', revenue: 100000, tier:1, failed:false }];
+advanceMonth();
+_ok(G.living.milestonesFired.includes('first_delivery'), 'first_delivery зафиксирован через DSL');
+const j = G.living.journal.find(x => x.id === 'first_delivery');
+_ok(!!j, 'есть запись в journal');
+_eq(j.tier, 'micro', 'tier = micro');
+`));
+
+// ── DSL.5: original_win через peakMoneyAtLeast: 'originalWin' ──
+add(run('Тест DSL.5: original_win через peakMoneyAtLeast: originalWin', `
+initState(); selectSpec('smm'); startGame();
+const orig = G.living.originalWinCondition;
+_ok(orig > 0, 'originalWinCondition сохранён (' + orig + ')');
+G.money = orig - 1;
+advanceMonth();
+_ok(!G.living.milestonesFired.includes('original_win'), 'до порога — не сработал');
+G.money = orig + 1000;
+advanceMonth();
+_ok(G.living.milestonesFired.includes('original_win'), 'после порога — сработал');
+const entry = G.living.journal.find(x => x.id === 'original_win');
+_ok(!!entry, 'есть запись в journal');
+_ok(!entry.desc.includes('$win'), '$win заменён в desc');
+`));
+
+// ── DSL.6: fallback на встроенный пул, если SCENARIO.milestones удалить ──
+add(run('Тест DSL.6: fallback на _milestonesBuiltin без SCENARIO.milestones', `
+initState(); selectSpec('smm'); startGame();
+delete SCENARIO.milestones;
+const m = LivingMarket._milestones(G);
+_ok(m.length >= 11, 'fallback дал ' + m.length + ' милстоунов');
+const ids = m.map(x => x.id);
+_ok(ids.includes('first_delivery'), 'first_delivery в fallback');
+_ok(ids.includes('original_win'),   'original_win в fallback');
+// _milestonesBuiltin отдельно тоже доступен
+const b = LivingMarket._milestonesBuiltin(G);
+_eq(b.length, m.length, '_milestonesBuiltin длина совпадает');
+`));
+
+// ── DSL.7: _scenarioMilestones возвращает null, если sceanrio пуст ──
+add(run('Тест DSL.7: _scenarioMilestones возвращает null без SCENARIO.milestones', `
+initState(); selectSpec('smm'); startGame();
+delete SCENARIO.milestones;
+_eq(LivingMarket._scenarioMilestones(G), null, 'null когда нет SCENARIO.milestones');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);

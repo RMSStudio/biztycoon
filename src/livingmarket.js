@@ -54,7 +54,7 @@
   // engine-древо, buyUpgrade не блокируется, ничего больше не меняется.
   const USE_TREE2_PROGRESSION = true;
 
-  const VERSION = 'v0.7';
+  const VERSION = 'v0.8';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -298,12 +298,75 @@
       apply: g => { /* подключается в Фазе C */ } },
   ];
 
-  // ── Майлстоуны (встроенный пул v0.1) ────────────────────────────────
-  // В следующей итерации переедет в `scenarios/<id>.data.js → milestones[]`.
-  // Каждый майлстоун — `cond(g, helpers)` → bool.  Срабатывает один раз,
-  // id попадает в `g.living.journal`.  Заходит через обёртку advanceMonth.
+  // ── Майлстоуны: DSL + чтение из сценария (v0.8, Фаза A шаг 3) ─────────
+  // Источник истины — `SCENARIO.milestones` (Тип C, чистые данные).  Если
+  // в сценарии нет `milestones`, используется встроенный `_milestonesBuiltin`
+  // как back-compat fallback (тот же контент, что был до v0.8).
+  //
+  // Формат сценарного майлстоуна:
+  //   { id, icon, name, desc, tier: 'micro'|'middle'|'large', when: {...} }
+  //
+  // Поля `when` объединяются логическим И (срабатывает только когда ВСЕ
+  // условия выполнены).  Поддерживаемые операторы:
+  //   • deliveriesAtLeast: N        — кол-во записей в G.completedProjects
+  //   • staffAtLeast: N             — кол-во сотрудников в G.staff
+  //   • moneyAtLeast: N|'originalWin'  — текущий G.money ≥ порога
+  //   • peakMoneyAtLeast: N|'originalWin' — пик кассы за партию
+  //   • revenueAtLeast: N           — накопленная выручка (sum revenue)
+  //   • reputationAtLeast: N        — G.reputation ≥ N
+  //   • portfolioAtLeast: N         — G.portfolio ≥ N
+  //   • stageAtLeast: N             — индекс достигнутой стадии
+  //
+  // Токен `$win` в поле desc заменяется отформатированным originalWinCondition
+  // (бывшая win-цель сценария), чтобы конкретное число не приходилось
+  // дублировать в data.
+
+  function _compileMilestoneWhen(when) {
+    if (!when || typeof when !== 'object') return () => false;
+    return function (g) {
+      const winOrig = (g.living && g.living.originalWinCondition) || 0;
+      const resolveTarget = v => (v === 'originalWin' || v === 'winCondition') ? winOrig : v;
+      if ('deliveriesAtLeast' in when && _countDeliveries(g) < when.deliveriesAtLeast) return false;
+      if ('staffAtLeast'      in when && _countStaff(g)      < when.staffAtLeast)      return false;
+      if ('moneyAtLeast'      in when && (g.money || 0)      < resolveTarget(when.moneyAtLeast)) return false;
+      if ('peakMoneyAtLeast'  in when) {
+        const peak = (g.living && g.living._peakMoney != null) ? g.living._peakMoney : (g.money || 0);
+        if (peak < resolveTarget(when.peakMoneyAtLeast)) return false;
+      }
+      if ('revenueAtLeast'    in when && _cumulativeRevenue(g) < when.revenueAtLeast)   return false;
+      if ('reputationAtLeast' in when && (g.reputation || 0)   < when.reputationAtLeast) return false;
+      if ('portfolioAtLeast'  in when && (g.portfolio || 0)    < when.portfolioAtLeast)  return false;
+      if ('stageAtLeast'      in when && _stageIdx(g)          < when.stageAtLeast)      return false;
+      return true;
+    };
+  }
+
+  function _resolveMilestoneDesc(desc, g) {
+    if (typeof desc !== 'string') return desc || '';
+    if (desc.indexOf('$win') === -1) return desc;
+    const orig = (g.living && g.living.originalWinCondition) || 0;
+    return desc.split('$win').join(_formatMoneyShort(orig));
+  }
+
+  function _scenarioMilestones(g) {
+    if (typeof SCENARIO === 'undefined' || !SCENARIO || !Array.isArray(SCENARIO.milestones)) return null;
+    return SCENARIO.milestones.map(m => ({
+      id:    m.id,
+      icon:  m.icon || '🎯',
+      name:  m.name || m.id,
+      desc:  _resolveMilestoneDesc(m.desc, g),
+      tier:  m.tier || 'micro',
+      cond:  _compileMilestoneWhen(m.when),
+    }));
+  }
 
   function _milestones(g) {
+    const sc = _scenarioMilestones(g);
+    if (sc && sc.length) return sc;
+    return _milestonesBuiltin(g);
+  }
+
+  function _milestonesBuiltin(g) {
     const orig = (g.living && g.living.originalWinCondition) || 7500000;
     return [
       // Эшелон «Микро»
@@ -1771,6 +1834,10 @@
       };
     },
     showYearlyReport,
+    // v0.8 (Фаза A шаг 3) — DSL милстоунов в данных сценария
+    getScenarioMilestones: () => (typeof SCENARIO !== 'undefined' && SCENARIO && Array.isArray(SCENARIO.milestones)) ? SCENARIO.milestones.slice() : null,
+    compileMilestoneWhen:  _compileMilestoneWhen,
+    resolveMilestoneDesc:  _resolveMilestoneDesc,
     // dev/test
     _initLiving,
     _suppressWin,
@@ -1784,6 +1851,9 @@
     _countStaff,
     _cumulativeRevenue,
     _formatMoneyShort,
+    _milestones,
+    _milestonesBuiltin,
+    _scenarioMilestones,
   };
 
   try {
