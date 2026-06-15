@@ -342,7 +342,7 @@ _ok(typeof LivingMarket.canPurchaseNode === 'function', 'canPurchaseNode ест�
 _ok(typeof LivingMarket.purchaseTreeNode === 'function', 'purchaseTreeNode есть');
 _ok(typeof LivingMarket.showTreeModal === 'function', 'showTreeModal есть');
 _eq(LivingMarket.getTreeBranches().length, 5, '5 веток');
-_eq(LivingMarket.getTreeNodes().length, 25, '25 узлов (5×5)');
+_eq(LivingMarket.getTreeNodes().length, 30, '30 узлов (5×5 + 5 альтернативных tier 4b)');
 const branchIds = LivingMarket.getTreeBranches().map(b => b.id);
 ['craft','production','people','market','deals'].forEach(id => {
   _ok(branchIds.includes(id), 'ветка ' + id);
@@ -510,6 +510,113 @@ LivingMarket._awardXp(500, 'dev');
 LivingMarket.purchaseTreeNode('craft1');
 const j = LivingMarket.getJournal();
 _ok(j.some(x => x.id === 'tree_craft1'), 'journal содержит tree_craft1');
+`));
+
+// ══════════════════════════════════════════════════════════════════════
+//   v0.3 (Фаза B, шаг 4 + 5) — Эксклюзивные пары tier 4 + persistence
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 31: 5 альтернативных узлов tier 4 в API ──
+add(run('Тест 31: 5 пар tier 4 (a/b) с excludes', `
+const nodes = LivingMarket.getTreeNodes();
+const tier4 = nodes.filter(n => n.tier === 4);
+_eq(tier4.length, 10, 'на tier 4 ровно 10 узлов (5 пар a/b)');
+// Каждая пара должна указывать на пару взаимно
+['craft','prod','peop','mark','deal'].forEach(prefix => {
+  const a = nodes.find(n => n.id === prefix + '4');
+  const b = nodes.find(n => n.id === prefix + '4b');
+  _ok(!!a && !!b, prefix + '4 и ' + prefix + '4b существуют');
+  _ok(a && (a.excludes || []).includes(prefix + '4b'), prefix + '4 excludes ' + prefix + '4b');
+  _ok(b && (b.excludes || []).includes(prefix + '4'),  prefix + '4b excludes ' + prefix + '4');
+});
+`));
+
+// ── 32: getConflictingTreeNodes двунаправленно ──
+add(run('Тест 32: getConflictingTreeNodes — двунаправленный поиск', `
+_ok(typeof LivingMarket.getConflictingTreeNodes === 'function', 'API getConflictingTreeNodes есть');
+_ok(LivingMarket.getConflictingTreeNodes('craft4').includes('craft4b'), 'craft4 ↔ craft4b (direct)');
+_ok(LivingMarket.getConflictingTreeNodes('craft4b').includes('craft4'), 'craft4b ↔ craft4 (inverse)');
+_eq(LivingMarket.getConflictingTreeNodes('craft1').length, 0, 'tier 1 узлы без конфликтов');
+_eq(LivingMarket.getConflictingTreeNodes('mark5').length, 0, 'tier 5 узлы без конфликтов');
+_eq(LivingMarket.getConflictingTreeNodes('unknown_id').length, 0, 'unknown → []');
+`));
+
+// ── 33: покупка a блокирует b с reason excluded_by ──
+add(run('Тест 33: покупка craft4 блокирует craft4b (excluded_by + blocker)', `
+initState(); selectSpec('smm'); startGame();
+// Двигаемся до Агентства (idx 2) — открывает tier 4
+G.living.stage = 2;
+LivingMarket._awardXp(2000, 'dev');
+const r1 = LivingMarket.purchaseTreeNode('craft4');
+_ok(r1.ok, 'craft4 куплен');
+const r2 = LivingMarket.purchaseTreeNode('craft4b');
+_ok(!r2.ok, 'craft4b отклонён');
+_eq(r2.reason, 'excluded_by', 'reason = excluded_by');
+_eq(r2.blocker, 'craft4', 'blocker = craft4');
+`));
+
+// ── 34: симметрия — покупка b блокирует a ──
+add(run('Тест 34: покупка peop4b блокирует peop4 (inverse-direction)', `
+initState(); selectSpec('smm'); startGame();
+G.living.stage = 2;
+LivingMarket._awardXp(2000, 'dev');
+const r1 = LivingMarket.purchaseTreeNode('peop4b');
+_ok(r1.ok, 'peop4b куплен');
+const r2 = LivingMarket.purchaseTreeNode('peop4');
+_ok(!r2.ok, 'peop4 отклонён');
+_eq(r2.reason, 'excluded_by', 'reason = excluded_by');
+_eq(r2.blocker, 'peop4b', 'blocker = peop4b');
+`));
+
+// ── 35: эффекты узлов tier 4b корректно применяются ──
+add(run('Тест 35: эффекты 4b отличаются от 4a (стиль билда)', `
+initState(); selectSpec('smm'); startGame();
+G.living.stage = 2;
+LivingMarket._awardXp(2000, 'dev');
+// craft4b: Q+5, repBonus+1, portfolio+5
+const q0 = G.caseQBonus || 0, rb0 = G.caseRepBonus || 0, pf0 = G.portfolio || 0;
+LivingMarket.purchaseTreeNode('craft4b');
+_eq(G.caseQBonus, q0 + 5, 'craft4b: Q +5');
+_eq(G.caseRepBonus, rb0 + 1, 'craft4b: caseRepBonus +1');
+_eq(G.portfolio, pf0 + 5, 'craft4b: portfolio +5');
+`));
+
+// ── 36 (шаг 5): persistence — purchased[] и эффекты переживают reload ──
+// saves.js сохраняет G целиком. После _restore G.caseQBonus и G.living
+// возвращаются к значениям на момент сохранения. Это значит, что эффекты
+// tree 2.0 НЕ нужно переприменять после load — они уже в G. Проверяем
+// этот контракт явно (если кто-то изменит сейв-логику — упадёт).
+add(run('Тест 36: эффекты узла переживают save+restore G целиком', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._awardXp(200, 'dev');
+LivingMarket.purchaseTreeNode('craft1');
+const beforeQ        = G.caseQBonus;
+const beforeXp       = G.xp;
+const beforePurchase = LivingMarket.getPurchasedNodeIds().slice();
+// Эмулируем save → restore: сериализуем G целиком (как делает saves.js),
+// потом обнуляем G, потом восстанавливаем из снапшота.
+const snap = JSON.parse(JSON.stringify(G));
+// Полный reset движка
+initState();
+// «Восстановление» — копируем поля обратно (упрощённый _restore-проход)
+Object.keys(snap).forEach(k => { G[k] = snap[k]; });
+// После restore: caseQBonus сохранился, purchased[] сохранился
+_eq(G.caseQBonus, beforeQ, 'caseQBonus сохранился после save+restore');
+_eq(G.xp,        beforeXp, 'XP сохранился');
+_eq(JSON.stringify(LivingMarket.getPurchasedNodeIds()), JSON.stringify(beforePurchase),
+    'purchased[] сохранился');
+// Повторная покупка того же узла блокируется after-restore
+const r = LivingMarket.purchaseTreeNode('craft1');
+_eq(r.reason, 'already_owned', 'after-restore: повторная покупка → already_owned');
+`));
+
+// ── 37: tier 5 узлы по-прежнему не имеют excludes (не парные) ──
+add(run('Тест 37: tier 5 узлы — без excludes (Фаза C перерешит)', `
+const tier5 = LivingMarket.getTreeNodes().filter(n => n.tier === 5);
+_eq(tier5.length, 5, 'на tier 5 — 5 узлов');
+tier5.forEach(n => {
+  _ok(!n.excludes || n.excludes.length === 0, n.id + ' без excludes');
+});
 `));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');

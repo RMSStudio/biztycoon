@@ -45,7 +45,7 @@
   const LIVING_MARKET_ENABLED = true;
   if (!LIVING_MARKET_ENABLED) return;
 
-  const VERSION = 'v0.2';
+  const VERSION = 'v0.3';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -196,8 +196,13 @@
       cost: 150, apply: g => { g.perkPenaltyShield = true; } },
     { id: 'craft3', branch: 'craft', tier: 3, icon: '🎨', name: 'Арт-директорат',     desc: '+5 к качеству от кейсов навсегда',                cost: 320,
       apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 5; } },
-    { id: 'craft4', branch: 'craft', tier: 4, icon: '🔬', name: 'R&D-лаборатория',    desc: '+10 к качеству от кейсов · потолок качества выше', cost: 700,
+    { id: 'craft4',  branch: 'craft', tier: 4, icon: '🔬', name: 'R&D-лаборатория',    desc: '+10 к качеству от кейсов · потолок качества выше', cost: 700,
+      excludes: ['craft4b'],
       apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 10; } },
+    { id: 'craft4b', branch: 'craft', tier: 4, icon: '🎨', name: 'Школа арт-директорства',
+      desc: '+5 Q · +1 восст. реп/мес · +5 портфолио (широкий путь вместо глубокого R&D)',
+      cost: 720, excludes: ['craft4'],
+      apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 5; g.caseRepBonus = (g.caseRepBonus || 0) + 1; g.portfolio = (g.portfolio || 0) + 5; } },
     { id: 'craft5', branch: 'craft', tier: 5, icon: '🎓', name: 'Школа студии',       desc: '(Фаза C) Junior растёт в Middle автоматически',   cost: 1200,
       apply: g => { /* эффект подключается в Фазе C — без модуля рынка пока no-op */ } },
 
@@ -208,8 +213,13 @@
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.05; g.perkInstantSpeed = true; } },
     { id: 'prod3', branch: 'production', tier: 3, icon: '🚀', name: 'Автоматизация', desc: '+10% к скорости команды',                         cost: 340,
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.10; } },
-    { id: 'prod4', branch: 'production', tier: 4, icon: '⚙️', name: 'Конвейер',     desc: '+15% к скорости · −1 фазе у epic-цепочек',        cost: 720,
+    { id: 'prod4',  branch: 'production', tier: 4, icon: '⚙️', name: 'Конвейер',     desc: '+15% к скорости · −1 фазе у epic-цепочек',        cost: 720,
+      excludes: ['prod4b'],
       apply: g => { g.speedUpgrades = (g.speedUpgrades || 0) + 0.15; g.perkEpicShortcut = true; } },
+    { id: 'prod4b', branch: 'production', tier: 4, icon: '💎', name: 'Бутик-режим',
+      desc: '+10 Q · +5% к восстановлению (медленно, но качественно вместо конвейера)', cost: 720,
+      excludes: ['prod4'],
+      apply: g => { g.caseQBonus = (g.caseQBonus || 0) + 10; g.perkRecoveryBonus = (g.perkRecoveryBonus || 0) + 0.05; } },
     { id: 'prod5', branch: 'production', tier: 5, icon: '🏗', name: 'Параллельные треки', desc: '(Фаза C) +1 слот мощности по умолчанию',   cost: 1200,
       apply: g => { /* подключается в Фазе C */ } },
 
@@ -220,8 +230,13 @@
       apply: g => { g.perkFatigueMult = (g.perkFatigueMult || 1) * 0.9; } },
     { id: 'peop3', branch: 'people', tier: 3, icon: '📈', name: 'Опционы',           desc: '+10% к восстановлению от HR-действий',            cost: 350,
       apply: g => { g.perkRecoveryBonus = (g.perkRecoveryBonus || 0) + 0.10; } },
-    { id: 'peop4', branch: 'people', tier: 4, icon: '🪪', name: 'Кадровый резерв',   desc: '+1 кандидат при скаутинге',                       cost: 720,
+    { id: 'peop4',  branch: 'people', tier: 4, icon: '🪪', name: 'Кадровый резерв',   desc: '+1 кандидат при скаутинге',                       cost: 720,
+      excludes: ['peop4b'],
       apply: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 1; } },
+    { id: 'peop4b', branch: 'people', tier: 4, icon: '🧘', name: 'Корпоративная культура',
+      desc: '−20% усталости команды (умножитель × 0.8) — выгорание не строит резервы', cost: 720,
+      excludes: ['peop4'],
+      apply: g => { g.perkFatigueMult = (g.perkFatigueMult || 1) * 0.8; } },
     { id: 'peop5', branch: 'people', tier: 5, icon: '👑', name: 'Культ компании',    desc: '(Фаза C) Иммунитет к хантингу звёзд',             cost: 1200,
       apply: g => { /* подключается в Фазе C */ } },
 
@@ -232,8 +247,13 @@
       apply: g => { g.caseRepBonus = (g.caseRepBonus || 0) + 1; } },
     { id: 'mark3', branch: 'market', tier: 3, icon: '📣', name: 'PR-служба',         desc: '+1 лид при скаутинге · +1 восст. реп/мес',        cost: 340,
       apply: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 1; g.caseRepBonus = (g.caseRepBonus || 0) + 1; } },
-    { id: 'mark4', branch: 'market', tier: 4, icon: '🏅', name: 'Премии',            desc: '+10 баллов портфолио · +5 репутации',             cost: 720,
+    { id: 'mark4',  branch: 'market', tier: 4, icon: '🏅', name: 'Премии',            desc: '+10 баллов портфолио · +5 репутации',             cost: 720,
+      excludes: ['mark4b'],
       apply: g => { g.portfolio = (g.portfolio || 0) + 10; g.reputation = Math.min(100, (g.reputation || 0) + 5); } },
+    { id: 'mark4b', branch: 'market', tier: 4, icon: '📡', name: 'Медиа-присутствие',
+      desc: '+2 лида при скаутинге · +5 портфолио (массовая узнаваемость вместо премий)', cost: 720,
+      excludes: ['mark4'],
+      apply: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 2; g.portfolio = (g.portfolio || 0) + 5; } },
     { id: 'mark5', branch: 'market', tier: 5, icon: '🎤', name: 'Лидер мнений',      desc: '(Фаза C) T5+ офферы появляются чаще',             cost: 1200,
       apply: g => { /* подключается в Фазе C */ } },
 
@@ -244,8 +264,13 @@
       apply: g => { g.perkPrepayBonus = (g.perkPrepayBonus || 0) + 0.10; } },
     { id: 'deal3', branch: 'deals', tier: 3, icon: '💳', name: 'Финдир',             desc: '+10% к выплатам (стек)',                          cost: 350,
       apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.10; } },
-    { id: 'deal4', branch: 'deals', tier: 4, icon: '🛡', name: 'Демпинг-защита',     desc: '+15% к шансу предоплаты (стек) · −штраф просрочки', cost: 720,
+    { id: 'deal4',  branch: 'deals', tier: 4, icon: '🛡', name: 'Демпинг-защита',     desc: '+15% к шансу предоплаты (стек) · −штраф просрочки', cost: 720,
+      excludes: ['deal4b'],
       apply: g => { g.perkPrepayBonus = (g.perkPrepayBonus || 0) + 0.15; g.perkPenaltyShield = true; } },
+    { id: 'deal4b', branch: 'deals', tier: 4, icon: '⚔️', name: 'Финансовый агрессор',
+      desc: '+15% к выплатам со всех сделок (стек) — давим маржой вместо защиты',  cost: 720,
+      excludes: ['deal4'],
+      apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.15; } },
     { id: 'deal5', branch: 'deals', tier: 5, icon: '🏭', name: 'M&A-отдел',          desc: '(Фаза C) Поглощения конкурентов дешевле',          cost: 1200,
       apply: g => { /* подключается в Фазе C */ } },
   ];
@@ -451,12 +476,30 @@
     return true;
   }
 
-  // Можно ли купить сейчас: открыт + не куплен + хватает XP.
+  // v0.3 (Фаза B шаг 4): возвращает массив id всех узлов, конфликтующих
+  // с указанным. Двунаправленно: direct excludes + inverse (если кто-то
+  // указал этот id в своём excludes). По образцу meta.js getConflictingPerks.
+  function getConflictingTreeNodes(id) {
+    const n = _getTreeNode(id);
+    if (!n) return [];
+    const direct  = (n.excludes || []).slice();
+    const inverse = TREE_NODES
+      .filter(x => (x.excludes || []).includes(id))
+      .map(x => x.id);
+    return Array.from(new Set(direct.concat(inverse)));
+  }
+
+  // Можно ли купить сейчас: открыт + не куплен + хватает XP + нет
+  // купленного взаимоисключающего (v0.3, tier 4 a/b).
   function canPurchaseNode(id) {
     const n = _getTreeNode(id);
     if (!n) return { ok: false, reason: 'unknown_node' };
     if (_isNodeOwned(id))         return { ok: false, reason: 'already_owned', node: n };
     if (!isNodeUnlocked(id))      return { ok: false, reason: 'locked',        node: n };
+    // v0.3: проверка взаимоисключений (двунаправленно)
+    const conflicts = getConflictingTreeNodes(id);
+    const blocker = conflicts.find(x => _isNodeOwned(x));
+    if (blocker) return { ok: false, reason: 'excluded_by', blocker, node: n };
     if ((G.xp || 0) < n.cost)     return { ok: false, reason: 'not_enough_xp', node: n };
     return { ok: true, node: n };
   }
@@ -812,6 +855,10 @@
     const owned    = _isNodeOwned(n.id);
     const unlocked = isNodeUnlocked(n.id);
     const can      = canPurchaseNode(n.id);
+    // v0.3: учитываем взаимоисключения tier 4 a/b
+    const conflicts = getConflictingTreeNodes(n.id);
+    const blockerId = !owned && conflicts.find(x => _isNodeOwned(x));
+    const isExcluded = !!blockerId;
     // Цветовая разметка по состоянию
     let borderColor, bg, statusHtml, opacity;
     if (owned) {
@@ -819,6 +866,14 @@
       bg          = 'rgba(34,211,238,.07)';
       opacity     = '1';
       statusHtml  = '<div style="font-size:9px;color:#22d3ee;font-weight:700">✓ Куплен</div>';
+    } else if (isExcluded) {
+      const bp = _getTreeNode(blockerId);
+      const bIcon = bp ? bp.icon : '⛔';
+      const bName = bp ? bp.name : blockerId;
+      borderColor = 'rgba(248,81,73,.25)';
+      bg          = 'rgba(248,81,73,.04)';
+      opacity     = '.6';
+      statusHtml  = '<div style="font-size:9px;font-weight:700;color:#fca5a5" title="Заблокирован: ' + bName + '">' + bIcon + ' Несовместимо</div>';
     } else if (!unlocked) {
       borderColor = 'var(--border)';
       bg          = 'rgba(255,255,255,.015)';
@@ -835,13 +890,25 @@
       opacity     = '1';
       statusHtml  = '<button onclick="LivingMarket._buyNode(\'' + n.id + '\')" style="background:' + b.color + ';border:none;color:#0a0a0a;padding:3px 8px;border-radius:5px;font-size:9px;font-weight:700;cursor:pointer;width:100%">Купить · ★' + n.cost + '</button>';
     }
-    // Силуэт для locked: имя + иконка приглушены, описание скрыто
+    // Силуэт для locked (стадия не достигнута): имя + иконка приглушены, описание скрыто.
+    // Для excluded — описание показываем, чтобы игрок видел, ЧТО он отдал, выбрав другую ветку.
     const descHtml = (!unlocked && !owned)
       ? '<div style="font-size:9px;color:var(--muted);line-height:1.3;font-style:italic">…</div>'
       : '<div style="font-size:9px;color:var(--sub);line-height:1.3">' + n.desc + '</div>';
+    // Подпись «Несовместимо: …» показываем у всех узлов с конфликтами (даже до покупки),
+    // чтобы выбор был осознанным до клика «Купить».
+    let conflictLine = '';
+    if (conflicts.length) {
+      const names = conflicts.map(id => {
+        const cn = _getTreeNode(id);
+        return cn ? cn.icon + ' ' + cn.name : id;
+      }).join(' / ');
+      conflictLine = '<div style="font-size:8px;color:var(--muted);margin-top:2px;line-height:1.3">⇄ ' + (owned || isExcluded ? '' : 'или ') + names + '</div>';
+    }
     return '<div style="border:1px solid ' + borderColor + ';background:' + bg + ';border-radius:7px;padding:7px;display:flex;flex-direction:column;gap:4px;opacity:' + opacity + ';min-height:90px">' +
       '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:15px">' + n.icon + '</span><span style="font-size:10px;font-weight:700;color:var(--text)">' + n.name + '</span></div>' +
       descHtml +
+      conflictLine +
       '<div style="margin-top:auto">' + statusHtml + '</div>' +
     '</div>';
   }
@@ -930,6 +997,7 @@
     isNodeUnlocked,
     canPurchaseNode,
     purchaseTreeNode,
+    getConflictingTreeNodes,
     getPurchasedNodeIds:  () => ((G && G.living && G.living.tree2 && G.living.tree2.purchased) || []).slice(),
     showTreeModal,
     _buyNode,
@@ -946,5 +1014,8 @@
     _formatMoneyShort,
   };
 
-  try { console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий (3 живых, 3 требуют модуль рынка), древо 2.0: ' + TREE_NODES.length + ' узлов'); } catch (e) {}
+  try {
+    const t4count = TREE_NODES.filter(n => n.tier === 4).length;
+    console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий (3 живых, 3 требуют модуль рынка), древо 2.0: ' + TREE_NODES.length + ' узлов (tier 4 пар: ' + (t4count / 2) + ')');
+  } catch (e) {}
 })();
