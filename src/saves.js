@@ -59,12 +59,15 @@ function _snap() {
 function _restore(snapshot) {
   Object.keys(snapshot.G).forEach(k => { G[k] = snapshot.G[k]; });
   DECISIONS = (snapshot.DECISIONS || []).slice();
-  // п.31: старые сейвы могут содержать money > winCondition без флага.
-  // Ставим флаг чтобы не показывать победный экран повторно при загрузке.
-  const wc = (typeof SCENARIO !== 'undefined') && SCENARIO?.settings?.winCondition;
-  const atEndgame = (G.runMap?.stageIdx ?? 0) >= 4;
-  if (wc != null && atEndgame && (G.money || 0) >= wc) {
+  // п.31: если в загруженном сейве уже достигнут финальный этап Run Map —
+  // ставим флаг, чтобы milestone-модал не вызвал повторный экран победы.
+  // (milestonesShown блокирует сам модал, но флаг нужен для engine-защиты.)
+  const stages = (typeof window !== 'undefined' && window.RunMap)
+    ? window.RunMap.getStages() : [];
+  const finalStageIdx = stages.length > 0 ? stages.length - 1 : 4;
+  if ((G.runMap?.stageIdx ?? 0) >= finalStageIdx) {
     G._wonAlreadyCelebrated = true;
+    G._endGameFired = true;
   }
 }
 

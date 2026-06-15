@@ -1555,14 +1555,11 @@ function advanceMonth() {
   if (typeof autoSave === 'function') autoSave();
 
   // Win / Lose
-  // v3.26: Модуль «Живой рынок» выставляет winCondition = Infinity → бесконечная партия.
-  // v2.2.2: Победа = достижение стадии «Эндгейм» (stageIdx ≥ 4) И money ≥ winCondition.
-  //   Флаг _wonAlreadyCelebrated предотвращает повторный триггер при загрузке сейвов.
-  const _atEndgame = (G.runMap?.stageIdx ?? 0) >= 4;
-  if (!G._wonAlreadyCelebrated && _atEndgame && G.money>=SCENARIO.settings.winCondition){
-    G._wonAlreadyCelebrated = true; _emitRender(); _emitEndGame(true); return;
-  }
-  if (G.money<=0)       { _emitRender(); _emitEndGame(false); return; }
+  // v2.2.3: Победа = выбор бонуса на переходе в «Эндгейм» (финальный этап Run Map).
+  //   Триггер живёт в runmap.js (_showMilestoneModal → fn(g)) чтобы win-экран
+  //   появлялся ПОСЛЕ закрытия модала выбора бонуса, а не посреди него.
+  //   Здесь только банкротство.
+  if (G.money<=0) { _emitRender(); _emitEndGame(false); return; }
 
   // Случайное событие (40%, пропуск 1-го месяца; не когда идёт событие ИИ)
   if (G.monthsPlayed>1 && Math.random()<0.40){

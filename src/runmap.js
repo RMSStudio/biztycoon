@@ -249,6 +249,16 @@
           }
           if (typeof notify === 'function') notify(`${nextStage.icon} ${nextStage.name}: ${b.name}`, 'success');
           EventBus.emit('render');
+          // v2.2.3: Победа = достижение финального этапа Run Map.
+          // Задержка 600мс — даём модалу закрыться до перехода на экран результатов.
+          const isFinalStage = st.stageIdx >= stages.length - 1;
+          if (isFinalStage && !g._wonAlreadyCelebrated) {
+            g._wonAlreadyCelebrated = true;
+            if (typeof g._endGameFired !== 'undefined') g._endGameFired = true;
+            setTimeout(() => {
+              if (typeof EventBus !== 'undefined') EventBus.emit('end_game', { won: true });
+            }, 600);
+          }
         },
       })),
     }});
