@@ -880,6 +880,33 @@ function buyUpgrade(id) {
 }
 
 // ══════════════════════════════════════════════════════
+//  FATIGUE ACTIONS  (обходит блокировку tree2 из livingmarket.js)
+// ══════════════════════════════════════════════════════
+function buyFatigueAction(id) {
+  const def = UPGRADES.find(u => u.id === id);
+  if (!def || !def.fatigueReduce) return;
+  const cd = (G.fatigueActionCooldowns || {})[def.id] || 0;
+  if (cd > 0) { notify(`⏳ Доступно через ${cd} мес.`, 'error'); return; }
+  if (def.minFatigue && (G.teamFatigue || 0) < def.minFatigue) {
+    notify(`Усталость команды слишком низкая — нужно ≥${def.minFatigue}`, 'error'); return;
+  }
+  if (G.actions < def.days) { notify(`Нужно ≥${def.days} дн.`, 'error'); return; }
+  if (G.money < def.cost)   { notify('Мало денег', 'error'); return; }
+  G.money   -= def.cost;
+  G.actions -= def.days;
+  const before = Math.round(G.teamFatigue || 0);
+  G.teamFatigue = clamp((G.teamFatigue || 0) - def.fatigueReduce, 0, 100);
+  const after = Math.round(G.teamFatigue);
+  if (!G.fatigueActionCooldowns) G.fatigueActionCooldowns = {};
+  if (def.cooldownMonths) G.fatigueActionCooldowns[def.id] = def.cooldownMonths;
+  const ftLabel = after >= 85 ? 'Кризис' : after >= 60 ? 'Выгорание' : after >= 30 ? 'Напряжение' : 'Норма';
+  addLog(`${def.icon} ${def.name}: усталость ${before} → ${after} (${ftLabel})`, 'green');
+  notify(`${def.icon} ${def.name} — усталость −${before - after} → ${after} (${ftLabel})`, 'success');
+  rd(`${def.name}`, 'event');
+  _emitRender();
+}
+
+// ══════════════════════════════════════════════════════
 //  CONFIRM HELPER  (reuses event-modal)
 // ══════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════
@@ -1396,9 +1423,13 @@ function advanceMonth() {
       const quitChance = G.teamFatigue >= 85 ? 0.20 : 0.10;
       const leaver = G.staff.find(() => Math.random() < quitChance);
       if (leaver) {
+        // Б.4: emit до удаления — UI покажет модал с деталями
+        EventBus.emit('staff_quit', {
+          staff:   { ...leaver },                 // snapshot до удаления
+          fatigue: Math.round(G.teamFatigue),
+        });
         G.staff = G.staff.filter(s => s._iid !== leaver._iid);
         addLog(`🚪 ${leaver.name} уволился из-за усталости команды!`, 'red');
-        notify(`${leaver.name} уволился — команда выгорает!`, 'error');
         checkCapacityExceeded(leaver.name);
       }
     }

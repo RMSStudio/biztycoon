@@ -498,6 +498,39 @@
   </div>
 </div>
 
+<!-- ══ STAFF QUIT MODAL (Б.4) ══ -->
+<style>
+  @keyframes bt-shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px) rotate(-4deg); }
+    40%      { transform: translateX(6px)  rotate(4deg); }
+    60%      { transform: translateX(-4px) rotate(-2deg); }
+    80%      { transform: translateX(4px)  rotate(2deg); }
+  }
+  #staff-quit-modal.active .modal-icon { animation: bt-shake .55s ease forwards; }
+</style>
+<div class="modal-overlay" id="staff-quit-modal" onclick="if(event.target===this)_closeStaffQuitModal()">
+  <div class="modal" style="max-width:360px;text-align:center;padding:28px 24px">
+    <div class="modal-icon" id="sqm-icon">🚪</div>
+    <div class="modal-title" id="sqm-name">Сотрудник покинул команду</div>
+    <div class="modal-body" style="margin-bottom:14px">
+      <span id="sqm-role" style="display:block;margin-bottom:10px;color:var(--sub);font-size:13px"></span>
+      Причина: <b style="color:var(--amber)">выгорание</b> — усталость команды достигла критического уровня.
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
+        <span>Усталость команды</span>
+        <span id="sqm-fatigue-label" style="font-weight:700;color:var(--red)">0%</span>
+      </div>
+      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden">
+        <div id="sqm-fatigue-bar" style="height:100%;background:var(--red);border-radius:3px;transition:width .4s;width:0%"></div>
+      </div>
+    </div>
+    <button class="btn" style="min-width:120px;justify-content:center"
+      onclick="_closeStaffQuitModal()">Понял</button>
+  </div>
+</div>
+
 <!-- ══ SAVE MODAL ══ -->
 <div class="modal-overlay" id="save-modal" onclick="if(event.target===this)closeSaveModal()">
   <div class="modal modal-wide">

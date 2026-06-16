@@ -513,6 +513,40 @@ function initEventBus() {
     const badge = document.getElementById('tab-ai-badge');
     if (badge) { badge.style.display = 'inline-flex'; }
   });
+
+  // Б.4: уход сотрудника — показываем модал с именем/ролью/усталостью
+  EventBus.on('staff_quit', ({ staff, fatigue }) => _showStaffQuitModal(staff, fatigue));
+}
+
+// ── Б.4: Staff Quit Modal ─────────────────────────────
+function _showStaffQuitModal(staff, fatigue) {
+  const modal = document.getElementById('staff-quit-modal');
+  if (!modal) return;
+
+  const icon  = staff.icon || '👤';
+  const name  = staff.name || 'Сотрудник';
+  const role  = staff.roleLabel || staff.role || '';
+  const grade = staff.gradeLabel || staff.grade || '';
+  const fat   = Math.min(100, Math.max(0, fatigue || 0));
+  const barCol = fat >= 85 ? 'var(--red)' : 'var(--amber)';
+
+  const iconEl = document.getElementById('sqm-icon');
+  const nameEl = document.getElementById('sqm-name');
+  const roleEl = document.getElementById('sqm-role');
+  const fatLbl = document.getElementById('sqm-fatigue-label');
+  const fatBar = document.getElementById('sqm-fatigue-bar');
+
+  if (iconEl)  iconEl.textContent  = icon;
+  if (nameEl)  nameEl.textContent  = `${name} покинул команду`;
+  if (roleEl)  roleEl.textContent  = grade ? `${role} · ${grade}` : role;
+  if (fatLbl) { fatLbl.textContent = `${fat}%`; fatLbl.style.color = barCol; }
+  if (fatBar) { fatBar.style.width = `${fat}%`; fatBar.style.background = barCol; }
+
+  modal.classList.add('active');
+}
+
+function _closeStaffQuitModal() {
+  document.getElementById('staff-quit-modal')?.classList.remove('active');
 }
 // ══════════════════════════════════════════════════════
 //  CAPABILITY BAR HELPER  (Q / V visual meter)
