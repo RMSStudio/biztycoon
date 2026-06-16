@@ -999,6 +999,7 @@ function renderGame() {
         <span class="nps-label">NPS</span>
         <div class="nps-wrap"><div class="nps-fill" style="width:${nps}%;background:${nc}"></div></div>
         <span class="nps-val" style="color:${nc}">${nps}</span>
+        ${(()=>{ const _aq=G.staff.length>0?Math.round(getQuality()/G.staff.length):0; return _aq>60?`<span title="Среднее качество команды: ${_aq}. Q>70 даёт NPS-буст при сдаче" style="font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(251,191,36,.1);color:var(--amber);font-weight:600;cursor:help">⭐ Q${_aq}</span>`:''; })()}
         <span class="nps-btn" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
           ${_isLC
             // LC-проект

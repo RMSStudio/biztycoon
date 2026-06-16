@@ -13,6 +13,7 @@
 //  { "rep": N }                        — репутация ±N
 //  { "fatigue": N }                    — усталость команды ±N
 //  { "nudgeAll": N }                   — лояльность всех клиентов ±N
+//  { "nudgeRandom": N }                — лояльность случайного активного клиента ±N
 //  { "notify": ["текст","type"] }      — тост (info|success|warning|error)
 //  { "log": ["текст","cls"] }          — запись в игровой лог
 //  { "rd": ["текст","type"] }          — запись в журнал решений
@@ -111,7 +112,8 @@ const ScenarioLoader = (() => {
     if (op.money != null)   { g.money += op.money; }
     if (op.rep != null)     { g.reputation = clamp(g.reputation + op.rep, 0, 100); }
     if (op.fatigue != null) { g.teamFatigue = clamp((g.teamFatigue || 0) + op.fatigue, 0, 100); }
-    if (op.nudgeAll != null){ nudgeAllNPS(g, op.nudgeAll); }
+    if (op.nudgeAll != null)   { nudgeAllNPS(g, op.nudgeAll); }
+    if (op.nudgeRandom != null){ const _nr = (g.activeClients||[]).filter(c=>!c.oneTime); if (_nr.length>0) nudgeClientRating(_nr[Math.floor(Math.random()*_nr.length)], op.nudgeRandom, g); }
     if (op.notify)          { notify(op.notify[0], op.notify[1] || 'info'); }
     if (op.log)             { addLog(op.log[0], op.log[1] || ''); }
     if (op.rd)              { rd(op.rd[0], op.rd[1] || 'event'); }

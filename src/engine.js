@@ -414,6 +414,12 @@ function updateAllNPS() {
     notify(`${c.icon} ${c.name} ушёл сам`,'error');
     rd(`${c.name} ушёл органически`,'churn');
   });
+  // п.10 (Р.4): churn-каскад — слух о потере клиента ударяет по остальным
+  if (churned.length > 0 && G.activeClients.filter(c=>!c.oneTime).length > 0) {
+    nudgeAllNPS(G, -5);
+    G.reputation = clamp((G.reputation||0) - 3, 0, 100);
+    addLog(`📢 Слух о потере клиента: лояльность остальных −5, репутация −3`, 'red');
+  }
 }
 
 function investInClient(cid) {
@@ -840,6 +846,9 @@ function buyUpgrade(id) {
     addLog(`${def.icon} ${def.name}: усталость ${before} → ${after} (${ftLabel})`, 'green');
     notify(`${def.icon} ${def.name} — усталость −${before - after} → ${after} (${ftLabel})`, 'success');
     rd(`${def.name}`, 'event');
+    // п.8 (Р.1): восстановление команды → клиенты замечают позитивный настрой
+    { const _ftT = G.activeClients.filter(c => !c.oneTime);
+      if (_ftT.length > 0) { const _t = _ftT[Math.floor(Math.random()*_ftT.length)]; nudgeClientRating(_t, +5); addLog(`✨ «${_t.name}» замечает, что команда отдохнула: настроение +5`, 'teal'); } }
     _emitRender();
     return;
   }
@@ -903,6 +912,9 @@ function buyFatigueAction(id) {
   addLog(`${def.icon} ${def.name}: усталость ${before} → ${after} (${ftLabel})`, 'green');
   notify(`${def.icon} ${def.name} — усталость −${before - after} → ${after} (${ftLabel})`, 'success');
   rd(`${def.name}`, 'event');
+  // п.8 (Р.1): восстановление команды → клиенты замечают позитивный настрой
+  { const _ftT = G.activeClients.filter(c => !c.oneTime);
+    if (_ftT.length > 0) { const _t = _ftT[Math.floor(Math.random()*_ftT.length)]; nudgeClientRating(_t, +5); addLog(`✨ «${_t.name}» замечает, что команда отдохнула: настроение +5`, 'teal'); } }
   _emitRender();
 }
 
@@ -1161,6 +1173,19 @@ function completeProject(cid) {
   // Портфолио-мультипликатор
   payout = Math.round(payout * getPortfolioMultiplier());
 
+  // п.9 (Р.2): Q-бонус к выплате — avgQ выше 40 → до +20% к итоговой выплате
+  const _avgQ = G.staff.length > 0 ? Math.round(getQuality() / G.staff.length) : 50;
+  const _qPayoutAdd = Math.min(0.20, Math.max(0, (_avgQ - 40) / 300));
+  let _qPayoutTag = '';
+  if (_qPayoutAdd > 0.001) {
+    const _qBonus = Math.round(payout * _qPayoutAdd);
+    payout += _qBonus;
+    _qPayoutTag = ` | Q×${Math.round(_qPayoutAdd * 100)}%`;
+  }
+  // NPS-буст при высоком avgQ (Q>70 → до +8)
+  const _qNpsBoost = _avgQ > 70 ? Math.min(8, Math.round((_avgQ - 70) / 5)) : 0;
+  if (_qNpsBoost > 0) nudgeClientRating(c, _qNpsBoost);
+
   // payment_delay: шанс задержать часть выплаты на месяц
   let immediatePayment = payout;
   if (c.modifier?.type === 'payment_delay' && Math.random() < c.modifier.val) {
@@ -1192,7 +1217,7 @@ function completeProject(cid) {
 
   const timeTag  = onTime ? '✅ в срок' : '⚠️ с опозданием';
   const penTag   = penaltyPct > 0 ? ` (−${Math.round(penaltyPct*100)}% штраф)` : '';
-  addLog(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}${penTag}${_specTag} | NPS ${finalNPS} | Порт. +${pfBonus}${repGain>0?' | Реп +'+repGain:''}`, onTime ? 'green' : 'amber');
+  addLog(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}${penTag}${_specTag}${_qPayoutTag} | NPS ${finalNPS} | Порт. +${pfBonus}${repGain>0?' | Реп +'+repGain:''}`, onTime ? 'green' : 'amber');
   notify(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}`, onTime ? 'success' : 'info');
   rd(`Завершён: ${c.name} → +${fmtK(immediatePayment)} ${timeTag}`, 'event');
 
@@ -1318,6 +1343,15 @@ function advanceMonth() {
     G.teamFatigue = clamp((G.teamFatigue||0) + fd, 0, 100);
   }
   const fatigueMult = getFatigueMult();
+
+  // п.10 (Р.4): Кризисный месяц — перегруз + высокая усталость
+  if (G.teamFatigue > 70 && overloaded && G.activeClients.length > 0) {
+    nudgeAllNPS(G, -5);
+    G.reputation = clamp((G.reputation||0) - 2, 0, 100);
+    G._crisisMonths = (G._crisisMonths||0) + 1;
+    addLog(`⚡ Кризисный месяц (усталость ${Math.round(G.teamFatigue)}, перегруз): лояльность всех −5, репутация −2`, 'red');
+    notify('⚡ Кризисный месяц — команда на пределе', 'error');
+  }
 
   // v3.0: тикают ВСЕ проекты, включая разовые — у них instant-цепочка
   // с одной work-фазой и _duration=1: при мощности >= нагрузки готовы за месяц
@@ -1599,6 +1633,7 @@ function advanceMonth() {
       if (e.id==='quit'        && G.staff.length===0)    return false;
       if (e.id==='conflict'    && G.staff.length<2)      return false;
       if (e.requiresClients    && !hasActiveProjects)    return false;
+      if (e.minMonths          && G.monthsPlayed < e.minMonths) return false; // п.10: поздне-игровые события
       return true;
     });
     _emitShowEvent(evs[Math.floor(Math.random()*evs.length)]);
