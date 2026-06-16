@@ -1137,7 +1137,7 @@
         '</div></div>'
       : '';
     m.innerHTML =
-      '<div style="background:var(--panel);border:2px solid #fbbf24;border-radius:14px;padding:26px;max-width:560px;width:90vw;box-shadow:0 0 60px rgba(251,191,36,.25)">' +
+      '<div style="background:var(--bg2);border:2px solid #fbbf24;border-radius:14px;padding:26px;max-width:560px;width:90vw;box-shadow:0 0 60px rgba(251,191,36,.25)">' +
         '<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">' +
           '<div style="font-size:46px;line-height:1">📅</div>' +
           '<div>' +
@@ -1889,7 +1889,7 @@
       document.body.appendChild(m);
     }
     m.innerHTML =
-      '<div style="background:var(--panel);border:2px solid ' + st.color + ';border-radius:14px;padding:32px;max-width:480px;text-align:center;box-shadow:0 0 60px ' + st.color + '44">' +
+      '<div style="background:var(--bg2);border:2px solid ' + st.color + ';border-radius:14px;padding:32px;max-width:480px;text-align:center;box-shadow:0 0 60px ' + st.color + '44">' +
         '<div style="font-size:64px;line-height:1;margin-bottom:14px">' + st.icon + '</div>' +
         '<div style="font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px">Стадия достигнута</div>' +
         '<div style="font-size:28px;font-weight:800;color:' + st.color + ';margin-bottom:14px">' + st.name + '</div>' +
@@ -2017,7 +2017,7 @@
           '<div style="font-size:10px;color:var(--sub)">Первый годовой итог через <b style="color:var(--text)">' + yProgress.left + ' мес.</b> (' + yProgress.elapsed + '/12)</div>' +
         '</div>';
     }
-    return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:540px;max-height:80vh;display:flex;flex-direction:column;width:90vw">' +
+    return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:540px;max-height:80vh;display:flex;flex-direction:column;width:90vw">' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
         '<span style="font-size:24px">' + st.icon + '</span>' +
         '<div><div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase">Журнал прогресса</div>' +
@@ -2107,7 +2107,7 @@
     // v0.5: блок «Эффекты древа» — суммарные мутации от всех купленных узлов
     const summaryHtml = _renderEffectsSummaryHtml();
 
-    return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:1000px;max-height:90vh;display:flex;flex-direction:column;width:96vw">' +
+    return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:1000px;max-height:90vh;display:flex;flex-direction:column;width:96vw">' +
       head +
       '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:4px">' + branchHeads + '</div>' +
       grid +

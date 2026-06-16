@@ -483,6 +483,21 @@
   </div>
 </div>
 
+<!-- ══ CONFIRM EXIT MODAL (Б.1) ══ -->
+<div class="modal-overlay" id="confirm-exit-modal">
+  <div class="modal" style="max-width:340px;text-align:center;padding:28px 24px">
+    <div class="modal-icon">🚪</div>
+    <div class="modal-title">Выйти в главное меню?</div>
+    <div class="modal-body">Текущий прогресс рана будет записан в мета-прогресс. Несохранённые изменения за этот месяц потеряются.</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-ghost" style="min-width:100px"
+        onclick="document.getElementById('confirm-exit-modal').classList.remove('active')">Остаться</button>
+      <button class="btn" style="min-width:100px;background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.4)"
+        onclick="_doExitToMenu()">Выйти</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ SAVE MODAL ══ -->
 <div class="modal-overlay" id="save-modal" onclick="if(event.target===this)closeSaveModal()">
   <div class="modal modal-wide">

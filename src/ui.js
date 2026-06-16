@@ -650,7 +650,8 @@ function renderGame() {
         const dis=cd>0||ftGate||G.money<u.cost||G.actions<u.days;
         const eff=u.fatigueReduce?`😴 −${u.fatigueReduce}`:`Q +${u.qBonus} (мес)`;
         const note=cd>0?`⏳ ${cd} мес.`:ftGate?`уст. ≥${u.minFatigue}`:`${fmtK(u.cost)} · ${u.days} дн.`;
-        return `<button class="btn btn-xs btn-ghost" ${dis?'disabled':''} onclick="buyUpgrade('${u.id}')"
+        const buyFn1 = u.fatigueReduce ? 'buyFatigueAction' : 'buyUpgrade';
+        return `<button class="btn btn-xs btn-ghost" ${dis?'disabled':''} onclick="${buyFn1}('${u.id}')"
           style="display:flex;justify-content:space-between;gap:6px;width:100%;text-align:left">
           <span>${u.icon} ${u.name}</span>
           <span style="color:var(--teal)">${eff}</span>
@@ -2237,8 +2238,9 @@ function _renderPerkTree() {
       const sub     = onCd ? `⏳${(G.fatigueActionCooldowns||{})[p.id]}м`
         : tempActive ? 'активен' : ftGate ? `≥${p.minFatigue}уст`
         : `${fmtK(p.cost)} · −${p.days}дн`;
+      const buyFn2 = p.fatigueReduce ? 'buyFatigueAction' : 'buyUpgrade';
       return `<button class="btn btn-sm ${dis?'btn-ghost':'btn-teal'}"
-        onclick="buyUpgrade('${p.id}')" ${dis?'disabled':''}
+        onclick="${buyFn2}('${p.id}')" ${dis?'disabled':''}
         style="font-size:10px;padding:5px 9px;white-space:nowrap" title="${p.desc}">
         ${p.icon} ${p.name} <span style="opacity:.6">· ${sub}</span>
       </button>`;
@@ -2278,14 +2280,17 @@ function resetGame() {
   _uiNavigate('screen-mode');
 }
 
-// Кнопка «← Меню» и клик по логотипу — с подтверждением при активной сессии
+// Б.1: кастомный confirm-модал вместо window.confirm (блокируется Chrome после dismiss)
 function confirmExitToMenu() {
   const active = typeof G !== 'undefined' && G && (G.month || 0) > 0 && !G._endGameFired;
   if (active) {
-    const ok = (typeof window.confirm === 'function')
-      ? window.confirm('Завершить текущую сессию и выйти в меню?\n(прогресс рана будет записан в мета-прогресс)')
-      : true;
-    if (!ok) return;
+    document.getElementById('confirm-exit-modal')?.classList.add('active');
+    return;
   }
+  resetGame();
+}
+
+function _doExitToMenu() {
+  document.getElementById('confirm-exit-modal')?.classList.remove('active');
   resetGame();
 }

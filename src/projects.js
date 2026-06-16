@@ -1735,7 +1735,7 @@ const Projects = (() => {
       if (available.length) {
         actionsHtml = `
           <div style="margin-bottom:14px">
-            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия</div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия <span style="color:var(--teal);font-weight:500;text-transform:none;letter-spacing:0">· не тратят дни</span></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               ${available.map(a => `
                 <button onclick="Projects.triggerPlayerAction('${client.id}','${a.id}')"
