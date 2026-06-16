@@ -159,12 +159,9 @@ function switchScenarioLive(id) {
   const cur = localStorage.getItem(LS_SCENARIO_KEY) || 'agency';
   if (id === cur || !SCENARIO_REGISTRY.find(s => s.id === id)) return false;
 
-  // Если посреди партии — спросить подтверждение и сбросить
+  // Если посреди партии — авто-сброс без confirm (window.confirm блокируется Chrome).
+  // Пользователь кликнул другой сценарий — намерение смены очевидно.
   if (typeof G !== 'undefined' && G && (G.month || 0) > 0) {
-    const ok = (typeof window.confirm === 'function')
-      ? window.confirm('Активная партия будет сброшена. Сменить сценарий?')
-      : true;
-    if (!ok) return false;
     if (typeof resetGame === 'function') resetGame();
     EventBus.emit('navigate', { screen: 'screen-mode' });
   }
@@ -173,8 +170,8 @@ function switchScenarioLive(id) {
 
   _loadScenarioData(id, function (err) {
     if (err) {
-      console.warn('[switchScenarioLive] не удалось загрузить data, фолбэк на reload:', err);
-      location.reload();
+      console.warn('[switchScenarioLive] не удалось загрузить data:', err);
+      if (typeof notify === 'function') notify('⚠️ Ошибка загрузки сценария — обновите страницу', 'error');
       return;
     }
     try {
@@ -198,11 +195,11 @@ function switchScenarioLive(id) {
       EventBus.emit('render');
       if (typeof notify === 'function') {
         const meta = SCENARIO_REGISTRY.find(s => s.id === id);
-        notify(`${meta?.icon || '🎯'} Сценарий переключён: ${meta?.name || id}`, 'success');
+        notify(`${meta?.icon || '🎯'} Сценарий: ${meta?.name || id}`, 'success');
       }
     } catch (e) {
-      console.error('[switchScenarioLive] hydrate/rebind упал, делаем reload:', e);
-      location.reload();
+      console.error('[switchScenarioLive] hydrate/rebind упал:', e);
+      if (typeof notify === 'function') notify('⚠️ Ошибка инициализации сценария — обновите страницу', 'error');
     }
   });
   return true;
@@ -283,11 +280,8 @@ function switchDifficultyLive(id) {
   const cur = localStorage.getItem(LS_DIFFICULTY_KEY_UI) || 'normal';
   if (id === cur || !ScenarioLoader.DIFFICULTY_ORDER.includes(id)) return false;
 
+  // Авто-сброс без window.confirm (блокируется Chrome).
   if (typeof G !== 'undefined' && G && (G.month || 0) > 0) {
-    const ok = (typeof window.confirm === 'function')
-      ? window.confirm('Активная партия будет сброшена. Сменить сложность?')
-      : true;
-    if (!ok) return false;
     if (typeof resetGame === 'function') resetGame();
     EventBus.emit('navigate', { screen: 'screen-mode' });
   }
@@ -312,12 +306,12 @@ function switchDifficultyLive(id) {
 
     EventBus.emit('render');
     if (typeof notify === 'function' && SCENARIO._activeDifficulty) {
-      notify(`Сложность переключена: ${SCENARIO._activeDifficulty.label}`, 'success');
+      notify(`Сложность: ${SCENARIO._activeDifficulty.label}`, 'success');
     }
     return true;
   } catch (e) {
-    console.error('[switchDifficultyLive] упал, делаем reload:', e);
-    location.reload();
+    console.error('[switchDifficultyLive] упал:', e);
+    if (typeof notify === 'function') notify('⚠️ Ошибка переключения сложности — обновите страницу', 'error');
     return false;
   }
 }

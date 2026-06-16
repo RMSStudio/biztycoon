@@ -165,6 +165,55 @@ const DLC = (() => {
     // Визуальный фидбек: обновить карточку
     const card = document.getElementById('dlc-card-' + id);
     if (card) card.classList.toggle('dlc-active', checked);
+
+    if (checked) _activateLive(id);
+    // Отключение DLC: эффект на следующей партии/перезагрузке.
+    // Полная live-деактивация требует unsubscribe EventBus во всех модулях —
+    // отложено до рефакторинга под cleanup() API.
+  }
+
+  // ── Live-активация DLC без перезагрузки страницы ─────
+  // При включении DLC через тумблер на mode-screen статические модули
+  // (runes/storyarcs/runmap/meta) уже загружены как <script> в index.html,
+  // но вернулись на DLC-гейте (DLC был выключен на старте). Сбрасываем
+  // __LOADED-флаги и реинжектируем скрипты с cache-buster — IIFE
+  // перезапустится, пройдёт гейт (localStorage уже обновлён) и инициализируется.
+  async function _activateLive(id) {
+    const dlc = REGISTRY.find(d => d.id === id);
+    if (!dlc) return;
+
+    // 1) Загружаем DLC-координатор (roguelite.js / strategy.js)
+    try { await load(id); } catch (e) { console.warn('[DLC] coordinator load:', e); }
+
+    // 2) Для roguelite — реактивируем статические модули
+    if (id === 'roguelite') await _reactivateRogueliteModules();
+
+    // 3) Перерисовываем DLC-карточки и уведомляем
+    renderModeScreen();
+    if (typeof notify === 'function') {
+      notify(`${dlc.icon} ${dlc.name} активирован — доступен с этой партии`, 'success');
+    }
+  }
+
+  // Статические модули roguelite — реинжект с cache-busting.
+  // Только для модулей, которые ещё не инициализированы (флаг не установлен).
+  function _reactivateRogueliteModules() {
+    const MODS = [
+      { flag: '__RUNES_LOADED', src: 'src/runes.js'      },
+      { flag: '__SA_LOADED',    src: 'src/storyarcs.js'  },
+      { flag: '__RM_LOADED',    src: 'src/runmap.js'     },
+      { flag: '__META_LOADED',  src: 'src/meta.js'       },
+    ];
+    const pending = MODS.filter(m => !window[m.flag]);
+    if (!pending.length) return Promise.resolve();
+
+    return Promise.all(pending.map(({ src }) => new Promise(resolve => {
+      const s    = document.createElement('script');
+      s.src      = `${src}?dlc_ts=${Date.now()}`;
+      s.onload   = () => { console.log(`[DLC:roguelite] реактивирован: ${src}`); resolve(); };
+      s.onerror  = () => { console.warn(`[DLC:roguelite] ошибка: ${src}`); resolve(); };
+      document.head.appendChild(s);
+    })));
   }
 
   return {
@@ -178,5 +227,7 @@ const DLC = (() => {
     getById,
     renderModeScreen,
     onToggle,
+    _activateLive,               // для тестов / внешнего вызова
+    _reactivateRogueliteModules, // для тестов
   };
 })();
