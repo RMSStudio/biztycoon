@@ -129,11 +129,11 @@ _ok(typeof Runes === 'object', 'window.Runes объявлен');
 _ok(typeof Runes.pick === 'function', 'Runes.pick есть');
 _ok(typeof Runes.getPool === 'function', 'Runes.getPool есть');
 const pool = Runes.getPool();
-_eq(pool.length, 8, 'в пуле 8 рун (4 базовых + 4 запираемых под мета-прогресс)');
+_eq(pool.length, 10, 'в пуле 10 рун (4 базовых + 4 ранних + 2 поздних v0.6)');
 const ids = pool.map(r => r.id).sort();
-const expected = ['connections','hardened','insider','networker','outsider','perfectionist','scholar','serial'];
+const expected = ['architect','connections','hardened','hustler','insider','networker','outsider','perfectionist','scholar','serial'];
 _ok(JSON.stringify(ids) === JSON.stringify(expected),
-   'id рун: 4 базовых + hardened/scholar/networker/outsider');
+   'id рун: 4 базовых + 4 ранних + architect/hustler (v0.6)');
 `));
 
 // ── 2: connections ──

@@ -273,7 +273,7 @@ _ok(typeof RogueMeta === 'undefined', 'window.RogueMeta НЕ объявлен');
 add(run('Тест 12: integration runes — запираемые руны вне пула при 0 ✦', `
 const lockedIds = ['hardened','scholar','networker','outsider'];
 const pool = Runes.getPool();
-_eq(pool.length, 8, 'полный пул содержит 8 рун');
+_eq(pool.length, 10, 'полный пул содержит 10 рун (4 базовые + 4 ранние + 2 поздние v0.6)');
 // При 0 ✦ запираемые не должны проходить isRuneUnlocked
 const unlockedNow = pool.filter(r => RogueMeta.isRuneUnlocked(r.id)).map(r => r.id);
 _eq(unlockedNow.length, 4, 'открыты ровно 4 базовые руны');
@@ -430,7 +430,7 @@ _ok(typeof RogueMeta.isMetaPerkUnlocked === 'function',  'API isMetaPerkUnlocked
 _ok(typeof RogueMeta.getBonusRerolls === 'function',     'API getBonusRerolls есть');
 _ok(typeof RogueMeta.getConflictingPerks === 'function', 'v0.5: API getConflictingPerks есть');
 const perks = RogueMeta.getMetaPerks();
-_eq(perks.length, 8, 'в пуле 8 мета-перков (3 v0.3 + 3 v0.4 + 2 v0.5)');
+_eq(perks.length, 10, 'в пуле 10 мета-перков (3 v0.3 + 3 v0.4 + 2 v0.5 + 2 v0.6)');
 _ok(perks.some(p => p.id === 'extra_reroll'),   'v0.3: extra_reroll');
 _ok(perks.some(p => p.id === 'seed_money'),     'v0.3: seed_money');
 _ok(perks.some(p => p.id === 'brand_starter'),  'v0.3: brand_starter');
@@ -666,7 +666,7 @@ const cWise = RogueMeta.getConflictingPerks('wise_consult');
 _ok(cWise.includes('solo_genius'), 'wise_consult конфликтует с solo_genius (inverse)');
 // Перки без excludes — пустой список
 _eq(RogueMeta.getConflictingPerks('extra_reroll').length, 0, 'extra_reroll без конфликтов');
-_eq(RogueMeta.getConflictingPerks('brand_starter').length, 0, 'brand_starter без конфликтов');
+_eq(RogueMeta.getConflictingPerks('brand_starter').length, 1, 'brand_starter конфликтует с brand_force (v0.6)');
 // Несуществующий id → пустой список
 _eq(RogueMeta.getConflictingPerks('nonexistent_perk').length, 0, 'unknown perk → []');
 `));
@@ -801,6 +801,155 @@ const m = RogueMeta.getMeta();
 const last = m.history[m.history.length - 1];
 _eq(last.scenarioId, 'bank', 'последняя запись history.scenarioId = bank');
 `));
+
+// ── 51: v0.6 ачивки — nightmare_clean ──
+add(run('Тест 51: nightmare_clean — Nightmare без займов', `
+// nightmare + no loan → засчитывается
+const g1 = { money: 5e6, monthsPlayed: 30, staff: [], runMap: { stageIdx: 4, choicesTaken: [] }, _loanTakenEver: false };
+__LS['bt_difficulty_v1'] = 'nightmare';
+const s1 = RogueMeta.awardAtEndGame(true, g1);
+_ok(s1.newAchievements.some(a => a.id === 'nightmare_clean'), 'nightmare + no_loan → nightmare_clean засчитан');
+
+// nightmare + loan → НЕ засчитывается
+RogueMeta.reset();
+const g2 = { money: 4e6, monthsPlayed: 32, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: true };
+__LS['bt_difficulty_v1'] = 'nightmare';
+const s2 = RogueMeta.awardAtEndGame(true, g2);
+_ok(!s2.newAchievements.some(a => a.id === 'nightmare_clean'), 'nightmare + loan → nightmare_clean НЕ засчитан');
+
+// normal + no loan → НЕ засчитывается
+RogueMeta.reset();
+const g3 = { money: 4e6, monthsPlayed: 25, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: false };
+__LS['bt_difficulty_v1'] = 'normal';
+const s3 = RogueMeta.awardAtEndGame(true, g3);
+_ok(!s3.newAchievements.some(a => a.id === 'nightmare_clean'), 'normal + no loan → nightmare_clean НЕ засчитан');
+`));
+
+// ── 52: v0.6 ачивки — bank_sprint ──
+add(run('Тест 52: bank_sprint — bank ≤25 мес', `
+// bank + M22 → засчитывается
+localStorage.setItem('bt_scenario_v1', 'bank');
+try { SCENARIO.id = 'bank'; } catch (e) {}
+const g1 = { money: 5e6, monthsPlayed: 22, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: true };
+const s1 = RogueMeta.awardAtEndGame(true, g1);
+_ok(s1.newAchievements.some(a => a.id === 'bank_sprint'), 'bank M22 → bank_sprint засчитан');
+
+// bank + M26 → НЕ засчитывается
+RogueMeta.reset();
+const g2 = { money: 5e6, monthsPlayed: 26, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: true };
+const s2 = RogueMeta.awardAtEndGame(true, g2);
+_ok(!s2.newAchievements.some(a => a.id === 'bank_sprint'), 'bank M26 → bank_sprint НЕ засчитан');
+
+// agency + M20 → НЕ засчитывается (wrong scenario)
+RogueMeta.reset();
+localStorage.setItem('bt_scenario_v1', 'agency');
+try { SCENARIO.id = 'agency'; } catch (e) {}
+const g3 = { money: 5e6, monthsPlayed: 20, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: false };
+const s3 = RogueMeta.awardAtEndGame(true, g3);
+_ok(!s3.newAchievements.some(a => a.id === 'bank_sprint'), 'agency scenario → bank_sprint НЕ засчитан');
+
+// bank + ровно M25 → засчитывается (граница включена)
+RogueMeta.reset();
+localStorage.setItem('bt_scenario_v1', 'bank');
+try { SCENARIO.id = 'bank'; } catch (e) {}
+const g4 = { money: 5e6, monthsPlayed: 25, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: true };
+const s4 = RogueMeta.awardAtEndGame(true, g4);
+_ok(s4.newAchievements.some(a => a.id === 'bank_sprint'), 'bank M25 (граница) → bank_sprint засчитан');
+`));
+
+// ── 53: v0.6 ачивки — rep_master ──
+add(run('Тест 53: rep_master — репутация ≥ 95 при победе', `
+// победа + rep 95 → засчитывается
+const fakeG = { money: 5e6, monthsPlayed: 30, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: true, reputation: 95 };
+const s1 = RogueMeta.awardAtEndGame(true, fakeG);
+_ok(s1.newAchievements.some(a => a.id === 'rep_master'), 'rep=95 победа → rep_master засчитан');
+
+// победа + rep 94 → НЕ засчитывается
+RogueMeta.reset();
+const fakeG2 = { money: 5e6, monthsPlayed: 30, staff: [{},{}], runMap: { stageIdx: 4, choicesTaken: ['x'] }, _loanTakenEver: true, reputation: 94 };
+const s2 = RogueMeta.awardAtEndGame(true, fakeG2);
+_ok(!s2.newAchievements.some(a => a.id === 'rep_master'), 'rep=94 → rep_master НЕ засчитан');
+
+// поражение + rep 100 → НЕ засчитывается
+RogueMeta.reset();
+const fakeG3 = { money: 0, monthsPlayed: 20, staff: [], runMap: { stageIdx: 2, choicesTaken: [] }, _loanTakenEver: false, reputation: 100 };
+const s3 = RogueMeta.awardAtEndGame(false, fakeG3);
+_ok(!s3.newAchievements.some(a => a.id === 'rep_master'), 'поражение + rep=100 → rep_master НЕ засчитан');
+`));
+
+// ── 54: v0.6 мета-перки — market_edge ──
+add(run('Тест 54: market_edge — prepay +20% + Q+2, excludes early_advance/wise_consult', `
+const perks = RogueMeta.getMetaPerks();
+const me = perks.find(p => p.id === 'market_edge');
+_ok(!!me, 'market_edge существует в пуле');
+_eq(me.cost, 400, 'цена market_edge = 400');
+_eq(me.effects.startPrepayBonus, 0.20, 'startPrepayBonus = 0.20');
+_eq(me.effects.startQBonus, 2, 'startQBonus = 2');
+_ok(Array.isArray(me.excludes) && me.excludes.includes('early_advance'), 'excludes early_advance');
+_ok(me.excludes.includes('wise_consult'), 'excludes wise_consult');
+
+// купить market_edge → нельзя затем купить early_advance
+const meta = RogueMeta.getMeta();
+meta.shards = 2000; // имитируем достаточно
+RogueMeta.reset(); // сбрасываем, затем накапливаем через awardAtEndGame
+// Покупаем через прямой вызов purchaseMetaPerk после накопления shards
+const g1 = { money: 5e6, monthsPlayed: 30, staff:[{},{}], runMap:{stageIdx:4,choicesTaken:['x']}, _loanTakenEver:true };
+for (let i=0; i<8; i++) RogueMeta.awardAtEndGame(true, g1); // набрать shards
+_ok(RogueMeta.getShards() >= 400, 'набрали достаточно shards для market_edge');
+const r1 = RogueMeta.purchaseMetaPerk('market_edge');
+_ok(r1.ok, 'market_edge куплен');
+const r2 = RogueMeta.purchaseMetaPerk('early_advance');
+_ok(!r2.ok && (r2.reason === 'excluded_by' || r2.blocker === 'market_edge'), 'early_advance заблокирован после market_edge');
+const r3 = RogueMeta.purchaseMetaPerk('wise_consult');
+_ok(!r3.ok && (r3.reason === 'excluded_by' || r3.blocker === 'market_edge'), 'wise_consult заблокирован после market_edge');
+`));
+
+// ── 55: v0.6 мета-перки — brand_force ──
+add(run('Тест 55: brand_force — rep+10 + penaltyShield, excludes brand_starter/penalty_grace', `
+const perks = RogueMeta.getMetaPerks();
+const bf = perks.find(p => p.id === 'brand_force');
+_ok(!!bf, 'brand_force существует в пуле');
+_eq(bf.cost, 300, 'цена brand_force = 300');
+_eq(bf.effects.startRep, 10, 'startRep = 10');
+_ok(bf.effects.startPenaltyShield === true, 'startPenaltyShield = true');
+_ok(Array.isArray(bf.excludes) && bf.excludes.includes('brand_starter'), 'excludes brand_starter');
+_ok(bf.excludes.includes('penalty_grace'), 'excludes penalty_grace');
+
+// купить brand_force → нельзя brand_starter / penalty_grace
+const g1 = { money:5e6, monthsPlayed:30, staff:[{},{}], runMap:{stageIdx:4,choicesTaken:['x']}, _loanTakenEver:true };
+for (let i=0;i<6;i++) RogueMeta.awardAtEndGame(true, g1);
+const r1 = RogueMeta.purchaseMetaPerk('brand_force');
+_ok(r1.ok, 'brand_force куплен');
+const r2 = RogueMeta.purchaseMetaPerk('brand_starter');
+_ok(!r2.ok, 'brand_starter заблокирован после brand_force');
+const r3 = RogueMeta.purchaseMetaPerk('penalty_grace');
+_ok(!r3.ok, 'penalty_grace заблокирован после brand_force');
+
+// brand_force применяется к G через _applyMetaPerksToG (через startGame)
+// Проверяем эффект через прямой доступ к эффектам купленного перка
+const ids = RogueMeta.getUnlockedMetaPerkIds();
+_ok(ids.includes('brand_force'), 'brand_force в списке купленных');
+const perkData = RogueMeta.getMetaPerks().find(p=>p.id==='brand_force');
+_eq(perkData.effects.startRep, 10, 'эффект startRep=10 читается корректно');
+`));
+
+// ── 56: v0.6 руны — architect и hustler в пуле ──
+add(run('Тест 56: architect и hustler в пуле рун v0.6', `
+const pool = Runes.getPool();
+const arch = pool.find(r => r.id === 'architect');
+const hust = pool.find(r => r.id === 'hustler');
+_ok(!!arch, 'architect есть в пуле');
+_ok(!!hust, 'hustler есть в пуле');
+_eq(arch.effects.qualityBonus, 8, 'architect.qualityBonus = 8');
+_eq(arch.effects.startMoneyDelta, -100000, 'architect.startMoneyDelta = -100K');
+_eq(hust.effects.scoutBonus, 1, 'hustler.scoutBonus = 1');
+_eq(hust.effects.payoutMult, 0.08, 'hustler.payoutMult = 0.08');
+_eq(hust.effects.startMoneyDelta, -200000, 'hustler.startMoneyDelta = -200K');
+
+// architect и hustler заблокированы без нужного мета-прогресса (shards 900 / 1100)
+_ok(!RogueMeta.isRuneUnlocked('architect'), 'architect заперт при 0 shards');
+_ok(!RogueMeta.isRuneUnlocked('hustler'), 'hustler заперт при 0 shards');
+`, { withRunes: true }));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);

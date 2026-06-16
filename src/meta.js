@@ -59,6 +59,9 @@
     { id: 'scholar',       shards: 300 },
     { id: 'networker',     shards: 500 },
     { id: 'outsider',      shards: 750 },
+    // v0.6: руны второго поколения — поздний мета-прогресс
+    { id: 'architect',     shards: 900 },
+    { id: 'hustler',       shards: 1100 },
   ];
 
   // Бонусы Run Map: id → требуется shards. 0 = всегда открыт.
@@ -122,6 +125,20 @@
     { id: 'solo_genius',    icon: '🧙', name: 'Гений-основатель',
       desc: '+5 Q от основателя (qualityBonus) — растёт без команды (вместо стартовой экспертизы)',
       cost: 300, effects: { startQualityBonus: 5 }, excludes: ['wise_consult'] },
+
+    // ── v0.6 (2026-06-16): четвёртая волна мета-перков ──
+    // market_edge: синергия предоплаты и качества команды — вместо двух отдельных путей.
+    // Нельзя с early_advance (уже даёт prepay) и wise_consult (уже даёт Q).
+    { id: 'market_edge',    icon: '🔮', name: 'Рыночная экспертиза',
+      desc: '+20% к шансу предоплаты и +2 Q к стартовой команде (вместо аванса или экспертизы)',
+      cost: 400, effects: { startPrepayBonus: 0.20, startQBonus: 2 },
+      excludes: ['early_advance', 'wise_consult'] },
+    // brand_force: мощный репутационный старт + ранняя защита — вместо двух отдельных.
+    // Нельзя с brand_starter (+5 реп) и penalty_grace (та же защита).
+    { id: 'brand_force',    icon: '💎', name: 'Сила бренда',
+      desc: '+10 стартовой репутации и штрафная защита −50% с порога (вместо двух отдельных перков)',
+      cost: 300, effects: { startRep: 10, startPenaltyShield: true },
+      excludes: ['brand_starter', 'penalty_grace'] },
   ];
 
   // ── Ачивки ────────────────────────────────────────────
@@ -229,6 +246,17 @@
     // minimalist: победа с командой не больше 1 сотрудника (или вообще без).
     { id: 'minimalist',       icon: '👤', name: 'Минималист',        desc: 'Победить с командой не более 1 сотрудника', shards: 200,
       check: ctx => ctx.run.won && (ctx.run.staffCount <= 1) },
+
+    // ── v0.6 (2026-06-16): четвёртая волна комбо-ачивок ──
+    // nightmare_clean: Nightmare без займов — максимальный риск при минимальных ресурсах.
+    { id: 'nightmare_clean',  icon: '🌑', name: 'Чистая игра',       desc: 'Победа на Nightmare без единого займа', shards: 400,
+      check: ctx => ctx.run.won && ctx.run.difficulty === 'nightmare' && !ctx.run.loanTaken },
+    // bank_sprint: bank-сценарий за ≤25 мес — агрессивный speed-run банка.
+    { id: 'bank_sprint',      icon: '⚡', name: 'Банкир-спринтер',   desc: 'Победа в сценарии «Банк» за 25 месяцев или меньше', shards: 250,
+      check: ctx => ctx.run.won && ctx.run.scenarioId === 'bank' && (ctx.run.monthsPlayed || 99) <= 25 },
+    // rep_master: победа с репутацией ≥95 — стиль «незапятнанное имя».
+    { id: 'rep_master',       icon: '🌟', name: 'Безупречная репутация', desc: 'Победить с финальной репутацией ≥ 95', shards: 200,
+      check: ctx => ctx.run.won && (ctx.run.finalReputation || 0) >= 95 },
   ];
 
   // ── Загрузка/сохранение ──────────────────────────────
@@ -831,5 +859,5 @@
     _buyPerk,
   };
 
-  console.log('[meta] v0.5 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок, ' + META_PERKS.length + ' мета-перков · текущие ✦ ' + getShards());
+  console.log('[meta] v0.6 активирован: ' + RUNE_UNLOCKS.length + ' рун, ' + BONUS_UNLOCKS.length + ' бонусов, ' + ACHIEVEMENTS.length + ' ачивок, ' + META_PERKS.length + ' мета-перков · текущие ✦ ' + getShards());
 })();
