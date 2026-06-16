@@ -174,6 +174,7 @@ const Projects = (() => {
 
     client._lcPhaseIdx = nextIdx;
     client._lcPhase    = chain[nextIdx];
+    client._phaseActionsUsed = {};  // Р.5: сброс кулдауна при смене фазы
 
     // Work-фазы: проект начинает тикать, поп-ап не нужен
     if (client._lcPhase.startsWith('work_')) {
@@ -1686,8 +1687,18 @@ const Projects = (() => {
     if (!client) return;
     const action = PLAYER_ACTIONS.find(a => a.id === actionId);
     if (!action) return;
+
+    // Р.5: кулдаун — 1 раз за фазу на каждое действие
+    const phase = client._lcPhase || '';
+    if (!client._phaseActionsUsed) client._phaseActionsUsed = {};
+    if (client._phaseActionsUsed[actionId] === phase) {
+      notify(`${action.icon} Уже использовано в этой фазе`, 'warning');
+      return;
+    }
+
     const ok = action.apply(client);
     if (ok) {
+      client._phaseActionsUsed[actionId] = phase;  // фиксируем использование
       addLog(`⚡ ${client.name}: ${action.title} — ${action.effectLabel}`, 'teal');
       notify(`${action.icon} ${action.title}: ${action.effectLabel}`, 'success');
       closeDetailPanel();
@@ -1732,24 +1743,40 @@ const Projects = (() => {
     let actionsHtml = '';
     if (isWork && !client._lcPendingDecision) {
       const available = PLAYER_ACTIONS.filter(a => a.available(client));
+      const usedInPhase = client._phaseActionsUsed || {};
+      const curPhase = client._lcPhase || '';
       if (available.length) {
         actionsHtml = `
           <div style="margin-bottom:14px">
-            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия <span style="color:var(--teal);font-weight:500;text-transform:none;letter-spacing:0">· не тратят дни</span></div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия <span style="color:var(--teal);font-weight:500;text-transform:none;letter-spacing:0">· не тратят дни · 1 раз за фазу</span></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-              ${available.map(a => `
-                <button onclick="Projects.triggerPlayerAction('${client.id}','${a.id}')"
-                  style="text-align:left;padding:8px 10px;border-radius:6px;border:1px solid rgba(45,212,191,.2);
-                         background:rgba(45,212,191,.05);cursor:pointer;transition:background .15s"
-                  onmouseover="this.style.background='rgba(45,212,191,.10)'"
-                  onmouseout="this.style.background='rgba(45,212,191,.05)'">
-                  <div style="font-size:12px;font-weight:600;color:var(--text)">${a.icon} ${a.title}</div>
-                  <div style="font-size:10px;color:var(--muted);margin-top:2px">${a.desc}</div>
-                  <div style="margin-top:5px;display:flex;gap:6px">
-                    <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,.12);color:var(--red)">${a.costLabel}</span>
-                    <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(45,212,191,.12);color:var(--teal)">${a.effectLabel}</span>
-                  </div>
-                </button>`).join('')}
+              ${available.map(a => {
+                const used = usedInPhase[a.id] === curPhase;
+                if (used) {
+                  return `
+                    <div style="text-align:left;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.07);
+                                background:rgba(255,255,255,.03);opacity:.55;cursor:not-allowed">
+                      <div style="font-size:12px;font-weight:600;color:var(--sub)">${a.icon} ${a.title}</div>
+                      <div style="font-size:10px;color:var(--muted);margin-top:2px">${a.desc}</div>
+                      <div style="margin-top:5px;display:flex;gap:6px">
+                        <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">использовано</span>
+                      </div>
+                    </div>`;
+                }
+                return `
+                  <button onclick="Projects.triggerPlayerAction('${client.id}','${a.id}')"
+                    style="text-align:left;padding:8px 10px;border-radius:6px;border:1px solid rgba(45,212,191,.2);
+                           background:rgba(45,212,191,.05);cursor:pointer;transition:background .15s"
+                    onmouseover="this.style.background='rgba(45,212,191,.10)'"
+                    onmouseout="this.style.background='rgba(45,212,191,.05)'">
+                    <div style="font-size:12px;font-weight:600;color:var(--text)">${a.icon} ${a.title}</div>
+                    <div style="font-size:10px;color:var(--muted);margin-top:2px">${a.desc}</div>
+                    <div style="margin-top:5px;display:flex;gap:6px">
+                      <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,.12);color:var(--red)">${a.costLabel}</span>
+                      <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(45,212,191,.12);color:var(--teal)">${a.effectLabel}</span>
+                    </div>
+                  </button>`;
+              }).join('')}
             </div>
           </div>`;
       }
