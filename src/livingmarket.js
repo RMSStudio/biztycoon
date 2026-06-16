@@ -54,7 +54,7 @@
   // engine-древо, buyUpgrade не блокируется, ничего больше не меняется.
   const USE_TREE2_PROGRESSION = true;
 
-  const VERSION = 'v0.9';
+  const VERSION = 'v0.10';
 
   // ── Стадии компании ────────────────────────────────────────────────
   // Гейт — функция G → { ok: boolean, progress: [{ label, cur, max }] }.
@@ -544,6 +544,9 @@
         yearStartPortfolio:     0,
       },
       yearlyReports:         [],
+      // v0.10 (Фаза E): купленные офисы и саббренды
+      offices:               [],
+      subBrands:             [],
     };
   }
 
@@ -580,6 +583,9 @@
         G.living.yearly.yearStartPortfolio = (G.portfolio || 0);
       }
       if (!G.living.yearlyReports) G.living.yearlyReports = [];
+      // v0.10: офисы и саббренды
+      if (!G.living.offices)   G.living.offices   = [];
+      if (!G.living.subBrands) G.living.subBrands = [];
     }
   }
 
@@ -1229,6 +1235,51 @@
     wildcard:  { name: 'Дикая карта',  icon: '🃏', desc: 'Непредсказуемые скачки роста',            revenueRange: [50_000,  750_000] },
   };
 
+
+  // ── Фаза E: Офисы ─────────────────────────────────────────────────────
+  // stageReq: 3=Сеть, 4=Холдинг. effects применяются к G немедленно при
+  // покупке — те же каналы что дерево 2.0 и руны (qualityBonus,
+  // perkFatigueMult). При сейве G.living.offices хранит купленные id;
+  // сам G уже содержит суммированные эффекты (не нужно переприменять).
+  const OFFICES = [
+    { id: 'coworking', name: 'Коворкинг', icon: '🏠',
+      desc: '+2 к качеству команды и −10% к росту усталости. Требуется: стадия Сеть.',
+      cost: 250_000, stageReq: 3,
+      apply: g => {
+        g.qualityBonus    = (g.qualityBonus    || 0) + 2;
+        g.perkFatigueMult = Math.round(((g.perkFatigueMult ?? 1) * 0.90) * 100) / 100;
+      },
+    },
+    { id: 'office', name: 'Полноценный офис', icon: '🏢',
+      desc: '+3 к качеству, −20% к усталости, +10 к репутации (разово). Нужен Коворкинг.',
+      cost: 750_000, stageReq: 4, requires: 'coworking',
+      apply: g => {
+        g.qualityBonus    = (g.qualityBonus    || 0) + 3;
+        g.perkFatigueMult = Math.round(((g.perkFatigueMult ?? 1) * 0.80) * 100) / 100;
+        g.reputation      = Math.min(100, (g.reputation    || 0) + 10);
+      },
+    },
+  ];
+
+  // ── Фаза E: Саббренды ─────────────────────────────────────────────────
+  // Запускаются на стадии Холдинг (idx 4+). Каждый саббренд — постоянный
+  // пассивный буст через существующие каналы G.
+  const SUB_BRANDS = [
+    { id: 'digital', name: 'Digital-направление', icon: '💻',
+      desc: '+2 к количеству предложений при скаутинге (G.caseScoutBonus). Требуется: Холдинг.',
+      cost: 400_000, stageReq: 4,
+      apply: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 2; },
+    },
+    { id: 'enterprise', name: 'Enterprise-направление', icon: '🏛',
+      desc: '+1 к скаутингу и +15% к выплатам (G.perkPayoutMult). Требуется: Холдинг.',
+      cost: 500_000, stageReq: 4,
+      apply: g => {
+        g.caseScoutBonus = (g.caseScoutBonus  || 0) + 1;
+        g.perkPayoutMult = Math.round(((g.perkPayoutMult || 0) + 0.15) * 100) / 100;
+      },
+    },
+  ];
+
   function _createCompetitors() {
     return Object.keys(COMPETITOR_ARCHETYPES).map((arch) => ({
       id:            'comp_' + arch,
@@ -1241,6 +1292,64 @@
       monthlyRevenue: 0,
       awardsWon:     0,   // Phase D: ежегодные награды
     }));
+  }
+
+
+  // ── Фаза E: покупка офисов, саббрендов, M&A ──────────────────────────
+
+  function purchaseOffice(id) {
+    if (typeof G === 'undefined' || !G || !G.living) return { ok: false, reason: 'no_game' };
+    const def = OFFICES.find(o => o.id === id);
+    if (!def) return { ok: false, reason: 'unknown_office' };
+    if ((G.living.offices || []).indexOf(id) !== -1) return { ok: false, reason: 'already_owned' };
+    const stage = G.living.stage || 0;
+    if (stage < def.stageReq) return { ok: false, reason: 'stage_required', stageReq: def.stageReq };
+    if (def.requires && (G.living.offices || []).indexOf(def.requires) === -1)
+      return { ok: false, reason: 'requires_' + def.requires };
+    if ((G.money || 0) < def.cost) return { ok: false, reason: 'insufficient_funds' };
+    G.money -= def.cost;
+    G.living.offices = (G.living.offices || []).concat(id);
+    try { def.apply(G); } catch (e) {}
+    try { EventBus.emit('assets_changed', { type: 'office', id }); } catch (_) {}
+    try { EventBus.emit('render');                                   } catch (_) {}
+    return { ok: true, id };
+  }
+
+  function createSubBrand(id) {
+    if (typeof G === 'undefined' || !G || !G.living) return { ok: false, reason: 'no_game' };
+    const def = SUB_BRANDS.find(b => b.id === id);
+    if (!def) return { ok: false, reason: 'unknown_brand' };
+    if ((G.living.subBrands || []).indexOf(id) !== -1) return { ok: false, reason: 'already_owned' };
+    const stage = G.living.stage || 0;
+    if (stage < def.stageReq) return { ok: false, reason: 'stage_required', stageReq: def.stageReq };
+    if ((G.money || 0) < def.cost) return { ok: false, reason: 'insufficient_funds' };
+    G.money -= def.cost;
+    G.living.subBrands = (G.living.subBrands || []).concat(id);
+    try { def.apply(G); } catch (e) {}
+    try { EventBus.emit('assets_changed', { type: 'sub_brand', id }); } catch (_) {}
+    try { EventBus.emit('render');                                      } catch (_) {}
+    return { ok: true, id };
+  }
+
+  // cost = 500 000 + 3× месячная выручка конкурента
+  // Эффект: конкурент исчезает, G.market.acquisitions++, +1 скаутинг, +3 реп
+  function acquireCompetitor(competitorId) {
+    if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
+    const stage = (G.living && (G.living.stage || 0)) || 0;
+    if (stage < 4) return { ok: false, reason: 'stage_required', stageReq: 4 };
+    const idx = (G.market.competitors || []).findIndex(c => c.id === competitorId);
+    if (idx === -1) return { ok: false, reason: 'competitor_not_found' };
+    const comp = G.market.competitors[idx];
+    const cost = 500_000 + Math.round((comp.monthlyRevenue || 200_000) * 3);
+    if ((G.money || 0) < cost) return { ok: false, reason: 'insufficient_funds', cost };
+    G.money -= cost;
+    G.market.competitors.splice(idx, 1);
+    G.market.acquisitions = (G.market.acquisitions || 0) + 1;
+    G.caseScoutBonus = (G.caseScoutBonus || 0) + 1;
+    G.reputation = Math.min(100, (G.reputation || 0) + 3);
+    try { EventBus.emit('assets_changed', { type: 'acquisition', id: competitorId }); } catch (_) {}
+    try { EventBus.emit('render');                                                      } catch (_) {}
+    return { ok: true, competitorId, cost, acquisitions: G.market.acquisitions };
   }
 
   function _initMarket() {
@@ -2213,6 +2322,149 @@
     window.doScouting.__marketDumpingWrapped = true;
   }
 
+
+  // ── Phase E: кнопка «🏢 Компания» + модал активов ───────────────────
+  const _STAGE_NAMES_E = ['Гараж', 'Студия', 'Агентство', 'Сеть', 'Холдинг', 'Империя'];
+
+  function _ensureAssetsButton() {
+    if (typeof document === 'undefined') return;
+    if (document.getElementById('btn-assets')) return;
+    const header = document.querySelector('.game-header');
+    if (!header) return;
+    const btn = document.createElement('button');
+    btn.id           = 'btn-assets';
+    btn.className    = 'btn btn-ghost';
+    btn.title        = 'Активы компании';
+    btn.style.cssText = 'font-size:12px;padding:5px 10px';
+    btn.textContent  = '🏢 Компания';
+    btn.onclick      = () => showAssetsModal();
+    // Вставляем перед кнопкой рынка (или первой кнопкой в шапке)
+    const marketBtn = document.getElementById('btn-market');
+    if (marketBtn) header.insertBefore(btn, marketBtn);
+    else {
+      const firstBtn = header.querySelector('button');
+      if (firstBtn) header.insertBefore(btn, firstBtn);
+      else header.appendChild(btn);
+    }
+  }
+
+  function showAssetsModal() {
+    if (typeof document === 'undefined') return;
+    const existing = document.getElementById('assets-modal');
+    if (existing) { existing.classList.add('active'); _renderAssetsModal(); return; }
+    const modal      = document.createElement('div');
+    modal.id         = 'assets-modal';
+    modal.className  = 'modal-overlay';
+    modal.innerHTML  = '<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto">' +
+      '<button class="modal-close" id="btn-assets-close">×</button>' +
+      '<div id="assets-modal-body"></div></div>';
+    document.body.appendChild(modal);
+    modal.querySelector('#btn-assets-close').onclick = () => modal.classList.remove('active');
+    modal.onclick = e => { if (e.target === modal) modal.classList.remove('active'); };
+    modal.classList.add('active');
+    _renderAssetsModal();
+  }
+
+  function _renderAssetsModal() {
+    const body = document.getElementById('assets-modal-body');
+    if (!body) return;
+    if (typeof G === 'undefined' || !G || !G.living) {
+      body.innerHTML = '<p style="color:#94a3b8">Игра не запущена.</p>';
+      return;
+    }
+    const stage         = G.living.stage || 0;
+    const money         = G.money || 0;
+    const ownedOffices  = G.living.offices    || [];
+    const ownedBrands   = G.living.subBrands  || [];
+    const acq           = (G.market && G.market.acquisitions) || 0;
+    const competitors   = (G.market && G.market.competitors)  || [];
+
+    let html = '<h2 style="margin:0 0 16px;color:#f1f5f9">🏢 Активы компании</h2>';
+
+    // ── Офисы
+    html += '<h3 style="margin:0 0 8px;color:#94a3b8;font-size:13px;text-transform:uppercase;letter-spacing:.05em">Офисы</h3>';
+    OFFICES.forEach(o => {
+      const owned  = ownedOffices.indexOf(o.id) !== -1;
+      const stOk   = stage >= o.stageReq;
+      const reqOk  = !o.requires || ownedOffices.indexOf(o.requires) !== -1;
+      const canBuy = !owned && stOk && reqOk && money >= o.cost;
+      const reqDef = o.requires ? OFFICES.find(x => x.id === o.requires) : null;
+      html += '<div style="background:' + (owned ? '#14532d' : '#1e293b') + ';border:1px solid ' +
+        (owned ? '#22c55e' : '#334155') + ';border-radius:8px;padding:12px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '<span style="font-size:15px;font-weight:600">' + o.icon + ' ' + o.name +
+        (owned ? ' <span style="color:#22c55e;font-weight:400;font-size:13px">✓ Куплено</span>' : '') + '</span>' +
+        '<span style="color:#94a3b8">' + _formatMoneyShort(o.cost) + '</span></div>' +
+        '<div style="color:#cbd5e1;font-size:13px;margin-bottom:6px">' + o.desc + '</div>' +
+        (!stOk ? '<div style="color:#f59e0b;font-size:12px">🔒 Требуется стадия «' + _STAGE_NAMES_E[o.stageReq] + '»</div>' : '') +
+        (stOk && !reqOk ? '<div style="color:#f59e0b;font-size:12px">🔒 Требуется «' + (reqDef ? reqDef.name : o.requires) + '»</div>' : '') +
+        (!owned && stOk && reqOk ? '<button data-oid="' + o.id + '" onclick="LivingMarket.purchaseOffice(this.getAttribute(\'data-oid\'))" ' +
+          (!canBuy ? 'disabled ' : '') +
+          'style="padding:4px 14px;background:' + (canBuy ? '#2563eb' : '#374151') + ';border:none;border-radius:4px;color:' +
+          (canBuy ? 'white' : '#6b7280') + ';cursor:' + (canBuy ? 'pointer' : 'default') + ';font-size:12px">Купить</button>' : '') +
+        '</div>';
+    });
+
+    // ── Саббренды
+    html += '<h3 style="margin:16px 0 8px;color:#94a3b8;font-size:13px;text-transform:uppercase;letter-spacing:.05em">Направления</h3>';
+    SUB_BRANDS.forEach(b => {
+      const owned  = ownedBrands.indexOf(b.id) !== -1;
+      const stOk   = stage >= b.stageReq;
+      const canBuy = !owned && stOk && money >= b.cost;
+      html += '<div style="background:' + (owned ? '#14532d' : '#1e293b') + ';border:1px solid ' +
+        (owned ? '#22c55e' : '#334155') + ';border-radius:8px;padding:12px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '<span style="font-size:15px;font-weight:600">' + b.icon + ' ' + b.name +
+        (owned ? ' <span style="color:#22c55e;font-weight:400;font-size:13px">✓ Активно</span>' : '') + '</span>' +
+        '<span style="color:#94a3b8">' + _formatMoneyShort(b.cost) + '</span></div>' +
+        '<div style="color:#cbd5e1;font-size:13px;margin-bottom:6px">' + b.desc + '</div>' +
+        (!stOk ? '<div style="color:#f59e0b;font-size:12px">🔒 Требуется стадия «' + _STAGE_NAMES_E[b.stageReq] + '»</div>' : '') +
+        (!owned && stOk ? '<button data-bid="' + b.id + '" onclick="LivingMarket.createSubBrand(this.getAttribute(\'data-bid\'))" ' +
+          (!canBuy ? 'disabled ' : '') +
+          'style="padding:4px 14px;background:' + (canBuy ? '#2563eb' : '#374151') + ';border:none;border-radius:4px;color:' +
+          (canBuy ? 'white' : '#6b7280') + ';cursor:' + (canBuy ? 'pointer' : 'default') + ';font-size:12px">Запустить</button>' : '') +
+        '</div>';
+    });
+
+    // ── M&A
+    html += '<h3 style="margin:16px 0 8px;color:#94a3b8;font-size:13px;text-transform:uppercase;letter-spacing:.05em">M&amp;A — Поглощения ' +
+      '<span style="color:#6b7280;text-transform:none;font-size:12px">(совершено: ' + acq + ')</span></h3>';
+    if (stage < 4) {
+      html += '<div style="color:#6b7280;font-size:13px">🔒 Доступно со стадии «Холдинг»</div>';
+    } else if (competitors.length === 0) {
+      html += '<div style="color:#6b7280;font-size:13px">Все конкуренты поглощены.</div>';
+    } else {
+      competitors.forEach(c => {
+        const cost   = 500_000 + Math.round((c.monthlyRevenue || 200_000) * 3);
+        const canBuy = money >= cost;
+        html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px;margin-bottom:8px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+          '<span style="font-size:15px;font-weight:600">' + (c.icon || '🏭') + ' ' + c.name +
+          ' <span style="color:#94a3b8;font-weight:400;font-size:12px">· ' + _formatMoneyShort(c.monthlyRevenue || 0) + '/мес</span></span>' +
+          '<span style="color:#a78bfa">' + _formatMoneyShort(cost) + '</span></div>' +
+          '<div style="color:#cbd5e1;font-size:13px;margin-bottom:6px">+1 к скаутингу, +3 к репутации. Конкурент покидает рынок.</div>' +
+          '<button data-cid="' + c.id + '" onclick="LivingMarket.acquireCompetitor(this.getAttribute(\'data-cid\'))" ' +
+          (!canBuy ? 'disabled ' : '') +
+          'style="padding:4px 14px;background:' + (canBuy ? '#7c3aed' : '#374151') + ';border:none;border-radius:4px;color:' +
+          (canBuy ? 'white' : '#6b7280') + ';cursor:' + (canBuy ? 'pointer' : 'default') + ';font-size:12px">Поглотить</button>' +
+          '</div>';
+      });
+    }
+
+    body.innerHTML = html;
+  }
+
+
+  // Phase E: обновляем модал активов при любом изменении активов
+  if (typeof EventBus !== 'undefined' && EventBus.on) {
+    EventBus.on('assets_changed', () => {
+      try {
+        const modal = document.getElementById('assets-modal');
+        if (modal && modal.classList.contains('active')) _renderAssetsModal();
+      } catch (e) {}
+    });
+  }
+
   // ── Phase C: кнопка «📊 Рынок» в шапке игры ─────────────────────────
   // Добавляем одну кнопку рядом с 💾 при каждом render.
   // Godot: только внутри _renderXxx-функций — не трогаем DOM вне рендера.
@@ -2248,6 +2500,7 @@
     EventBus.on('render', () => {
       try {
         if (typeof G !== 'undefined' && G && G._spec) {
+          _ensureAssetsButton();
           _ensureMarketButton();
           _updateMarketButton();
           // Если модал открыт — обновить его тоже
@@ -2373,6 +2626,16 @@
     getScenarioMilestones: () => (typeof SCENARIO !== 'undefined' && SCENARIO && Array.isArray(SCENARIO.milestones)) ? SCENARIO.milestones.slice() : null,
     compileMilestoneWhen:  _compileMilestoneWhen,
     resolveMilestoneDesc:  _resolveMilestoneDesc,
+    // v0.10 (Фаза E) — активы и поглощения
+    getOffices:            () => OFFICES.slice(),
+    getSubBrands:          () => SUB_BRANDS.slice(),
+    getOwnedOffices:       () => ((G && G.living && G.living.offices)   || []).slice(),
+    getOwnedSubBrands:     () => ((G && G.living && G.living.subBrands) || []).slice(),
+    purchaseOffice,
+    createSubBrand,
+    acquireCompetitor,
+    showAssetsModal,
+    _renderAssetsModal,
     // v0.9 (Фаза C) — конкуренты + рейтинг рынка
     getMarket:             () => (typeof G !== 'undefined' && G && G.market) ? G.market : null,
     getCompetitors:        () => (typeof G !== 'undefined' && G && G.market && G.market.competitors) ? G.market.competitors.slice() : [],
@@ -2416,6 +2679,6 @@
   try {
     const t4count = TREE_NODES.filter(n => n.tier === 4).length;
     const compCount = Object.keys(COMPETITOR_ARCHETYPES).length;
-    console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий (все живые), ' + compCount + ' конкурентов (Фаза C), древо 2.0: ' + TREE_NODES.length + ' узлов (tier 4 пар: ' + (t4count / 2) + ')');
+    console.log('[livingmarket] ' + VERSION + ' активирован: ' + STAGES.length + ' стадий, ' + compCount + ' конкурентов, ' + OFFICES.length + ' офисов, ' + SUB_BRANDS.length + ' саббрендов (Фаза E), ' + TREE_NODES.length + ' узлов древа 2.0');
   } catch (e) {}
 })();

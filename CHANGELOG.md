@@ -1,5 +1,59 @@
 # BizTycoon — Changelog
 
+## v3.38 — Живой рынок: Фаза E — Активы и поглощения (2026-06-16)
+
+**Бэклог:** п.14 «Живой рынок — Фаза E». Тип A. Затронуто: `src/livingmarket.js` v0.9→v0.10, `sim/test-livingmarket.js`.
+
+### Новые константы
+- `OFFICES` (2 офиса): `coworking` (250K, стадия Сеть) — qualityBonus+2, perkFatigueMult×0.90; `office` (750K, Холдинг, требует coworking) — qualityBonus+3, perkFatigueMult×0.80, rep+10
+- `SUB_BRANDS` (2 направления): `digital` (400K, Холдинг) — caseScoutBonus+2; `enterprise` (500K, Холдинг) — caseScoutBonus+1 + perkPayoutMult+0.15
+- Эффекты применяются немедленно при покупке через те же каналы что дерево 2.0 и руны.
+
+### Механики
+- `purchaseOffice(id)` — гейт по стадии + requires-цепочка + проверка денег; применяет `def.apply(G)`
+- `createSubBrand(id)` — гейт по стадии + проверка денег; применяет `def.apply(G)`
+- `acquireCompetitor(competitorId)` — стоимость 500K + 3× monthlyRevenue; конкурент удаляется, `G.market.acquisitions++`, caseScoutBonus+1, rep+3; гейт Холдинг (stage≥4)
+- Состояние: `G.living.offices[]` и `G.living.subBrands[]` (новые поля в `_defaults()` + back-compat в `_initLiving()`)
+
+### UI
+- Кнопка «🏢 Компания» в шапке игры (`_ensureAssetsButton`) — появляется рядом с «📊 Рынок» на любой стадии
+- Модал с тремя секциями: Офисы / Направления / M&A поглощения
+- Конкурентный M&A показывает цену (динамическая) и кнопку «Поглотить»; блокируется до Холдинга
+
+### Публичное API
+`getOffices`, `getSubBrands`, `getOwnedOffices`, `getOwnedSubBrands`, `purchaseOffice`, `createSubBrand`, `acquireCompetitor`, `showAssetsModal`, `_renderAssetsModal`
+
+### Тесты
+- `sim/test-livingmarket.js`: 426 → 437 проверок (11 новых тест-блоков E.1–E.11)
+
+---
+
+## v3.37 — Roguelite: мета-прогресс v0.6 — 4-я волна контента (2026-06-16)
+
+**Бэклог:** п.13 «Дальнейшие шаги мета-прогресса». Тип B. Затронуто: `src/meta.js`, `src/runes.js`, `sim/test-meta.js`, `sim/test-runes.js`.
+
+### Ачивки 4-й волны (`src/meta.js` ACHIEVEMENTS)
+- `nightmare_clean` 🌑 +400 ✦ — победа на Nightmare без единого займа (`difficulty === 'nightmare' && !loanTaken`)
+- `bank_sprint` ⚡ +250 ✦ — победа в сценарии bank за ≤25 месяцев (`scenarioId === 'bank' && monthsPlayed <= 25`)
+- `rep_master` 🌟 +200 ✦ — победа с финальной репутацией ≥ 95 (`finalReputation >= 95`)
+- Используют только уже отслеживаемые поля history; новых трекеров не нужно.
+
+### Мета-перки 4-й волны (`src/meta.js` META_PERKS)
+- `market_edge` 🔮 400 ✦ — `{ startPrepayBonus: 0.20, startQBonus: 2 }` (гибрид early_advance + wise_consult); `excludes: ['early_advance', 'wise_consult']`
+- `brand_force` 💎 300 ✦ — `{ startRep: 10, startPenaltyShield: true }` (гибрид brand_starter + penalty_grace); `excludes: ['brand_starter', 'penalty_grace']`
+- Все эффекты обрабатываются существующим `_applyMetaPerksToG`, новых каналов не добавлялось.
+
+### Руны второго поколения (`src/runes.js` v0.1→v0.2)
+- `architect` 🏗 (900 ✦ в мета-прогрессе) — qualityBonus +8, startMoneyDelta −100K
+- `hustler` 💨 (1100 ✦ в мета-прогрессе) — scoutBonus +1, payoutMult +8%, startMoneyDelta −200K
+- Добавлены в `RUNE_UNLOCKS` (`src/meta.js`) с порогами 900/1100.
+- Появляются в пуле после накопления достаточных shards; до этого модал показывает только открытые руны (фолбэк ≥ 3 гарантирован).
+
+### Тесты
+- `sim/test-meta.js`: 191 → 231 проверок (6 новых тест-блоков: nightmare_clean, bank_sprint, rep_master, market_edge, brand_force, architect/hustler)
+- `sim/test-runes.js`: 25 → 27 проверок (обновлены хардкоды пула)
+- Итог: **831/831** (meta 231 + runes 27 + runmap 136 + livingmarket 437)
+
 ## v3.34 — Перенос пула майлстоунов в данные сценария (Фаза A, шаг 3) (2026-06-15)
 
 Майлстоуны Живого рынка теперь объявляются в `scenarios/<id>.data.js`

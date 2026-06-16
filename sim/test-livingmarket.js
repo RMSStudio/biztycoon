@@ -1700,3 +1700,151 @@ _eq(G.scoutPool.length, 2, 'пул не изменился — нет T3+ про
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);
+
+// ══════════════════════════════════════════════════════════════════════
+//   v0.10 (Фаза E) — Активы и поглощения
+// ══════════════════════════════════════════════════════════════════════
+
+// ── E.1: каталоги OFFICES / SUB_BRANDS доступны через API ──
+add(run('Фаза E.1: каталоги офисов и саббрендов доступны через API', `
+_ok(typeof LivingMarket.getOffices === 'function',       'getOffices — функция');
+_ok(typeof LivingMarket.getSubBrands === 'function',     'getSubBrands — функция');
+_ok(typeof LivingMarket.purchaseOffice === 'function',   'purchaseOffice — функция');
+_ok(typeof LivingMarket.createSubBrand === 'function',   'createSubBrand — функция');
+_ok(typeof LivingMarket.acquireCompetitor === 'function','acquireCompetitor — функция');
+const offices = LivingMarket.getOffices();
+_eq(offices.length, 2, '2 офиса в каталоге');
+_ok(offices.every(o => o.id && o.name && o.cost && typeof o.stageReq === 'number'), 'офисы имеют нужные поля');
+const brands = LivingMarket.getSubBrands();
+_eq(brands.length, 2, '2 саббренда в каталоге');
+_ok(brands.every(b => b.id && b.name && b.cost && typeof b.stageReq === 'number'), 'саббренды имеют нужные поля');
+`));
+
+// ── E.2: G.living.offices и G.living.subBrands инициализируются при startGame ──
+add(run('Фаза E.2: G.living.offices / subBrands инициализируются', `
+initState(); selectSpec('smm'); startGame();
+_ok(Array.isArray(G.living.offices),   'G.living.offices — массив');
+_ok(Array.isArray(G.living.subBrands), 'G.living.subBrands — массив');
+_eq(G.living.offices.length,   0, 'offices пустой в начале');
+_eq(G.living.subBrands.length, 0, 'subBrands пустой в начале');
+`));
+
+// ── E.3: purchaseOffice — блок по стадии ──
+add(run('Фаза E.3: purchaseOffice отказывает если стадия ниже требуемой', `
+initState(); selectSpec('smm'); startGame();
+G.money = 1_000_000;
+// stage=0 (Гараж), coworking требует stageReq=3 (Сеть)
+const r = LivingMarket.purchaseOffice('coworking');
+_ok(!r.ok, 'покупка отклонена');
+_eq(r.reason, 'stage_required', 'reason = stage_required');
+_eq(G.money, 1_000_000, 'деньги не списаны');
+_eq(G.living.offices.length, 0, 'offices пустой');
+`));
+
+// ── E.4: purchaseOffice — успешная покупка коворкинга на стадии Сеть ──
+add(run('Фаза E.4: purchaseOffice коворкинг работает на стадии Сеть', `
+initState(); selectSpec('smm'); startGame();
+G.money = 1_000_000;
+G.living.stage = 3;         // Сеть
+const qBefore = G.qualityBonus || 0;
+const fBefore = G.perkFatigueMult ?? 1;
+const r = LivingMarket.purchaseOffice('coworking');
+_ok(r.ok, 'покупка успешна: ' + JSON.stringify(r));
+_eq(r.id, 'coworking', 'id = coworking');
+_eq(G.money, 750_000, 'списано 250 000');
+_ok(G.living.offices.includes('coworking'), 'coworking в G.living.offices');
+_eq(G.qualityBonus, qBefore + 2, 'qualityBonus вырос на 2');
+_ok(G.perkFatigueMult < fBefore, 'perkFatigueMult снизился (меньше усталость)');
+`));
+
+// ── E.5: purchaseOffice — блок по requires (office без coworking) ──
+add(run('Фаза E.5: purchaseOffice office отказывает без coworking', `
+initState(); selectSpec('smm'); startGame();
+G.money = 2_000_000;
+G.living.stage = 4;         // Холдинг
+const r = LivingMarket.purchaseOffice('office');
+_ok(!r.ok, 'покупка отклонена');
+_eq(r.reason, 'requires_coworking', 'reason = requires_coworking');
+`));
+
+// ── E.6: purchaseOffice — already_owned ──
+add(run('Фаза E.6: purchaseOffice возвращает already_owned при дубле', `
+initState(); selectSpec('smm'); startGame();
+G.money = 2_000_000;
+G.living.stage = 3;
+LivingMarket.purchaseOffice('coworking');
+const r2 = LivingMarket.purchaseOffice('coworking');
+_ok(!r2.ok, 'второй вызов отклонён');
+_eq(r2.reason, 'already_owned', 'reason = already_owned');
+_eq(G.living.offices.length, 1, 'offices.length = 1');
+`));
+
+// ── E.7: createSubBrand — успешная покупка digital на Холдинге ──
+add(run('Фаза E.7: createSubBrand digital работает на стадии Холдинг', `
+initState(); selectSpec('smm'); startGame();
+G.money = 1_000_000;
+G.living.stage = 4;
+const scoutBefore = G.caseScoutBonus || 0;
+const r = LivingMarket.createSubBrand('digital');
+_ok(r.ok, 'покупка успешна: ' + JSON.stringify(r));
+_eq(G.money, 600_000, 'списано 400 000');
+_ok(G.living.subBrands.includes('digital'), 'digital в G.living.subBrands');
+_eq(G.caseScoutBonus, scoutBefore + 2, 'caseScoutBonus вырос на 2');
+`));
+
+// ── E.8: createSubBrand enterprise — применяет perkPayoutMult ──
+add(run('Фаза E.8: createSubBrand enterprise добавляет perkPayoutMult +0.15', `
+initState(); selectSpec('smm'); startGame();
+G.money = 1_000_000;
+G.living.stage = 4;
+const payBefore = G.perkPayoutMult || 0;
+LivingMarket.createSubBrand('enterprise');
+_ok(Math.abs((G.perkPayoutMult || 0) - (payBefore + 0.15)) < 0.001, 'perkPayoutMult +0.15');
+`));
+
+// ── E.9: acquireCompetitor — блок при stage < 4 ──
+add(run('Фаза E.9: acquireCompetitor отказывает при стадии ниже Холдинга', `
+initState(); selectSpec('smm'); startGame();
+G.money = 5_000_000;
+G.living.stage = 3;         // Сеть — недостаточно
+const r = LivingMarket.acquireCompetitor('comp_dumper');
+_ok(!r.ok, 'поглощение отклонено');
+_eq(r.reason, 'stage_required', 'reason = stage_required');
+_eq(G.market.competitors.length, 5, 'конкуренты не изменились');
+`));
+
+// ── E.10: acquireCompetitor — успешное поглощение ──
+add(run('Фаза E.10: acquireCompetitor успешно поглощает конкурента', `
+initState(); selectSpec('smm'); startGame();
+G.living.stage = 4;
+// Выставляем monthlyRevenue вручную для детерминизма стоимости
+G.market.competitors[0].monthlyRevenue = 200_000;
+const cost = 500_000 + Math.round(200_000 * 3);  // 1 100 000
+G.money = cost + 1_000_000;
+const repBefore   = G.reputation || 0;
+const scoutBefore = G.caseScoutBonus || 0;
+const compsBefore = G.market.competitors.length;
+const acqBefore   = G.market.acquisitions || 0;
+const targetId    = G.market.competitors[0].id;
+const r = LivingMarket.acquireCompetitor(targetId);
+_ok(r.ok, 'поглощение успешно: ' + JSON.stringify(r));
+_eq(r.cost, cost, 'стоимость верная');
+_eq(G.market.competitors.length, compsBefore - 1, 'один конкурент исчез');
+_ok(!G.market.competitors.find(c => c.id === targetId), 'поглощённый исчез из списка');
+_eq(G.market.acquisitions, acqBefore + 1, 'acquisitions++');
+_eq(G.caseScoutBonus, scoutBefore + 1, 'caseScoutBonus +1');
+_eq(G.reputation, Math.min(100, repBefore + 3), 'reputation +3');
+`));
+
+// ── E.11: acquireCompetitor — блок при insufficient_funds ──
+add(run('Фаза E.11: acquireCompetitor блокирует без денег', `
+initState(); selectSpec('smm'); startGame();
+G.living.stage = 4;
+G.market.competitors[0].monthlyRevenue = 200_000;
+G.money = 100;  // явно мало
+const r = LivingMarket.acquireCompetitor(G.market.competitors[0].id);
+_ok(!r.ok, 'отклонено');
+_eq(r.reason, 'insufficient_funds', 'reason = insufficient_funds');
+_eq(G.market.competitors.length, 5, 'конкуренты не изменились');
+`));
+
