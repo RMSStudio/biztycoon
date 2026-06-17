@@ -532,6 +532,7 @@
     const _origAdv = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdv.apply(this, arguments);
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
       try { _updateMoneyTrack(typeof G !== 'undefined' ? G : null); } catch (e) {}
       return r;
     };
@@ -541,6 +542,7 @@
     const _origStart = window.startGame;
     window.startGame = function () {
       const r = _origStart.apply(this, arguments);
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
       try {
         if (typeof G !== 'undefined' && G) {
           // v0.3: применяем мета-перки до фиксации стартового трека

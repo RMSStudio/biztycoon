@@ -142,6 +142,7 @@
     const _origAdvance = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdvance.apply(this, arguments);
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
       try { _tickRunMap(); } catch (e) { console.warn('[runmap] tick error:', e); }
       return r;
     };
@@ -266,6 +267,7 @@
 
   // ── UI: пилюля этапа в game-header ───────────────────
   function _injectPill() {
+    if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return;
     if (typeof G === 'undefined' || !G || !G.runMap) return;
     const header = document.querySelector('.game-header .game-logo');
     if (!header) return;

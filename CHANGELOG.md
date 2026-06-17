@@ -1,5 +1,29 @@
 # BizTycoon — Changelog
 
+## v3.48 — Б.6: Live-деактивация DLC без перезагрузки страницы (2026-06-17)
+
+**Бэклог:** Б.6. Затронуто: `dlc/loader.js`, `src/runes.js`, `src/storyarcs.js`, `src/runmap.js`, `src/meta.js`.
+
+**Проблема:** отключение DLC через тумблер на mode-screen не применялось без `location.reload()`. Включение работало (v3.43), деактивация была помечена «отложено до cleanup() API».
+
+**Решение — guard-паттерн:** вместо unsubscribe EventBus (требует хранить ссылки на closure-функции), в каждую обёртку `advanceMonth` / `startGame` и в `_injectPill` добавлена проверка `DLC.isEnabled('roguelite')`. После `disable()` localStorage обновляется немедленно → все DLC-обёртки на следующем тике возвращают управление без своей логики.
+
+**Изменения:**
+- **`dlc/loader.js`**:
+  - `onToggle` — при `checked=false` вызывает `_deactivateLive(id)` вместо комментария
+  - `_deactivateLive(id)` — новая функция: убирает pill-индикаторы из заголовка (`#rune-active-pill`, `#runmap-active-pill`), перерисовывает DLC-карточки, показывает `notify(..., 'info')`
+- **`src/runes.js`** — guard в `advanceMonth`-обёртке, `_generateOffers`-обёртке, `_injectPill`
+- **`src/storyarcs.js`** — guard в `advanceMonth`-обёртке
+- **`src/meta.js`** — guard в `advanceMonth`-обёртке и `startGame`-обёртке
+- **`src/runmap.js`** — guard в `advanceMonth`-обёртке и `_injectPill`
+
+**Поведение после фикса:**
+- Отключение roguelite-DLC заморозит рунные эффекты, сторисы и трекинг немедленно (текущая партия + все новые)
+- Включение работает как раньше через `_activateLive` / `_reactivateRogueliteModules`
+- Повторное включение после деактивации корректно: guard пропускает → обёртки продолжают работу без перезапуска
+
+---
+
 ## v3.47 — Ф.3 / п.13: Переговорный аудит + выбор второй специализации (2026-06-17)
 
 **Бэклог:** п.19 (Ф.3), п.13 (Roguelite). Затронуто: `src/engine.js`, `src/projects.js`, `src/ui.js`, `src/runes.js`, `scenarios/agency.data.js`.

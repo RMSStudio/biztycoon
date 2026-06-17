@@ -166,10 +166,32 @@ const DLC = (() => {
     const card = document.getElementById('dlc-card-' + id);
     if (card) card.classList.toggle('dlc-active', checked);
 
-    if (checked) _activateLive(id);
-    // Отключение DLC: эффект на следующей партии/перезагрузке.
-    // Полная live-деактивация требует unsubscribe EventBus во всех модулях —
-    // отложено до рефакторинга под cleanup() API.
+    if (checked) {
+      _activateLive(id);
+    } else {
+      _deactivateLive(id);
+    }
+  }
+
+  // ── Live-деактивация DLC без перезагрузки страницы ────
+  // Модули roguelite уже подписаны на advanceMonth/startGame/render,
+  // но их обёртки проверяют DLC.isEnabled() перед выполнением логики.
+  // disable() выше уже убрал DLC из localStorage → guard вернёт false
+  // → все рогалайт-эффекты заморожены немедленно.
+  function _deactivateLive(id) {
+    const dlc = REGISTRY.find(d => d.id === id);
+    if (!dlc) return;
+
+    // Для roguelite: убираем pill-индикаторы из заголовка, если есть
+    if (id === 'roguelite') {
+      document.getElementById('rune-active-pill')?.remove();
+      document.getElementById('runmap-active-pill')?.remove();
+    }
+
+    renderModeScreen();
+    if (typeof notify === 'function') {
+      notify(`${dlc.icon} ${dlc.name} деактивирован — вступит в силу с этой партии`, 'info');
+    }
   }
 
   // ── Live-активация DLC без перезагрузки страницы ─────
@@ -228,6 +250,7 @@ const DLC = (() => {
     renderModeScreen,
     onToggle,
     _activateLive,               // для тестов / внешнего вызова
+    _deactivateLive,             // для тестов / внешнего вызова
     _reactivateRogueliteModules, // для тестов
   };
 })();

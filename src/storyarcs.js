@@ -123,6 +123,7 @@
     const _origAdvance = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdvance.apply(this, arguments);
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
       try { _tickArcs(); } catch (e) { console.warn('[storyarcs] tick error:', e); }
       return r;
     };

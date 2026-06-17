@@ -198,6 +198,7 @@
     const _origAdvance = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdvance.apply(this, arguments);
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
       try { _postAdvance(); } catch (e) { console.warn('[runes] postAdvance:', e); }
       return r;
     };
@@ -209,6 +210,7 @@
     const _origGen = window._generateOffers;
     window._generateOffers = function () {
       const offers = _origGen.apply(this, arguments) || [];
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return offers;
       try {
         if (G && G.runeInsiderRare) _injectRareOffer(offers);
       } catch (e) { console.warn('[runes] insider:', e); }
@@ -475,6 +477,7 @@
 
   // ── Пилюля активной руны в game-header ───────────────
   function _injectPill() {
+    if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return;
     if (!G || !G.activeRune) return;
     const header = document.querySelector('.game-header .game-logo');
     if (!header) return;
