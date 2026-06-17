@@ -252,7 +252,7 @@
       pill.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,.03);transition:background .15s';
       pill.onmouseover = () => { pill.style.background = 'rgba(255,255,255,.07)'; };
       pill.onmouseout  = () => { pill.style.background = 'rgba(255,255,255,.03)'; };
-      pill.onclick = () => showMarketModal();
+      pill.onclick = (e) => { e.stopPropagation(); showMarketModal(); };
       host.appendChild(pill);
     }
     const rank = getPlayerRank();

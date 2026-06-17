@@ -278,7 +278,8 @@
     if (!pill) {
       pill = document.createElement('span');
       pill.id = 'runmap-pill';
-      pill.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.3px;vertical-align:middle';
+      pill.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.3px;vertical-align:middle;cursor:default';
+      pill.onclick = (e) => e.stopPropagation();
       header.appendChild(pill);
     }
     pill.style.background = `${stage.color}22`;
