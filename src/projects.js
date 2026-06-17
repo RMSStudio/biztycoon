@@ -1018,76 +1018,152 @@ const Projects = (() => {
   //  Сборка команды; реагирует на тег real_team_shown
   // ══════════════════════════════════════════════════════
 
+  // п.17 (Ф.1): интерактивный выбор команды с кнопкой «⚡ Авто»
   function _showPlanning(client) {
-    const staff     = (G.staff || []).filter(s => s.status !== 'fired');
-    const hasStaff  = staff.length > 0;
+    const allStaff  = (G.staff || []).filter(s => s.status !== 'fired');
+    const hasStaff  = allStaff.length > 0;
     const shownTeam = hasTag(client, 'real_team_shown');
 
-    const staffList = hasStaff
-      ? staff.map(s =>
-          `<span style="display:inline-block;margin:2px 3px;padding:2px 8px;border-radius:4px;
-           background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.15);font-size:11px">
-            ${s.icon || '👤'} ${s.name} <span style="color:var(--muted)">(${s.role})</span>
-          </span>`
-        ).join('')
-      : '<span style="color:var(--muted);font-size:11px">— нет нанятых сотрудников —</span>';
+    // Начальный выбор — все свободные (или уже назначенные на этот проект)
+    const sel = new Set(
+      allStaff
+        .filter(s => !s._assignedProjectId || s._assignedProjectId === client.id)
+        .map(s => s._iid || s.id)
+    );
 
-    const teamWarning = shownTeam
-      ? `<div style="margin-top:6px;padding:5px 8px;border-radius:5px;background:rgba(210,153,34,.08);
-              border:1px solid rgba(210,153,34,.25);font-size:10px;color:var(--amber);font-weight:600">
-           ⚠️ В КП была показана реальная команда — назначьте тех же людей
-         </div>`
-      : '';
+    function _cleanup() {
+      delete window.__lcPlanSel;
+      delete window.__lcPlanAuto;
+    }
 
-    _showLCModal({
-      client,
-      icon: '📌', title: 'Сборка команды на проект',
-      phaseLabel: `${client.icon} ${client.name}  ·  Планирование`,
-      body: `<div>
-        <div style="color:var(--sub);margin-bottom:8px">Кто работает над проектом?</div>
-        <div style="margin-bottom:4px">${staffList}</div>
-        ${teamWarning}
-      </div>`,
-      choices: [
-        ...(hasStaff ? [{
-          text: 'Назначить всю команду',
-          desc: `Все сотрудники (${staff.length} чел.) работают над проектом.`,
-          effect: shownTeam ? '+10% к качеству — команда совпадает с КП' : '+5% к качеству',
-          highlight: shownTeam,
+    function _refresh() {
+      const selArr  = allStaff.filter(s => sel.has(s._iid || s.id));
+      const pLoad   = getProjectLoad(client);
+      const projThr = 2 + selArr.reduce((t, s) => t + calcStaffWorkUnit(s), 0);
+      const thrColor = projThr >= pLoad
+        ? 'var(--teal)'
+        : projThr >= pLoad * 0.7 ? 'var(--amber)' : 'var(--red)';
+
+      // Чипы сотрудников — кликабельные тоглы
+      const staffChips = allStaff.map(s => {
+        const key        = s._iid || s.id;
+        const isSelected = sel.has(key);
+        const wu         = calcStaffWorkUnit(s);
+        const busy       = s._assignedProjectId && s._assignedProjectId !== client.id;
+        return `<span onclick="${busy ? '' : `window.__lcPlanSel('${key}')`}"
+          style="display:inline-flex;align-items:center;gap:3px;margin:2px 3px;padding:3px 9px;
+            border-radius:5px;font-size:11px;user-select:none;
+            ${busy ? 'opacity:.4;cursor:not-allowed' : 'cursor:pointer'};
+            background:${isSelected && !busy ? 'rgba(45,212,191,.12)' : 'rgba(148,163,184,.06)'};
+            border:1px solid ${isSelected && !busy ? 'rgba(45,212,191,.35)' : 'rgba(148,163,184,.15)'};
+            color:${isSelected && !busy ? 'var(--fg)' : 'var(--muted)'}">
+          ${s.icon || '👤'} ${s.name}
+          <span style="font-size:9px;opacity:.65">(WU&nbsp;${wu})</span>
+          ${busy ? '<span style="font-size:9px">·&nbsp;занят</span>' : ''}
+        </span>`;
+      }).join('');
+
+      // Индикатор мощности vs нагрузки
+      const thrBar = `
+        <div style="margin-top:8px;display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px">
+          <span style="color:var(--muted)">Мощность выбранных:</span>
+          <span style="color:${thrColor};font-weight:700">${projThr}</span>
+          <span style="color:var(--muted)">/ нагрузка</span>
+          <span style="font-weight:600">${pLoad}</span>
+          ${projThr < pLoad
+            ? `<span style="color:var(--red);font-size:10px">⚠ мощности может не хватить</span>`
+            : `<span style="color:var(--teal);font-size:10px">✓ покрыто</span>`}
+        </div>`;
+
+      const teamWarning = shownTeam
+        ? `<div style="margin-top:6px;padding:5px 8px;border-radius:5px;background:rgba(210,153,34,.08);
+                border:1px solid rgba(210,153,34,.25);font-size:10px;color:var(--amber);font-weight:600">
+             ⚠️ В КП была показана реальная команда — назначьте тех же людей
+           </div>`
+        : '';
+
+      const body = hasStaff
+        ? `<div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="color:var(--sub);font-size:12px">Выберите состав команды:</span>
+              <button onclick="window.__lcPlanAuto()"
+                style="font-size:10px;padding:2px 10px;border-radius:4px;
+                  background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);
+                  color:rgba(168,85,247,.9);cursor:pointer;font-weight:600">⚡ Авто</button>
+            </div>
+            <div>${staffChips}</div>
+            ${thrBar}
+            ${teamWarning}
+          </div>`
+        : `<div style="color:var(--muted);font-size:11px">— нет нанятых сотрудников —</div>`;
+
+      // Параметры кнопки подтверждения зависят от выбора
+      const selArrFinal = allStaff.filter(s => sel.has(s._iid || s.id));
+      const hasSelection = selArrFinal.length > 0;
+      const qBonus = shownTeam && selArrFinal.length === allStaff.length ? 10 : hasSelection ? 5 : 0;
+
+      const confirmText = hasSelection
+        ? `Подтвердить команду (${selArrFinal.length} чел.)`
+        : (shownTeam ? 'Работать без команды (нарушаем КП)' : 'Работать самостоятельно');
+      const confirmDesc = hasSelection
+        ? selArrFinal.map(s => `${s.icon || '👤'} ${s.name}`).join(', ')
+        : (shownTeam ? 'Обещание нарушено — клиент узнает на ревью.' : 'Без команды — скорость ниже, риск выше.');
+      const confirmEffect = hasSelection
+        ? `+${qBonus}% к качеству${shownTeam && selArrFinal.length === allStaff.length ? ' — команда совпадает с КП' : ''}`
+        : (shownTeam ? '+10 риска · −10 настроения (нарушение КП)' : '+10 риска');
+
+      _showLCModal({
+        client,
+        icon: '📌', title: 'Сборка команды на проект',
+        phaseLabel: `${client.icon} ${client.name}  ·  Планирование`,
+        body,
+        choices: [{
+          text:      confirmText,
+          desc:      confirmDesc,
+          effect:    confirmEffect,
+          highlight: hasSelection,
           fn: () => {
-            const bonus = shownTeam ? 10 : 5;
-            client._lcQualityBonus = (client._lcQualityBonus || 0) + bonus;
-            // Фикс дабл-назначения (v3.6): через assignStaffToProject — он снимает
-            // сотрудника с прежнего проекта. Прямая запись массива оставляла людей
-            // в _assignedStaff ОБОИХ проектов → мощность считалась дважды (абуз)
-            staff.forEach(s => assignStaffToProject(s._iid || s.id, client.id));
-            applyTag(client, 'team_assigned');
-            logDecision(client, 'planning', 'team: full', `+${bonus}% качество`);
-            _closeLCModal();
-            addLog(`📌 ${client.name}: команда назначена — стартуем работу`, 'teal');
-            advancePhase(client);
-          },
-        }] : []),
-        {
-          text: shownTeam ? 'Работать без команды (нарушаем КП)' : 'Работать самостоятельно',
-          desc: shownTeam
-            ? 'Обещание нарушено — клиент узнает на ревью.'
-            : 'Без команды — скорость ниже, риск выше.',
-          effect: shownTeam ? '+10 риска · −10 настроения (нарушение КП)' : '+10 риска',
-          fn: () => {
-            riskDelta(client, +10);
-            if (shownTeam) {
-              moodDelta(client, -10);
-              applyTag(client, 'team_broken_promise');
-              addLog(`⚠️ ${client.name}: обещанная команда не назначена`, 'amber');
+            _cleanup();
+            const finalSel = allStaff.filter(s => sel.has(s._iid || s.id));
+            if (finalSel.length > 0) {
+              const bonus = shownTeam && finalSel.length === allStaff.length ? 10 : 5;
+              client._lcQualityBonus = (client._lcQualityBonus || 0) + bonus;
+              finalSel.forEach(s => assignStaffToProject(s._iid || s.id, client.id));
+              applyTag(client, 'team_assigned');
+              logDecision(client, 'planning', `team: ${finalSel.length}/${allStaff.length}`, `+${bonus}% качество`);
+              _closeLCModal();
+              addLog(`📌 ${client.name}: команда назначена (${finalSel.length} чел.) — стартуем работу`, 'teal');
+            } else {
+              riskDelta(client, +10);
+              if (shownTeam) {
+                moodDelta(client, -10);
+                applyTag(client, 'team_broken_promise');
+                addLog(`⚠️ ${client.name}: обещанная команда не назначена`, 'amber');
+              }
+              logDecision(client, 'planning', 'team: none', '+10 риска');
+              _closeLCModal();
             }
-            logDecision(client, 'planning', 'team: none', '+10 риска');
-            _closeLCModal();
             advancePhase(client);
           },
-        },
-      ],
-    });
+        }],
+      });
+    }
+
+    // Эфемерные глобальные хэндлеры для onclick в innerHTML
+    window.__lcPlanSel = (key) => {
+      if (sel.has(key)) sel.delete(key); else sel.add(key);
+      _refresh();
+    };
+    window.__lcPlanAuto = () => {
+      if (typeof autoAssignOptimal === 'function') {
+        const optimal = autoAssignOptimal(client);
+        sel.clear();
+        optimal.forEach(s => sel.add(s._iid || s.id));
+        _refresh();
+      }
+    };
+
+    _refresh();
   }
 
   // ══════════════════════════════════════════════════════
@@ -1680,6 +1756,47 @@ const Projects = (() => {
         return true;
       },
     },
+    // п.18 (Ф.2): действия влияния на клиента — calendar-кулдаун через _actionCooldowns
+    {
+      id: 'client_sync',
+      icon: '🤝', title: 'Синхронизация',
+      desc: 'Встреча по ожиданиям: клиент понимает прогресс, напряжение спадает.',
+      costLabel: '−15К',
+      effectLabel: '+15 😊 · −10 ⚠️',
+      cooldownMonths: 2,
+      bypassPhaseCheck: true,
+      available: c => !((c._actionCooldowns || {}).client_sync > 0),
+      apply: c => {
+        if ((G.money || 0) < 15000) { notify('Недостаточно средств для встречи', 'error'); return false; }
+        G.money -= 15000;
+        moodDelta(c, +15);
+        riskDelta(c, -10);
+        c._actionCooldowns = c._actionCooldowns || {};
+        c._actionCooldowns.client_sync = 2;
+        logDecision(c, c._lcPhase, 'Синхронизация с клиентом', '+15 настроения · −10 риска · −15К');
+        return true;
+      },
+    },
+    {
+      id: 'bonus_demo',
+      icon: '🎬', title: 'Бонус-демо',
+      desc: 'Мини-показ без штрафа к ходу — клиент видит прогресс, доверие растёт.',
+      costLabel: '−12К',
+      effectLabel: '+12 😊 · +5% качество',
+      cooldownMonths: 1,
+      bypassPhaseCheck: true,
+      available: c => !((c._actionCooldowns || {}).bonus_demo > 0),
+      apply: c => {
+        if ((G.money || 0) < 12000) { notify('Недостаточно средств для демо', 'error'); return false; }
+        G.money -= 12000;
+        moodDelta(c, +12);
+        c._lcQualityBonus = (c._lcQualityBonus || 0) + 5;
+        c._actionCooldowns = c._actionCooldowns || {};
+        c._actionCooldowns.bonus_demo = 1;
+        logDecision(c, c._lcPhase, 'Бонус-демо клиенту', '+12 настроения · +5% качество · −12К');
+        return true;
+      },
+    },
   ];
 
   function triggerPlayerAction(clientId, actionId) {
@@ -1688,11 +1805,19 @@ const Projects = (() => {
     const action = PLAYER_ACTIONS.find(a => a.id === actionId);
     if (!action) return;
 
-    // Р.5: кулдаун — 1 раз за фазу на каждое действие
-    const phase = client._lcPhase || '';
-    if (!client._phaseActionsUsed) client._phaseActionsUsed = {};
-    if (client._phaseActionsUsed[actionId] === phase) {
-      notify(`${action.icon} Уже использовано в этой фазе`, 'warning');
+    // Р.5: кулдаун — 1 раз за фазу (пропускаем для calendar-cooldown действий)
+    if (!action.bypassPhaseCheck) {
+      const phase = client._lcPhase || '';
+      if (!client._phaseActionsUsed) client._phaseActionsUsed = {};
+      if (client._phaseActionsUsed[actionId] === phase) {
+        notify(`${action.icon} Уже использовано в этой фазе`, 'warning');
+        return;
+      }
+    }
+    // п.18 (Ф.2): calendar-кулдаун
+    if ((client._actionCooldowns || {})[actionId] > 0) {
+      const left = client._actionCooldowns[actionId];
+      notify(`${action.icon} Доступно через ${left} мес.`, 'warning');
       return;
     }
 
@@ -1742,25 +1867,35 @@ const Projects = (() => {
     const isWork = (client._lcPhase || '').startsWith('work_');
     let actionsHtml = '';
     if (isWork && !client._lcPendingDecision) {
-      const available = PLAYER_ACTIONS.filter(a => a.available(client));
       const usedInPhase = client._phaseActionsUsed || {};
-      const curPhase = client._lcPhase || '';
-      if (available.length) {
+      const curPhase    = client._lcPhase || '';
+      const cdMap       = client._actionCooldowns || {};
+      // Показываем все действия: обычные (фильтр available) + calendar-cooldown (всегда)
+      const visibleActions = PLAYER_ACTIONS.filter(a =>
+        a.cooldownMonths ? true : a.available(client)
+      );
+      if (visibleActions.length) {
         actionsHtml = `
           <div style="margin-bottom:14px">
-            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия <span style="color:var(--teal);font-weight:500;text-transform:none;letter-spacing:0">· не тратят дни · 1 раз за фазу</span></div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия <span style="color:var(--teal);font-weight:500;text-transform:none;letter-spacing:0">· не тратят дни</span></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-              ${available.map(a => {
-                const used = usedInPhase[a.id] === curPhase;
-                if (used) {
+              ${visibleActions.map(a => {
+                const cdLeft = cdMap[a.id] || 0;
+                const phaseUsed = !a.bypassPhaseCheck && usedInPhase[a.id] === curPhase;
+                const disabled  = cdLeft > 0 || phaseUsed;
+                const statusTag = cdLeft > 0
+                  ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(168,85,247,.1);color:rgba(168,85,247,.8)">через ${cdLeft} мес.</span>`
+                  : phaseUsed
+                    ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">использовано</span>`
+                    : `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,.12);color:var(--red)">${a.costLabel}</span>
+                       <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(45,212,191,.12);color:var(--teal)">${a.effectLabel}</span>`;
+                if (disabled) {
                   return `
                     <div style="text-align:left;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.07);
                                 background:rgba(255,255,255,.03);opacity:.55;cursor:not-allowed">
                       <div style="font-size:12px;font-weight:600;color:var(--sub)">${a.icon} ${a.title}</div>
                       <div style="font-size:10px;color:var(--muted);margin-top:2px">${a.desc}</div>
-                      <div style="margin-top:5px;display:flex;gap:6px">
-                        <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">использовано</span>
-                      </div>
+                      <div style="margin-top:5px;display:flex;gap:6px">${statusTag}</div>
                     </div>`;
                 }
                 return `
@@ -1771,10 +1906,7 @@ const Projects = (() => {
                     onmouseout="this.style.background='rgba(45,212,191,.05)'">
                     <div style="font-size:12px;font-weight:600;color:var(--text)">${a.icon} ${a.title}</div>
                     <div style="font-size:10px;color:var(--muted);margin-top:2px">${a.desc}</div>
-                    <div style="margin-top:5px;display:flex;gap:6px">
-                      <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,.12);color:var(--red)">${a.costLabel}</span>
-                      <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(45,212,191,.12);color:var(--teal)">${a.effectLabel}</span>
-                    </div>
+                    <div style="margin-top:5px;display:flex;gap:6px">${statusTag}</div>
                   </button>`;
               }).join('')}
             </div>

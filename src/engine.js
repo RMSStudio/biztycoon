@@ -268,6 +268,42 @@ function unassignStaff(staffId) {
   });
 }
 
+// п.17 (Ф.1): Оптимальный подбор команды под проект
+// Сортирует свободных сотрудников по WU × affinity-бонусу роли к типу проекта,
+// жадно добавляет пока throughput (2 + WU выбранных) не покроет load×1.15
+function autoAssignOptimal(project) {
+  const pLoad  = getProjectLoad(project);
+  const target = Math.max(pLoad * 1.15, 4); // с запасом 15%, минимум 4
+
+  const free = (G.staff || []).filter(s => s.status !== 'fired' && !s._assignedProjectId);
+  if (!free.length) return [];
+
+  // Role → project-type affinity multipliers
+  const _AFF = {
+    corp:  { developer: 1.2, manager: 1.15, lawyer: 1.2 },
+    bank:  { developer: 1.2, manager: 1.15, lawyer: 1.25 },
+    state: { lawyer: 1.25, manager: 1.1 },
+    store: { designer: 1.2, smm: 1.15, copywriter: 1.15 },
+    local: { designer: 1.15, smm: 1.2, copywriter: 1.1 },
+  };
+  const affMap = _AFF[project.type] || {};
+
+  const scored = free.map(s => {
+    const wu = calcStaffWorkUnit(s);
+    return { s, wu, score: wu * (affMap[s.role] || 1.0) };
+  }).sort((a, b) => b.score - a.score);
+
+  const selected = [];
+  let thr = 2; // базовая мощность фаундера
+  for (const { s, wu } of scored) {
+    if (thr >= target) break;
+    selected.push(s);
+    thr += wu;
+  }
+  // Гарантируем хотя бы одного, если есть свободные
+  return selected.length ? selected : (scored[0] ? [scored[0].s] : []);
+}
+
 // Мощность, которую требует проект (по тиру) — целевая нагрузка/мес.
 // T1–T7 (v3.0): 4 / 8 / 14 / 18 / 24 / 32 / 40 — шкала пропорциональна
 // мощн. сотрудников (jr=2, md=4, sr=7, lead=9, star=12)
@@ -438,6 +474,16 @@ function investInClient(cid) {
 // ══════════════════════════════════════════════════════
 //  SCOUTING
 // ══════════════════════════════════════════════════════
+// п.21 (Ф.6): Сезонный модификатор (0=Янв … 11=Дек)
+// Q4 (ноябрь–декабрь) — пик спроса; Q1 (янв–фев) — затишье; Лето (июн–июл) — спад
+function getSeasonMod() {
+  const m = G.month % 12;
+  if (m === 10 || m === 11) return { offerBonus:  1, budgetBoost: 0.15, npsNudge:  0, label: 'Q4 — пик спроса', icon: '📈', color: 'var(--teal)'  };
+  if (m === 0  || m === 1 ) return { offerBonus: -1, budgetBoost: 0,    npsNudge: -3, label: 'Q1 — затишье',    icon: '❄️',  color: '#7fa8d8'       };
+  if (m === 5  || m === 6 ) return { offerBonus:  0, budgetBoost: 0,    npsNudge: -2, label: 'Лето',            icon: '☀️',  color: 'var(--amber)'  };
+  return { offerBonus: 0, budgetBoost: 0, npsNudge: 0, label: null, icon: null, color: null };
+}
+
 function _generateOffers() {
   const roll=Math.random()*100;
   const repBonus=(G.reputation-50)*0.2;
@@ -453,6 +499,8 @@ function _generateOffers() {
   if (G.caseScoutBonus>0) offerCount=Math.min(4, offerCount+(G.caseScoutBonus||0));
   // SMM-специализация: пассивно +1 оффер всегда (стек с HR-SMM)
   if (SPECS[G.spec]?.passive === 'scout_offers') offerCount=Math.min(5, offerCount+(SPECS[G.spec].passiveVal||0));
+  // п.21 (Ф.6): сезонный бонус/штраф к количеству офферов
+  { const sea = getSeasonMod(); offerCount = Math.max(0, Math.min(5, offerCount + sea.offerBonus)); }
 
   // Гейты тиров T1–T7 (v3.0): репутация + портфолио для эндгейма
   const _rep = G.reputation, _pf = G.portfolio || 0;
@@ -477,20 +525,22 @@ function _generateOffers() {
   );
 
   // Взвешенный выбор: вероятность из поля prob; epic/rare имеют меньший prob
+  // п.21 (Ф.6): Q4 — добавляем _seasonBoost к офферам для бюджетного буста при подписании
+  const _seaBoost = getSeasonMod().budgetBoost;
   const offers=[];
   const available = pool.filter(p => !G.activeClients.find(c=>c.id.startsWith(p.id)));
   const shuffled  = [...available].sort(()=>Math.random()-0.5);
   for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
     const p=shuffled[i];
     if (Math.random() < (p.prob||0.5))
-      offers.push({ ...p });
+      offers.push({ ...p, ...(_seaBoost > 0 ? { _seasonBoost: _seaBoost } : {}) });
   }
   // Если не набрали нужное количество — берём без prob-фильтра
   if (offers.length < offerCount) {
     for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
       const p=shuffled[i];
       if (!offers.find(o=>o.id===p.id))
-        offers.push({ ...p });
+        offers.push({ ...p, ...(_seaBoost > 0 ? { _seasonBoost: _seaBoost } : {}) });
     }
   }
   return offers;
@@ -700,10 +750,11 @@ function signProject(pid) {
   // Бюджет: диапазон/число из fixedBudget (oneTime) или случайный из BUDGET_RANGES тира
   const totalBudget = (() => {
     const fb = def.fixedBudget;
-    if (Array.isArray(fb)) return Math.round((fb[0] + Math.random() * (fb[1] - fb[0])) / 1000) * 1000;
-    if (fb) return fb;
+    const _sea = 1 + (def._seasonBoost || 0); // п.21 (Ф.6): Q4 буст бюджета
+    if (Array.isArray(fb)) return Math.round((fb[0] + Math.random() * (fb[1] - fb[0])) * _sea / 1000) * 1000;
+    if (fb) return Math.round(fb * _sea / 1000) * 1000;
     const [bMin, bMax] = BUDGET_RANGES[def.tier] || BUDGET_RANGES[1];
-    return Math.round((bMin + Math.random() * (bMax - bMin)) / 5000) * 5000;
+    return Math.round((bMin + Math.random() * (bMax - bMin)) * _sea / 5000) * 5000;
   })();
 
   // Milestone-выплаты: T2 — 40% при 50%; T3–T4 — 30%+30% при 33/66;
@@ -1314,6 +1365,21 @@ function advanceMonth() {
       if (G.fatigueActionCooldowns[k] > 0) G.fatigueActionCooldowns[k]--;
     });
   }
+  // п.18 (Ф.2): декремент кулдаунов действий влияния на клиента (calendar-based)
+  G.activeClients.forEach(c => {
+    if (c._actionCooldowns) {
+      Object.keys(c._actionCooldowns).forEach(k => {
+        if (c._actionCooldowns[k] > 0) c._actionCooldowns[k]--;
+      });
+    }
+  });
+  // п.21 (Ф.6): сезонный NPS-нaтиск — Q1/лето давят на лояльность клиентов
+  { const _seaNps = getSeasonMod().npsNudge;
+    if (_seaNps !== 0 && G.activeClients.filter(c=>!c.oneTime).length > 0) {
+      nudgeAllNPS(G, _seaNps);
+      const _seaM = getSeasonMod();
+      addLog(`${_seaM.icon} Сезон (${_seaM.label}): лояльность ${_seaNps > 0 ? '+' : ''}${_seaNps}`, 'muted');
+    } }
 
   // ② Прогресс проектов (не-разовые) — от назначенной команды (WU-система)
   const throughput = getTeamThroughput();

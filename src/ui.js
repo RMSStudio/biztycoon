@@ -579,6 +579,25 @@ function renderGame() {
   const spec=SPECS[G.spec];
   document.getElementById('g-spec-name').textContent=spec.name;
   document.getElementById('g-month').textContent=monthLabel();
+  // п.21 (Ф.6): индикатор сезона рядом с меткой месяца
+  { const _sea = getSeasonMod();
+    let _seaEl = document.getElementById('g-season-badge');
+    if (_sea.label) {
+      if (!_seaEl) {
+        _seaEl = document.createElement('span');
+        _seaEl.id = 'g-season-badge';
+        _seaEl.style.cssText = 'display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600;vertical-align:middle;cursor:help';
+        const mEl = document.getElementById('g-month');
+        if (mEl) mEl.parentElement.appendChild(_seaEl);
+      }
+      _seaEl.textContent = `${_sea.icon} ${_sea.label}`;
+      _seaEl.style.color  = _sea.color;
+      _seaEl.style.background = `${_sea.color}18`;
+      _seaEl.style.border = `1px solid ${_sea.color}40`;
+      _seaEl.title = _sea.label;
+    } else if (_seaEl) {
+      _seaEl.remove();
+    } }
 
   // Money
   const mEl=document.getElementById('g-money');

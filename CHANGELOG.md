@@ -1,5 +1,33 @@
 # BizTycoon — Changelog
 
+## v3.46 — Ф.1 / Ф.2 / Ф.6: умный стаффинг, влияние на клиента, сезонность (2026-06-17)
+
+**Бэклог:** п.17 (Ф.1), п.18 (Ф.2), п.21 (Ф.6). Затронуто: `src/engine.js`, `src/projects.js`, `src/ui.js`.
+
+### п.17 (Ф.1) — Автоназначение команды: `autoAssignOptimal` + кнопка «Авто»
+
+- `engine.js`: новая функция `autoAssignOptimal(project)` — жадный алгоритм, сортирует свободных сотрудников по `WU × affinity-бонусу` роли к типу проекта (`corp/bank → developer/lawyer`, `store/local → designer/smm`), добирает пока throughput не покроет `load × 1.15`; гарантирует минимум одного
+- `projects.js`: `_showPlanning` полностью переписан — тоглы-чипы для каждого сотрудника вместо статичного списка; занятые (другой проект) — серые с `cursor:not-allowed`; кнопка «⚡ Авто» вызывает `autoAssignOptimal` и проставляет оптимальный набор; live-индикатор мощности vs нагрузки проекта с цветовой сигнализацией; одна кнопка «Подтвердить/Работать самостоятельно» меняет текст по выбору; эфемерные window-хэндлеры `__lcPlanSel`/`__lcPlanAuto` чистятся при подтверждении
+
+### п.18 (Ф.2) — Действия влияния на клиента: Синхронизация + Бонус-демо
+
+- `projects.js`: два новых PLAYER_ACTIONS с `cooldownMonths` (calendar-кулдаун вместо per-phase):
+  - 🤝 **Синхронизация** — встреча по ожиданиям, `+15 😊 · −10 ⚠️ · −15К`, кулдаун 2 мес.
+  - 🎬 **Бонус-демо** — мини-показ без штрафа к ходу, `+12 😊 · +5% качество · −12К`, кулдаун 1 мес.
+- `engine.js`: декремент `client._actionCooldowns` в `advanceMonth` (calendar-based)
+- `triggerPlayerAction`: bypass phase-check для `bypassPhaseCheck: true`-действий; блокировка по `_actionCooldowns` с сообщением «через N мес.»
+- `showDetailPanel`: render всех действий включая cooldown-based — при кулдауне бейдж «через N мес.» вместо «использовано»; при фазе-использованном — как прежде
+
+### п.21 (Ф.6) — Сезонность: Q4 пик / Q1 спад + визуальный индикатор
+
+- `engine.js`: `getSeasonMod()` — возвращает `{offerBonus, budgetBoost, npsNudge, label, icon, color}` по `G.month % 12`; сезоны: Q4 ноябрь–декабрь (+1 оффер, +15% бюджет, 0 NPS), Q1 январь–февраль (−1 оффер, −3 NPS/мес), Лето июнь–июль (−2 NPS/мес)
+- `_generateOffers`: `offerCount += seaMod.offerBonus`; Q4-офферы несут флаг `_seasonBoost: 0.15`
+- `signProject` `totalBudget`: `× (1 + def._seasonBoost)` по всем путям (fixedBudget, BUDGET_RANGES)
+- `advanceMonth`: в Q1/лето `nudgeAllNPS(G, npsNudge)` + запись в лог
+- `ui.js` `renderGame`: динамический бейдж `#g-season-badge` рядом с меткой месяца — цвет/иконка/лейбл из `getSeasonMod()`; исчезает в нейтральные месяцы
+
+---
+
 ## v3.45 — Ребаланс: мораль-триггеры, Q-влияние, кризисная система (2026-06-16)
 
 **Бэклог:** п.8 (Р.1), п.9 (Р.2), п.10 (Р.4). Затронуто: `src/engine.js`, `src/scenario-loader.js`, `src/ui.js`, `scenarios/agency.data.js`.
