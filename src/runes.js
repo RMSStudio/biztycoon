@@ -307,16 +307,17 @@
       });
     }
 
-    // (в) Серийный предприниматель: при пересечении 15 портфолио
-    //     открываем «вторую специализацию» = +20% к payoutMult единоразово.
-    //     В следующей итерации заменим на полноценный выбор второй спеки.
+    // (в) Серийный предприниматель: при пересечении 15 портфолио —
+    //     п.13: полноценный выбор второй специализации через UI.
     if (G.runeSerialUnlock && !G.runeSerialApplied && (G.portfolio || 0) >= 15) {
-      G.runeSerialApplied = true;
-      G.perkPayoutMult    = Math.round(((G.perkPayoutMult || 0) + 0.20) * 100) / 100;
-      if (typeof addLog === 'function') {
-        addLog('🚀 Серийный предприниматель: вторая специализация открыта — выплаты +20%', 'green');
+      G.runeSerialApplied = true; // флаг — больше не триггерить
+      if (typeof showSecondSpecPicker === 'function') {
+        showSecondSpecPicker();
+      } else {
+        // fallback: если ui.js ещё не загружен
+        G.perkPayoutMult = Math.round(((G.perkPayoutMult || 0) + 0.20) * 100) / 100;
+        if (typeof addLog === 'function') addLog('🚀 Серийный предприниматель: выплаты +20%', 'green');
       }
-      if (typeof notify === 'function') notify('🚀 Серийный предприниматель активирован', 'success');
     }
   }
 

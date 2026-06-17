@@ -634,9 +634,12 @@ const Projects = (() => {
         ...(() => {
           const baseChance = client.prepayChance ?? [0, .25, .35, .45, .50, .55, .60, .65][client.tier || 1] ?? 0;
           if (baseChance <= 0) return [];
-          const chance = Math.min(0.95, baseChance + (hasRole('lawyer') ? 0.15 : 0) + (G.perkPrepayBonus || 0));
+          // п.19 (Ф.3): буст от Переговорного аудита (если игрок выбрал «выбить аванс»)
+          const auditBoost = client._negPrepayBoost || 0;
+          const chance = Math.min(0.95, baseChance + (hasRole('lawyer') ? 0.15 : 0) + (G.perkPrepayBonus || 0) + auditBoost);
+          const auditLabel = auditBoost > 0 ? ` 🤝 +${Math.round(auditBoost*100)}% (аудит)` : '';
           return [{
-            text: `Попробовать выбить аванс 30% (шанс ~${Math.round(chance * 100)}%)`,
+            text: `Попробовать выбить аванс 30% (шанс ~${Math.round(chance * 100)}%${auditLabel})`,
             desc: hasRole('lawyer')
               ? 'Юрист усиливает позицию (+15% к шансу). При отказе клиент слегка напряжётся.'
               : 'Если клиент согласится — деньги сразу. При отказе — слегка напряжётся.',
@@ -1956,6 +1959,76 @@ const Projects = (() => {
     if (m) m.classList.remove('active');
   }
 
+  // ══════════════════════════════════════════════════════
+  //  п.19 (Ф.3) — ПЕРЕГОВОРНЫЙ АУДИТ (pre-sign)
+  //  Разблокируется пёрком negotiator. Вызывается из startSign()
+  //  в engine.js — до signProject(). Выбор записывается в
+  //  G._pendingNegAudit и применяется к объекту клиента внутри
+  //  signProject при создании.
+  // ══════════════════════════════════════════════════════
+  function preSignAudit(pid) {
+    const def = (typeof PROJECT_POOL !== 'undefined' ? PROJECT_POOL : []).find(p => p.id === pid);
+    if (!def) { signProject(pid); return; }
+
+    const hasCloser  = G.upgrades && G.upgrades['closer'];
+    const budgetApprox = (() => {
+      const fb = def.fixedBudget;
+      if (Array.isArray(fb)) return Math.round((fb[0] + fb[1]) / 2 / 1000) * 1000;
+      if (fb) return fb;
+      const rng = (typeof BUDGET_RANGES !== 'undefined' ? BUDGET_RANGES : {})[def.tier];
+      return rng ? Math.round((rng[0] + rng[1]) / 2 / 5000) * 5000 : 0;
+    })();
+
+    _showLCModal({
+      client: { ...def, id: pid },
+      icon: '🤝', title: 'Переговорный аудит',
+      phaseLabel: `${def.icon||'📄'} ${def.name}  ·  До подписания`,
+      body: `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+        Переговорщик в команде — можно согласовать условия <em>до</em> подписания контракта.
+        ${budgetApprox ? `Ориентировочный бюджет: <strong style="color:var(--text)">${fmtK(budgetApprox)}</strong>.` : ''}
+      </div>`,
+      choices: [
+        {
+          text: 'Подписать стандартно',
+          desc: 'Без переговоров — быстро, без риска.',
+          effect: 'Без изменений',
+          highlight: true,
+          fn: () => { _closeLCModal(); signProject(pid); },
+        },
+        {
+          text: 'Выбить улучшенный аванс',
+          desc: 'Агрессивный запрос предоплаты. Клиент слегка напряжётся, но шанс аванса вырастет.',
+          effect: 'Аванс-шанс +25% · −5 настроения',
+          fn: () => {
+            G._pendingNegAudit = { pid, prepayBoost: 0.25, moodHit: -5 };
+            _closeLCModal();
+            signProject(pid);
+          },
+        },
+        {
+          text: 'Предложить расширенный скоуп',
+          desc: 'Включаем допуслугу в контракт. Бюджет вырастет, сроки чуть растянутся.',
+          effect: 'Бюджет +15% · Сроки +1 мес · −8 настроения',
+          fn: () => {
+            G._pendingNegAudit = { pid, scopeBoost: true, moodHit: -8 };
+            _closeLCModal();
+            signProject(pid);
+          },
+        },
+        ...(hasCloser ? [{
+          text: '💼 Закрыть с нажимом',
+          desc: 'Переговорщик + Клоузер: улучшенный аванс и выше итоговая выплата.',
+          effect: 'Аванс-шанс +20% · Бюджет +8% · −6 настроения',
+          fn: () => {
+            G._pendingNegAudit = { pid, prepayBoost: 0.20, budgetBoost: 0.08, moodHit: -6 };
+            _closeLCModal();
+            signProject(pid);
+          },
+        }] : []),
+      ],
+    });
+  }
+
   // ── Публичный API ───────────────────────────────────────
   return {
     buildPhaseChain,
@@ -1968,6 +2041,7 @@ const Projects = (() => {
     triggerPlayerAction,
     showDetailPanel,
     closeDetailPanel,
+    preSignAudit,
     PHASE_LABELS,
     PHASE_ICONS,
   };

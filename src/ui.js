@@ -2342,3 +2342,76 @@ function _doExitToMenu() {
   document.getElementById('confirm-exit-modal')?.classList.remove('active');
   resetGame();
 }
+
+// ══════════════════════════════════════════════════════
+//  п.13 — ВТОРАЯ СПЕЦИАЛИЗАЦИЯ (Серийный предприниматель)
+//  Вызывается из runes.js при достижении 15 портфолио.
+//  Показывает оверлей со спек-картами (кроме текущей),
+//  на выбор вызывает applySecondSpec(id).
+// ══════════════════════════════════════════════════════
+function showSecondSpecPicker() {
+  if (typeof SPECS === 'undefined' || !G || !G.spec) return;
+  // Удаляем старый оверлей если есть
+  document.getElementById('second-spec-overlay')?.remove();
+
+  const options = Object.entries(SPECS).filter(([id]) => id !== G.spec);
+  if (!options.length) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'second-spec-overlay';
+  overlay.style.cssText = [
+    'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999',
+    'display:flex;align-items:center;justify-content:center',
+    'animation:fadeIn .2s ease',
+  ].join(';');
+
+  const TAGS = ['green', 'amber', 'purple', 'teal'];
+  overlay.innerHTML = `
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;
+                padding:24px;max-width:520px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+                  color:var(--muted);margin-bottom:4px">Руна · Серийный предприниматель</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">
+        🚀 Открыта вторая специализация
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:18px;line-height:1.5">
+        15 портфолио — ты построил диверсифицированное агентство.<br>
+        Выбери второе направление: его бонусы будут работать параллельно с основным.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${options.map(([id, s], i) => `
+          <div onclick="applySecondSpec('${id}')"
+               style="cursor:pointer;padding:14px;border:1px solid var(--border);border-radius:8px;
+                      transition:.15s;background:rgba(255,255,255,.02)"
+               onmouseover="this.style.borderColor='var(--teal)';this.style.background='rgba(45,212,191,.06)'"
+               onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,.02)'">
+            <div style="font-size:20px;margin-bottom:5px">${s.icon}</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text)">${s.name}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.4">${s.desc}</div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:3px">
+              <span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;width:fit-content;
+                           background:rgba(63,185,80,.1);color:var(--green);border:1px solid rgba(63,185,80,.2)">${s.bonusLabel}</span>
+              <span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:4px;width:fit-content;
+                           background:rgba(45,212,191,.1);color:var(--teal);border:1px solid rgba(45,212,191,.2)">${s.passiveLabel}</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  if (typeof addLog === 'function') addLog('🚀 Серийный предприниматель: доступен выбор второй специализации', 'green');
+}
+
+// Применяет выбранную вторую специализацию. Вызывается из onclick оверлея.
+function applySecondSpec(specId) {
+  document.getElementById('second-spec-overlay')?.remove();
+  if (typeof G === 'undefined' || typeof SPECS === 'undefined') return;
+  G.secondSpec = specId;
+  const s = SPECS[specId];
+  if (!s) return;
+  if (typeof addLog === 'function')
+    addLog(`🚀 Вторая специализация: ${s.icon} ${s.name} — ${s.bonusLabel}`, 'green');
+  if (typeof notify === 'function')
+    notify(`🚀 ${s.icon} ${s.name} — вторая специализация активна!`, 'success');
+  if (typeof _emitRender === 'function') _emitRender();
+}

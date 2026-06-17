@@ -160,7 +160,7 @@ function startGame() {
   G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
-  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.calendarEvents=[]; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0;
+  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.calendarEvents=[]; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0; G.secondSpec=null; G._pendingNegAudit=null;
   // ИИ-нейросеть
   G.ai = {
     purchased:         false,   // куплен доступ
@@ -200,7 +200,9 @@ function getSpeed(g=G) {
   const staffBonus  = g.staff.reduce((s,x) => s + (x.speedBonus||0), 0);
   const loanDebuff  = g.loan?.debuff?.type === 'speed_debuff' ? (g.loan.debuff.val || 0) : 0;
   const specBonus   = SPECS[g.spec]?.passive === 'speed' ? (SPECS[g.spec].passiveVal || 0) : 0;
-  return 1.0 + staffBonus + (g.speedUpgrades||0) + loanDebuff + specBonus;
+  // п.13: пассив второй специализации
+  const spec2Bonus  = g.secondSpec && SPECS[g.secondSpec]?.passive === 'speed' ? (SPECS[g.secondSpec].passiveVal || 0) : 0;
+  return 1.0 + staffBonus + (g.speedUpgrades||0) + loanDebuff + specBonus + spec2Bonus;
 }
 // +0.4% выручки за каждый балл портфолио, cap +20% при 50 баллах
 function getPortfolioMultiplier(g=G){ return 1+Math.min((g.portfolio||0)*0.004, 0.20); }
@@ -327,6 +329,8 @@ function getPipelineValue(g=G) {
 function getTotalStaffCost(g=G) {
   let t=g.staff.reduce((s,x)=>s+x.cost,0);
   if (SPECS[g.spec].bonus==='staff_cost') t=Math.round(t*(1+SPECS[g.spec].bonusVal));
+  // п.13: бонус второй специализации
+  if (g.secondSpec && SPECS[g.secondSpec]?.bonus==='staff_cost') t=Math.round(t*(1+SPECS[g.secondSpec].bonusVal));
   return t;
 }
 
@@ -499,6 +503,8 @@ function _generateOffers() {
   if (G.caseScoutBonus>0) offerCount=Math.min(4, offerCount+(G.caseScoutBonus||0));
   // SMM-специализация: пассивно +1 оффер всегда (стек с HR-SMM)
   if (SPECS[G.spec]?.passive === 'scout_offers') offerCount=Math.min(5, offerCount+(SPECS[G.spec].passiveVal||0));
+  // п.13: пассив второй специализации
+  if (G.secondSpec && SPECS[G.secondSpec]?.passive === 'scout_offers') offerCount=Math.min(5, offerCount+(SPECS[G.secondSpec].passiveVal||0));
   // п.21 (Ф.6): сезонный бонус/штраф к количеству офферов
   { const sea = getSeasonMod(); offerCount = Math.max(0, Math.min(5, offerCount + sea.offerBonus)); }
 
@@ -728,7 +734,7 @@ function _legacyShowScout(offers) {
         </div>`;
       })()}
       ${reqRow}
-      ${canTake?`<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px;" onclick="signProject('${p.id}')">Подписать контракт</button>`:''}
+      ${canTake?`<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px;" onclick="startSign('${p.id}')">Подписать контракт</button>`:''}
     `;
     grid.appendChild(card);
   });
@@ -795,10 +801,39 @@ function signProject(pid) {
     // Brand: +passiveVal NPS только store-клиентам
     client.npsStart = Math.min(100, (client.npsStart||70) + (_spec.passiveVal||0));
   }
+  // п.13: пассивы второй специализации
+  const _spec2 = G.secondSpec ? SPECS[G.secondSpec] : null;
+  if (_spec2?.passive === 'nps_start' && !client.oneTime)
+    client.npsStart = Math.min(100, (client.npsStart||70) + (_spec2.passiveVal||0));
+  if (_spec2?.passive === 'nps_start_store' && client.type === 'store')
+    client.npsStart = Math.min(100, (client.npsStart||70) + (_spec2.passiveVal||0));
+
+  // п.19 (Ф.3): применяем выбор из Переговорного аудита
+  if (G._pendingNegAudit && G._pendingNegAudit.pid === pid) {
+    const _na = G._pendingNegAudit;
+    if (_na.prepayBoost) client._negPrepayBoost = _na.prepayBoost;
+    if (_na.scopeBoost) {
+      client._totalBudget    = Math.round(client._totalBudget * 1.15);
+      client._originalBudget = client._totalBudget;
+      client._duration       = (client._duration || 4) + 1;
+    }
+    if (_na.budgetBoost) {
+      client._totalBudget    = Math.round(client._totalBudget * (1 + _na.budgetBoost));
+      client._originalBudget = client._totalBudget;
+    }
+    if (_na.moodHit) client._negMoodPending = _na.moodHit;
+    G._pendingNegAudit = null;
+  }
 
   G.activeClients.push(client);
   G.clientNPS[client.id]=client.npsStart||70;
   G.clientEarnings[client.id]=0;
+
+  // п.19 (Ф.3): применяем отложенный штраф настроения от аудита
+  if (client._negMoodPending) {
+    G.clientNPS[client.id] = Math.max(0, Math.min(100, (G.clientNPS[client.id]||70) + client._negMoodPending));
+    delete client._negMoodPending;
+  }
 
   // Immediate modifier effects
   if (client.modifier.type==='reputation'){
@@ -830,6 +865,18 @@ function signProject(pid) {
     Projects.showPhasePopup(client);
   }
   _emitRender();
+}
+
+// п.19 (Ф.3): Переговорный аудит — перехватывает нажатие «Подписать»
+// Если пёрк negotiator куплен — показывает pre-sign аудит через Projects.
+// Иначе — прямой вызов signProject.
+function startSign(pid) {
+  if (G.upgrades && G.upgrades['negotiator'] &&
+      typeof Projects !== 'undefined' && Projects.preSignAudit) {
+    Projects.preSignAudit(pid);
+  } else {
+    signProject(pid);
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1220,6 +1267,14 @@ function completeProject(cid) {
                        (c.type==='store' && spec.bonus==='store_income');
   if (_specApplied) payout = Math.round(payout * (1+spec.bonusVal));
   const _specTag = _specApplied ? ` | ★ ${spec.name} +${Math.round(spec.bonusVal*100)}%` : '';
+  // п.13: бонус второй специализации к выплате
+  const _spec2p = G.secondSpec ? SPECS[G.secondSpec] : null;
+  if (_spec2p) {
+    const _spec2Applied = (c.type==='small' && _spec2p.bonus==='small_income') ||
+                          (c.type==='corp'  && _spec2p.bonus==='corp_income')  ||
+                          (c.type==='store' && _spec2p.bonus==='store_income');
+    if (_spec2Applied) payout = Math.round(payout * (1+_spec2p.bonusVal));
+  }
 
   // Портфолио-мультипликатор
   payout = Math.round(payout * getPortfolioMultiplier());

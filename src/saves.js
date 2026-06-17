@@ -15,9 +15,11 @@
 //  Зависит от: events.js (EventBus), engine.js (G, DECISIONS, notify, monthLabel)
 // ══════════════════════════════════════════════════════
 
-const RUNS_KEY   = 'btz_runs_v2';
-const CURR_KEY   = 'btz_current_run';
-const MAX_RUNS   = 10;
+const RUNS_KEY        = 'btz_runs_v2';
+const CURR_KEY        = 'btz_current_run';
+const MAX_RUNS        = 10;  // хранить не более N ранов
+const MAX_AUTO_STEPS  = 10;  // rolling window авто-сейвов внутри рана
+const MAX_MANUAL_SLOTS = 5;  // максимум ручных слотов внутри рана
 
 // ── Миграция из старого формата ───────────────────────
 
@@ -51,7 +53,7 @@ const MAX_RUNS   = 10;
 
 function _snap() {
   return {
-    G:         JSON.parse(JSON.stringify({ ...G, log: (G.log||[]).slice(-80) })),
+    G:         JSON.parse(JSON.stringify({ ...G, log: (G.log||[]).slice(-40) })),
     DECISIONS: JSON.parse(JSON.stringify(DECISIONS || [])),
   };
 }
@@ -129,6 +131,13 @@ function autoSave() {
     if (idx >= 0) run.steps[idx] = entry;
     else          run.steps.push(entry);
 
+    // Rolling window: оставить только MAX_AUTO_STEPS последних авто-сейвов
+    const autos   = run.steps.filter(s => s.type === 'auto').sort((a,b) => b.ts - a.ts);
+    const manuals = run.steps.filter(s => s.type !== 'auto');
+    if (autos.length > MAX_AUTO_STEPS) {
+      run.steps = [...manuals, ...autos.slice(0, MAX_AUTO_STEPS)];
+    }
+
     _saveRuns(runs);
   } catch(e) {
     console.warn('autoSave failed:', e);
@@ -158,8 +167,16 @@ function quickSave(label) {
     };
 
     run.steps.unshift(entry);
-    _saveRuns(runs);
-    notify('💾 Сохранено', 'success');
+
+    // Cap: оставить только MAX_MANUAL_SLOTS ручных сейвов (удалить самые старые)
+    const ms = run.steps.filter(s => s.type === 'manual').sort((a,b) => b.ts - a.ts);
+    const as_ = run.steps.filter(s => s.type !== 'manual');
+    if (ms.length > MAX_MANUAL_SLOTS) {
+      run.steps = [...as_, ...ms.slice(0, MAX_MANUAL_SLOTS)];
+      notify(`💾 Сохранено (слот ${MAX_MANUAL_SLOTS}/${MAX_MANUAL_SLOTS} — старое удалено)`, 'success');
+    } else {
+      notify(`💾 Сохранено (слот ${ms.length}/${MAX_MANUAL_SLOTS})`, 'success');
+    }
     if (document.getElementById('save-modal')?.classList.contains('active')) {
       _renderSaveList();
     }

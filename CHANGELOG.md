@@ -1,5 +1,32 @@
 # BizTycoon — Changelog
 
+## v3.47 — Ф.3 / п.13: Переговорный аудит + выбор второй специализации (2026-06-17)
+
+**Бэклог:** п.19 (Ф.3), п.13 (Roguelite). Затронуто: `src/engine.js`, `src/projects.js`, `src/ui.js`, `src/runes.js`, `scenarios/agency.data.js`.
+
+### п.19 (Ф.3) — Переговорный аудит: pre-sign диалог условий контракта
+
+- `engine.js`: новая функция `startSign(pid)` — перехватывает нажатие «Подписать контракт»; если куплен пёрк `negotiator`, вызывает `Projects.preSignAudit(pid)`, иначе напрямую `signProject(pid)`; кнопка в scout-карточке переключена с `signProject` на `startSign`
+- `engine.js`: в `signProject` — блок применения `G._pendingNegAudit`: поддержка `prepayBoost` (добавляет `client._negPrepayBoost`), `scopeBoost` (бюджет +15%, срок +1 мес), `budgetBoost` (произвольный %), `moodHit` (корректировка NPS сразу после init); `G._pendingNegAudit` сбрасывается после применения
+- `projects.js`: новая функция `preSignAudit(pid)` (экспортирована) — модал «Переговорный аудит» с 3 вариантами: «Стандарт» (без изменений), «Выбить аванс» (`prepayBoost +25%`, −5 настроения), «Расширенный скоуп» (`scopeBoost +15%`, +1 мес, −8 настроения); если куплен пёрк `closer` — 4-й вариант «Закрыть с нажимом» (`prepayBoost +20%`, `budgetBoost +8%`, −6 настроения)
+- `projects.js`: в `_negStep1` — `auditBoost = client._negPrepayBoost || 0` прибавляется к итоговому шансу аванса; в подписи варианта отображается `🤝 +N% (аудит)` если буст активен
+- `scenarios/agency.data.js`: обновлено описание пёрка `negotiator` — указывает что разблокирует Переговорный аудит
+- `engine.js`: `G._pendingNegAudit = null` и `G.secondSpec = null` добавлены в `resetGame()`
+
+### п.13 — Roguelite: выбор второй специализации
+
+- `runes.js`: вместо тихого `perkPayoutMult +0.20` при 15 портфолио — вызывает `showSecondSpecPicker()` из `ui.js`; fallback на +20% если `ui.js` недоступен (порядок загрузки)
+- `ui.js`: новая функция `showSecondSpecPicker()` — создаёт оверлей-модал с карточками всех специализаций кроме текущей; каждая карточка показывает icon, название, описание, оба бейджа бонусов (bonusLabel + passiveLabel); клик вызывает `applySecondSpec(id)`
+- `ui.js`: новая функция `applySecondSpec(specId)` — убирает оверлей, устанавливает `G.secondSpec`, пишет в лог и notify, вызывает `_emitRender()`
+- `engine.js` — 5 точек применения `G.secondSpec` (без правки логики, только доп.проверка):
+  - `getSpeed()`: `spec2Bonus` — пассив `speed` второй спеки
+  - `getTotalStaffCost()`: `staff_cost` второй спеки снижает ФОТ
+  - `_generateOffers()`: `scout_offers` второй спеки добавляет оффер
+  - `signProject()`: `nps_start` / `nps_start_store` второй спеки к стартовому NPS клиента
+  - пayout-блок: `small_income` / `corp_income` / `store_income` второй спеки к итоговой выплате
+
+---
+
 ## v3.46 — Ф.1 / Ф.2 / Ф.6: умный стаффинг, влияние на клиента, сезонность (2026-06-17)
 
 **Бэклог:** п.17 (Ф.1), п.18 (Ф.2), п.21 (Ф.6). Затронуто: `src/engine.js`, `src/projects.js`, `src/ui.js`.
