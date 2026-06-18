@@ -138,9 +138,16 @@ function autoSave() {
       run.steps = [...manuals, ...autos.slice(0, MAX_AUTO_STEPS)];
     }
 
-    _saveRuns(runs);
+    const r = _saveRuns(runs);
+    if (!r.ok) {
+      // Б.5: больше не глотаем — сообщаем игроку, что место кончилось.
+      notify('⚠️ Авто-сейв не записан — нет места. Удалите старые раны/сейвы.', 'error');
+    } else if (r.evicted) {
+      console.info(`[saves] авто-сейв: освобождено место, удалено старых ранов: ${r.evicted}`);
+    }
   } catch(e) {
     console.warn('autoSave failed:', e);
+    notify('⚠️ Ошибка авто-сохранения', 'error');
   }
 }
 
@@ -171,11 +178,22 @@ function quickSave(label) {
     // Cap: оставить только MAX_MANUAL_SLOTS ручных сейвов (удалить самые старые)
     const ms = run.steps.filter(s => s.type === 'manual').sort((a,b) => b.ts - a.ts);
     const as_ = run.steps.filter(s => s.type !== 'manual');
-    if (ms.length > MAX_MANUAL_SLOTS) {
-      run.steps = [...as_, ...ms.slice(0, MAX_MANUAL_SLOTS)];
+    const capped = ms.length > MAX_MANUAL_SLOTS;
+    if (capped) run.steps = [...as_, ...ms.slice(0, MAX_MANUAL_SLOTS)];
+
+    // Б.5: запись с эвикцией — если места нет, говорим явно, а не «успех».
+    const r = _saveRuns(runs);
+    if (!r.ok) {
+      notify('⚠️ Нет места для сохранения — удалите старые раны/сейвы', 'error');
+      return;
+    }
+    const slotN = Math.min(ms.length, MAX_MANUAL_SLOTS);
+    if (r.evicted || r.trimmed) {
+      notify(`💾 Сохранено · освобождено место (удалено старых: ${r.evicted})`, 'success');
+    } else if (capped) {
       notify(`💾 Сохранено (слот ${MAX_MANUAL_SLOTS}/${MAX_MANUAL_SLOTS} — старое удалено)`, 'success');
     } else {
-      notify(`💾 Сохранено (слот ${ms.length}/${MAX_MANUAL_SLOTS})`, 'success');
+      notify(`💾 Сохранено (слот ${slotN}/${MAX_MANUAL_SLOTS})`, 'success');
     }
     if (document.getElementById('save-modal')?.classList.contains('active')) {
       _renderSaveList();
@@ -239,8 +257,56 @@ function _loadRuns() {
   catch { return []; }
 }
 
+// Б.5: одна попытка записи. true=успех; false=нехватка места (quota);
+// прочие ошибки пробрасываем наверх (их ловит try/catch вызывающего).
+function _persist(runs) {
+  try {
+    localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
+    return true;
+  } catch (e) {
+    const quota = e && (e.name === 'QuotaExceededError'
+      || e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+      || e.code === 22 || e.code === 1014
+      || /quota/i.test(String(e && e.message)));
+    if (quota) return false;
+    throw e;
+  }
+}
+
+// Б.5: запись с эвикцией при нехватке места — БЕЗ тихой потери.
+// Сначала чистим старые НЕ-текущие раны, затем режем авто/ручные текущего рана.
+// Возвращает { ok, evicted, trimmed } для уведомления игрока.
 function _saveRuns(runs) {
-  localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
+  if (_persist(runs)) return { ok: true, evicted: 0 };
+
+  const keepId = _currentRunId();
+  let evicted = 0;
+
+  // 1) Удаляем целиком НЕ-текущие раны, начиная с самых старых (они в конце массива).
+  for (let i = runs.length - 1; i >= 0; i--) {
+    if (runs[i].runId === keepId) continue;
+    runs.splice(i, 1);
+    evicted++;
+    if (_persist(runs)) return { ok: true, evicted };
+  }
+
+  // 2) Остался только текущий ран — режем до аварийного минимума.
+  const cur = runs.find(r => r.runId === keepId) || runs[0];
+  if (cur) {
+    const trimType = (type, keep) => {
+      const same  = cur.steps.filter(s => s.type === type).sort((a, b) => b.ts - a.ts);
+      const other = cur.steps.filter(s => s.type !== type);
+      if (same.length > keep) { cur.steps = [...other, ...same.slice(0, keep)]; return true; }
+      return false;
+    };
+    if (trimType('auto', 3)   && _persist(runs)) return { ok: true, evicted, trimmed: true };
+    if (trimType('manual', 2) && _persist(runs)) return { ok: true, evicted, trimmed: true };
+    // Последний рубеж: оставить только новейший шаг — чтобы не потерять текущий прогресс.
+    const newest = [...cur.steps].sort((a, b) => b.ts - a.ts)[0];
+    if (newest) { cur.steps = [newest]; if (_persist(runs)) return { ok: true, evicted, trimmed: true }; }
+  }
+
+  return { ok: false, evicted };
 }
 
 // ── Public helpers ────────────────────────────────────
