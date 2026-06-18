@@ -435,98 +435,221 @@ function _hasTrait(staff, traitId) {
 // ── Team Panel Render ─────────────────────────────────
 // Вызывается из ui.js вместо встроенного рендера команды
 
-function renderTeamCards(el) {
-  if (!el) return;
-  const fmtMoney = n => new Intl.NumberFormat('ru-RU').format(Math.round(n)) + ' ₽';
-  const moodColor = v => v >= 75 ? 'var(--green)' : v >= 50 ? 'var(--amber)' : 'var(--red)';
-  const loyColor  = v => v >= 70 ? 'var(--teal)'  : v >= 40 ? 'var(--amber)' : 'var(--red)';
+// ── Хелперы цветов/денег (общие для сайдбара и модала) ──
+const _fmtStaffMoney = n => new Intl.NumberFormat('ru-RU').format(Math.round(n)) + ' ₽';
+const _moodColor = v => v >= 75 ? 'var(--green)' : v >= 50 ? 'var(--amber)' : 'var(--red)';
+const _loyColor  = v => v >= 70 ? 'var(--teal)'  : v >= 40 ? 'var(--amber)' : 'var(--red)';
 
-  // Founder card
-  let html = `<div class="staff-char-card founder-card">
-    <div class="staff-char-avatar" style="background:rgba(79,110,247,.25)">
-      <span>🧑‍💼</span>
+// Б.10: разметка одной rich-карточки специалиста (используется в модале «Команда»)
+function _staffCardHTML(s) {
+  const meta  = ROLE_META[s.role] || {};
+  const color = meta.color || '#6366f1';
+  const emoji = s.icon || meta.emoji || '👤';
+  const grade = s.gradeLabel || s.grade || '';
+  const cost  = s.cost || s.salary || 0;
+  const mood  = s.mood  ?? 80;
+  const loy   = s.loyalty ?? 70;
+  const iid   = s._iid || s.uid || s.id;
+
+  _recomputeWU(s);
+  const wu = s._wu || 0;
+
+  const assignedClient = s._assignedProjectId
+    ? (G.activeClients || []).find(c => c.id === s._assignedProjectId)
+    : null;
+  const assignBadge = assignedClient
+    ? `<span style="display:inline-block;margin-top:4px;padding:2px 6px;border-radius:4px;
+         background:rgba(99,102,241,.18);color:var(--teal);font-size:10px;font-weight:600">
+         📂 ${assignedClient.name || assignedClient.id}</span>` : '';
+
+  const visTraits = (s.traits || []).filter(t => t.revealed);
+  const traitBadges = visTraits.slice(0, 3).map(t => {
+    const td = TRAITS[t.id] || {};
+    const cls = td.type === 'pos' ? 'trait-badge trait-pos' : 'trait-badge trait-neg';
+    return `<span class="${cls}" title="${td.desc || ''}">${td.icon || '?'} ${td.label || t.id}</span>`;
+  }).join('');
+
+  const hidCount = (s.traits || []).filter(t => !t.revealed).length;
+  const hidBadge = hidCount > 0
+    ? `<span class="trait-badge trait-hidden" title="Раскрываются в работе">❓ ×${hidCount}</span>` : '';
+
+  return `<div class="staff-char-card">
+    <div class="staff-char-avatar" style="background:${color}20;border:1.5px solid ${color}40">
+      <span>${emoji}</span>
     </div>
+    <div class="staff-char-body">
+      <div class="staff-char-top">
+        <div>
+          <div class="staff-char-name">${s.name || s.id}</div>
+          <div class="staff-char-role">${s.roleLabel || s.role}
+            <span class="staff-grade-badge">${grade}</span>
+          </div>
+        </div>
+        <div class="staff-char-cost">−${_fmtStaffMoney(cost)}</div>
+      </div>
+      <div class="staff-char-stats">
+        <span title="Качество">Q ${s.quality || s.qStat || '—'}</span>
+        <span title="Скорость">⚡ ${s.speedStat || '—'}</span>
+        <span title="Мощность — вклад специалиста в прогресс проекта" style="color:var(--teal)">⚙ ${wu} мощн.</span>
+        ${s.capacity > 0 ? `<span title="Слоты проектов">📂 +${s.capacity}</span>` : ''}
+      </div>
+      ${assignBadge}
+      <div class="staff-char-bars">
+        <div class="staff-bar-row" title="Настроение: ${mood}%">
+          <span class="staff-bar-lbl">😊</span>
+          <div class="staff-bar-track"><div class="staff-bar-fill" style="width:${mood}%;background:${_moodColor(mood)}"></div></div>
+        </div>
+        <div class="staff-bar-row" title="Лояльность: ${loy}%">
+          <span class="staff-bar-lbl">🏅</span>
+          <div class="staff-bar-track"><div class="staff-bar-fill" style="width:${loy}%;background:${_loyColor(loy)}"></div></div>
+        </div>
+      </div>
+      ${traitBadges || hidBadge
+        ? `<div class="staff-char-traits">${traitBadges}${hidBadge}</div>` : ''}
+    </div>
+    <button class="staff-fire-btn" onclick="fireStaffById('${iid}')" title="Уволить (выходное пособие: ${_fmtStaffMoney(cost*0.5)})">✕</button>
+  </div>`;
+}
+
+function _founderCardHTML() {
+  return `<div class="staff-char-card founder-card">
+    <div class="staff-char-avatar" style="background:rgba(79,110,247,.25)"><span>🧑‍💼</span></div>
     <div class="staff-char-body">
       <div class="staff-char-name">Ты (Фаундер)</div>
       <div class="staff-char-role">Продажи · Скаутинг</div>
     </div>
     <div class="staff-char-cost" style="color:var(--sub);font-size:11px">бесплатно</div>
   </div>`;
-
-  (G.staff || []).forEach(s => {
-    const meta  = ROLE_META[s.role] || {};
-    const color = meta.color || '#6366f1';
-    const emoji = s.icon || meta.emoji || '👤';
-    const grade = s.gradeLabel || s.grade || '';
-    const cost  = s.cost || s.salary || 0;
-    const mood  = s.mood  ?? 80;
-    const loy   = s.loyalty ?? 70;
-    const iid   = s._iid || s.uid || s.id;
-
-    // WU — рабочие единицы (обновляем при каждом рендере)
-    _recomputeWU(s);
-    const wu = s._wu || 0;
-
-    // Бейдж назначения на проект
-    const assignedClient = s._assignedProjectId
-      ? (G.activeClients || []).find(c => c.id === s._assignedProjectId)
-      : null;
-    const assignBadge = assignedClient
-      ? `<span style="display:inline-block;margin-top:4px;padding:2px 6px;border-radius:4px;
-           background:rgba(99,102,241,.18);color:var(--teal);font-size:10px;font-weight:600">
-           📂 ${assignedClient.name || assignedClient.id}</span>` : '';
-
-    const visTraits = (s.traits || []).filter(t => t.revealed);
-    const traitBadges = visTraits.slice(0, 3).map(t => {
-      const td = TRAITS[t.id] || {};
-      const cls = td.type === 'pos' ? 'trait-badge trait-pos' : 'trait-badge trait-neg';
-      return `<span class="${cls}" title="${td.desc || ''}">${td.icon || '?'} ${td.label || t.id}</span>`;
-    }).join('');
-
-    const hidCount = (s.traits || []).filter(t => !t.revealed).length;
-    const hidBadge = hidCount > 0
-      ? `<span class="trait-badge trait-hidden" title="Раскрываются в работе">❓ ×${hidCount}</span>` : '';
-
-    html += `<div class="staff-char-card">
-      <div class="staff-char-avatar" style="background:${color}20;border:1.5px solid ${color}40">
-        <span>${emoji}</span>
-      </div>
-      <div class="staff-char-body">
-        <div class="staff-char-top">
-          <div>
-            <div class="staff-char-name">${s.name || s.id}</div>
-            <div class="staff-char-role">${s.roleLabel || s.role}
-              <span class="staff-grade-badge">${grade}</span>
-            </div>
-          </div>
-          <div class="staff-char-cost">−${fmtMoney(cost)}</div>
-        </div>
-        <div class="staff-char-stats">
-          <span title="Качество">Q ${s.quality || s.qStat || '—'}</span>
-          <span title="Скорость">⚡ ${s.speedStat || '—'}</span>
-          <span title="Мощность — вклад специалиста в прогресс проекта" style="color:var(--teal)">⚙ ${wu} мощн.</span>
-          ${s.capacity > 0 ? `<span title="Слоты проектов">📂 +${s.capacity}</span>` : ''}
-        </div>
-        ${assignBadge}
-        <div class="staff-char-bars">
-          <div class="staff-bar-row" title="Настроение: ${mood}%">
-            <span class="staff-bar-lbl">😊</span>
-            <div class="staff-bar-track"><div class="staff-bar-fill" style="width:${mood}%;background:${moodColor(mood)}"></div></div>
-          </div>
-          <div class="staff-bar-row" title="Лояльность: ${loy}%">
-            <span class="staff-bar-lbl">🏅</span>
-            <div class="staff-bar-track"><div class="staff-bar-fill" style="width:${loy}%;background:${loyColor(loy)}"></div></div>
-          </div>
-        </div>
-        ${traitBadges || hidBadge
-          ? `<div class="staff-char-traits">${traitBadges}${hidBadge}</div>` : ''}
-      </div>
-      <button class="staff-fire-btn" onclick="fireStaffById('${iid}')" title="Уволить (выходное пособие: ${fmtMoney(cost*0.5)})">✕</button>
-    </div>`;
-  });
-
-  el.innerHTML = html;
 }
+
+// ══════════════════════════════════════════════════════
+//  Б.10 — Сайдбар: компактная сводка команды + кнопка окна
+// ══════════════════════════════════════════════════════
+function renderTeamCards(el) {
+  if (!el) return;
+  const staff = (G.staff || []).filter(s => s.status !== 'fired');
+  const n   = staff.length;
+  const fot = staff.reduce((a, s) => a + (s.cost || s.salary || 0), 0);
+  const avg = (key, def) => n ? Math.round(staff.reduce((a, s) => a + (s[key] ?? def), 0) / n) : def;
+  const avgMood = avg('mood', 80);
+  const avgLoy  = avg('loyalty', 70);
+  const bar = (val, col, icon, label) => `
+    <div class="staff-bar-row" title="${label}: ${val}%" style="margin-top:3px">
+      <span class="staff-bar-lbl">${icon}</span>
+      <div class="staff-bar-track"><div class="staff-bar-fill" style="width:${val}%;background:${col}"></div></div>
+      <span style="font-size:10px;color:var(--sub);min-width:26px;text-align:right">${val}%</span>
+    </div>`;
+
+  el.innerHTML = `
+    ${_founderCardHTML()}
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:8px">
+      <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">В штате</span>
+      <span style="font-size:13px;font-weight:700;color:var(--text)">${n} чел.</span>
+    </div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:2px">
+      <span style="font-size:11px;color:var(--muted)">ФОТ</span>
+      <span style="font-size:12px;font-weight:600;color:var(--red)">−${_fmtStaffMoney(fot)}/мес</span>
+    </div>
+    ${n ? bar(avgMood, _moodColor(avgMood), '😊', 'Средняя мораль') + bar(avgLoy, _loyColor(avgLoy), '🏅', 'Средняя лояльность') : ''}
+    <button onclick="openTeamModal()" style="margin-top:10px;width:100%;background:rgba(99,102,241,.10);
+      border:1px solid rgba(99,102,241,.30);border-radius:8px;padding:9px 12px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text);font-weight:600;font-size:12px;
+      transition:background .15s" onmouseover="this.style.background='rgba(99,102,241,.18)'"
+      onmouseout="this.style.background='rgba(99,102,241,.10)'">
+      👥 Управление командой <span style="color:var(--muted);font-weight:500">(${n})</span>
+    </button>`;
+
+  // если окно команды открыто — синхронизируем его содержимое
+  if (document.getElementById('team-modal')) _renderTeamGrid();
+}
+
+// ══════════════════════════════════════════════════════
+//  Б.10 — Модал «Команда»: сетка карточек + сортировка/поиск
+// ══════════════════════════════════════════════════════
+let _teamSort  = 'role';
+let _teamQuery = '';
+
+function openTeamModal() {
+  if (typeof document === 'undefined') return;
+  let m = document.getElementById('team-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'team-modal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:330;display:flex;align-items:center;justify-content:center;padding:24px';
+    m.onclick = e => { if (e.target === m) closeTeamModal(); };
+    document.body.appendChild(m);
+  }
+  const sortOpts = [
+    ['role', 'по роли'], ['power', 'по мощности'], ['mood', 'по морали'],
+    ['loyalty', 'по лояльности'], ['salary', 'по окладу'], ['name', 'по имени'],
+  ].map(([v, l]) => `<option value="${v}" ${v === _teamSort ? 'selected' : ''}>${l}</option>`).join('');
+
+  m.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;width:100%;max-width:900px;
+                max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div style="font-size:16px;font-weight:800;color:var(--text)">👥 Команда</div>
+        <span id="team-modal-count" style="font-size:12px;color:var(--muted)"></span>
+        <div style="flex:1"></div>
+        <input id="team-search" type="text" placeholder="🔍 Поиск по имени" value="${_teamQuery.replace(/"/g,'&quot;')}"
+          oninput="setTeamQuery(this.value)"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);
+                 font-size:12px;padding:7px 10px;width:180px;outline:none">
+        <select onchange="setTeamSort(this.value)"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:7px 10px;cursor:pointer">
+          ${sortOpts}
+        </select>
+        <button onclick="closeTeamModal()" title="Закрыть"
+          style="background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--sub);
+                 cursor:pointer;font-size:14px;padding:6px 11px">✕</button>
+      </div>
+      <div id="team-modal-grid" style="padding:16px 20px;overflow-y:auto;display:grid;
+           grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;align-content:start"></div>
+    </div>
+    <style>
+      #team-modal-grid .staff-char-card{border:1px solid var(--border);border-radius:10px;
+        background:rgba(255,255,255,.02);padding:10px 12px;margin:0}
+      #team-modal-grid .staff-char-card:last-child{border-bottom:1px solid var(--border)}
+    </style>`;
+  m.style.display = 'flex';
+  _renderTeamGrid();
+}
+
+function closeTeamModal() {
+  const m = document.getElementById('team-modal');
+  if (m) m.remove();
+}
+
+function _renderTeamGrid() {
+  const grid = document.getElementById('team-modal-grid');
+  if (!grid) return;
+  let staff = (G.staff || []).filter(s => s.status !== 'fired');
+
+  const q = (_teamQuery || '').trim().toLowerCase();
+  if (q) staff = staff.filter(s => (s.name || s.id || '').toLowerCase().includes(q));
+
+  const byKey = {
+    role:    (a, b) => (a.roleLabel || a.role || '').localeCompare(b.roleLabel || b.role || ''),
+    name:    (a, b) => (a.name || '').localeCompare(b.name || ''),
+    mood:    (a, b) => (b.mood ?? 80) - (a.mood ?? 80),
+    loyalty: (a, b) => (b.loyalty ?? 70) - (a.loyalty ?? 70),
+    salary:  (a, b) => (b.cost || b.salary || 0) - (a.cost || a.salary || 0),
+    power:   (a, b) => { _recomputeWU(a); _recomputeWU(b); return (b._wu || 0) - (a._wu || 0); },
+  };
+  staff.sort(byKey[_teamSort] || byKey.role);
+
+  const cnt = document.getElementById('team-modal-count');
+  if (cnt) cnt.textContent = `${staff.length} чел.${q ? ' (фильтр)' : ''} · фаундер +1`;
+
+  grid.innerHTML = _founderCardHTML() + staff.map(_staffCardHTML).join('');
+  if (staff.length === 0) {
+    grid.innerHTML += `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;padding:18px 0">
+      ${q ? 'Никто не найден по запросу' : 'В штате пока никого — наймите специалистов'}</div>`;
+  }
+}
+
+function setTeamSort(v)  { _teamSort = v;  _renderTeamGrid(); }
+function setTeamQuery(v) { _teamQuery = v; _renderTeamGrid(); }
 
 // ══════════════════════════════════════════════════════
 //  MODAL UI — Scout
