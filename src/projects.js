@@ -1709,6 +1709,7 @@ const Projects = (() => {
       costLabel: '−8К',
       effectLabel: '+10 😊',
       available: c => (c._lcClientMood || 60) < 90,
+      naLabel: 'настроение макс.',
       apply: c => {
         if ((G.money || 0) < 8000) { notify('Недостаточно средств для показа','error'); return false; }
         G.money -= 8000;
@@ -1724,6 +1725,7 @@ const Projects = (() => {
       costLabel: '+15 усталость',
       effectLabel: '+20% прогресс',
       available: c => (c._progress || 0) < 80,
+      naLabel: 'проект почти готов',
       apply: c => {
         c._progress = Math.min(100, (c._progress || 0) + 20);
         G.teamFatigue = Math.min(100, (G.teamFatigue || 0) + 15);
@@ -1753,6 +1755,7 @@ const Projects = (() => {
       costLabel: '−8К',
       effectLabel: '−15 ⚠️',
       available: c => (c._lcRisk || 0) > 10,
+      naLabel: 'риск уже низкий',
       apply: c => {
         if ((G.money || 0) < 8000) { notify('Недостаточно средств','error'); return false; }
         G.money -= 8000;
@@ -1810,10 +1813,13 @@ const Projects = (() => {
     const action = PLAYER_ACTIONS.find(a => a.id === actionId);
     if (!action) return;
 
+    // Б.6: phase объявлен в скоупе функции (раньше — внутри if, что давало
+    // ReferenceError на успешной ветке ниже и тихо рвало notify/render).
+    const phase = client._lcPhase || '';
+    if (!client._phaseActionsUsed) client._phaseActionsUsed = {};
+
     // Р.5: кулдаун — 1 раз за фазу (пропускаем для calendar-cooldown действий)
     if (!action.bypassPhaseCheck) {
-      const phase = client._lcPhase || '';
-      if (!client._phaseActionsUsed) client._phaseActionsUsed = {};
       if (client._phaseActionsUsed[actionId] === phase) {
         notify(`${action.icon} Уже использовано в этой фазе`, 'warning');
         return;
@@ -1828,7 +1834,7 @@ const Projects = (() => {
 
     const ok = action.apply(client);
     if (ok) {
-      client._phaseActionsUsed[actionId] = phase;  // фиксируем использование
+      if (!action.bypassPhaseCheck) client._phaseActionsUsed[actionId] = phase;  // фиксируем использование (calendar-cooldown — по своему счётчику)
       addLog(`⚡ ${client.name}: ${action.title} — ${action.effectLabel}`, 'teal');
       notify(`${action.icon} ${action.title}: ${action.effectLabel}`, 'success');
       closeDetailPanel();
@@ -1875,10 +1881,8 @@ const Projects = (() => {
       const usedInPhase = client._phaseActionsUsed || {};
       const curPhase    = client._lcPhase || '';
       const cdMap       = client._actionCooldowns || {};
-      // Показываем все действия: обычные (фильтр available) + calendar-cooldown (всегда)
-      const visibleActions = PLAYER_ACTIONS.filter(a =>
-        a.cooldownMonths ? true : a.available(client)
-      );
+      // Б.6: показываем ВСЕ действия всегда; недоступные = disabled с причиной (не скрываем).
+      const visibleActions = PLAYER_ACTIONS;
       if (visibleActions.length) {
         actionsHtml = `
           <div style="margin-bottom:14px">
@@ -1887,12 +1891,15 @@ const Projects = (() => {
               ${visibleActions.map(a => {
                 const cdLeft = cdMap[a.id] || 0;
                 const phaseUsed = !a.bypassPhaseCheck && usedInPhase[a.id] === curPhase;
-                const disabled  = cdLeft > 0 || phaseUsed;
+                const naNow     = !cdLeft && !phaseUsed && !a.available(client); // условие не выполнено (Б.6)
+                const disabled  = cdLeft > 0 || phaseUsed || naNow;
                 const statusTag = cdLeft > 0
                   ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(168,85,247,.1);color:rgba(168,85,247,.8)">через ${cdLeft} мес.</span>`
                   : phaseUsed
                     ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">использовано</span>`
-                    : `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,.12);color:var(--red)">${a.costLabel}</span>
+                    : naNow
+                      ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">${a.naLabel || 'недоступно сейчас'}</span>`
+                      : `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,.12);color:var(--red)">${a.costLabel}</span>
                        <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(45,212,191,.12);color:var(--teal)">${a.effectLabel}</span>`;
                 if (disabled) {
                   return `
