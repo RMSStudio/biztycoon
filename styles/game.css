@@ -121,7 +121,9 @@
   .pip.used { background:var(--bg3); }
   .actions-val { font-size:12px; font-weight:700; color:var(--teal); white-space:nowrap; }
 
-  .game-body { display:grid; grid-template-columns:1fr 300px; gap:14px; }
+  /* Б.10: align-items:start — колонки по высоте своего контента, без растяжки
+     короткой колонки до высоты длинной (раньше при большом штате слева зияла пустота). */
+  .game-body { display:grid; grid-template-columns:1fr 300px; gap:14px; align-items:start; }
   .col-main { display:flex; flex-direction:column; gap:12px; }
   .col-side { display:flex; flex-direction:column; gap:12px; }
 
