@@ -270,6 +270,17 @@ function unassignStaff(staffId) {
   });
 }
 
+// Б.9 (2026-06-18): освободить ВСЮ команду выбывающего проекта.
+// Раньше _assignedProjectId не снимался при сдаче/завершении/расторжении/churn —
+// сотрудники оставались «вечно заняты», ломая планнинг и автоназначение (Ф.1).
+// Вызывать ПЕРЕД удалением клиента из G.activeClients в каждой точке выбытия.
+function releaseProjectTeam(projectId) {
+  if (projectId == null) return;
+  (G.staff || []).forEach(s => {
+    if (s._assignedProjectId === projectId) s._assignedProjectId = null;
+  });
+}
+
 // п.17 (Ф.1): Оптимальный подбор команды под проект
 // Сортирует свободных сотрудников по WU × affinity-бонусу роли к типу проекта,
 // жадно добавляет пока throughput (2 + WU выбранных) не покроет load×1.15
@@ -448,6 +459,7 @@ function updateAllNPS() {
       id:c.id, name:c.name, icon:c.icon, revenue:c.revenue, tier:c.tier||1,
       finalNPS:finalNPS, monthCompleted:G.month, terminated:false, failed:true, _cased:false,
     });
+    releaseProjectTeam(c.id); // Б.9
     G.activeClients=G.activeClients.filter(a=>a.id!==c.id);
     delete G.clientNPS[c.id];
     addLog(`💔 ${c.name} расторг контракт (NPS обнулился)`,'red');
@@ -1063,6 +1075,7 @@ function terminateContract(cid) {
         finalNPS:Math.round(G.clientNPS[cid]||50), monthCompleted:G.month,
         terminated:true, failed:false, _cased:false,
       });
+      releaseProjectTeam(cid); // Б.9
       G.activeClients = G.activeClients.filter(a => a.id !== cid);
       delete G.clientNPS[cid];
       G.reputation = clamp(G.reputation - 10, 0, 100);
@@ -1090,6 +1103,7 @@ function _forceTerminate(cid) {
     finalNPS:Math.round(G.clientNPS[cid]||50), monthCompleted:G.month,
     terminated:true, failed:false, _cased:false,
   });
+  releaseProjectTeam(cid); // Б.9
   G.activeClients = G.activeClients.filter(a => a.id !== cid);
   delete G.clientNPS[cid];
   G.reputation = clamp(G.reputation - 10, 0, 100);
@@ -1318,6 +1332,7 @@ function completeProject(cid) {
     finalNPS: finalNPS, totalEarned: payout, _cased: false,
   });
 
+  releaseProjectTeam(cid); // Б.9
   G.activeClients = G.activeClients.filter(a => a.id !== cid);
   delete G.clientNPS[cid];
 

@@ -131,6 +131,7 @@ const ScenarioLoader = (() => {
         }
         case 'rating': nudgeClientRating(c, v, g); break;
         case 'remove': {
+          if (typeof releaseProjectTeam === 'function') releaseProjectTeam(c.id); // Б.9
           g.activeClients = g.activeClients.filter(x => x.id !== c.id);
           delete g.clientNPS[c.id];
           addLog(`💔 «${c.name}» — контракт потерян`, 'red');
@@ -139,6 +140,7 @@ const ScenarioLoader = (() => {
         case 'collect': {
           const sum = c._totalBudget || 0;
           g.money += sum;
+          if (typeof releaseProjectTeam === 'function') releaseProjectTeam(c.id); // Б.9
           g.activeClients = g.activeClients.filter(x => x.id !== c.id);
           delete g.clientNPS[c.id];
           addLog(`💪 «${c.name}»: взыскано полностью +${fmtK(sum)}`, 'green');

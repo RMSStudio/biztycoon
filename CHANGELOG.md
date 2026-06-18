@@ -1,5 +1,18 @@
 # BizTycoon — Changelog
 
+## v3.50 — Фаза 1 переделки: корневые баги Б.8, Б.9, Б.2 (2026-06-18)
+
+**Контекст:** аудит пула v3.41–v3.49 (`docs/Аудит пула Б-Р-Ф`). Фаза 1 плана `docs/План работ`. Тег страховки: `archive/pool-v3.49`.
+
+- **Б.8 — кнопки `Projects.*` оживлены.** `projects.js`: добавлен `window.Projects = Projects` после IIFE. Inline-`onclick="Projects.triggerPlayerAction(...)"` / `"Projects.showDetailPanel(...)"` резолвятся только по свойствам `window`, а top-level `const Projects` туда не попадал → клики молча падали с ReferenceError (корень Б.6 и Р.3).
+- **Б.9 — команда освобождается при выбытии проекта.** `engine.js`: новый хелпер `releaseProjectTeam(projectId)` (снимает `_assignedProjectId` у всей команды). Вызван во всех 8 точках удаления клиента: churn, `terminateContract`, `_forceTerminate`, `completeProject` (engine.js), `_abandonProject`, `finishDelivery` (projects.js), DSL `remove`/`collect` (scenario-loader.js). Раньше `_assignedProjectId` не снимался → сотрудники «вечно заняты» (корень Ф.1 «все заблокированы»).
+- **Б.2 — прозрачный фон домечен.** `game.css`: в `:root` добавлена `--panel: #161B22` (алиас к `--bg2`). Переменная использовалась в `competitors.js` (вкладка «Рынок») и `game.css`, но не была определена → прозрачный фон. v3.41 чинил только `livingmarket.js`.
+- **Б.1 (частично) — ховер шапки.** `index.html`: кликабельный логотип обёрнут в `<span class="logo-exit">` с собственным `onclick`/hover. Раньше `onmouseover` висел на всём `.game-logo`, куда инжектятся пилюли (стадия, рейтинг, спец) → наведение на любую пилюлю гасило всю строку. Теперь подсветка/клик-выход только на самом названии; заодно клик по пилюле физически не может увести в меню. Остаток Б.1 (просмотр требований стадии) — Фаза 2.
+
+Сборка: `dist/BizTycoon.html` (+ agency/bank) пересобраны. Синтаксис проверен (`node --check`). Требуется живой плейтест-подтверждение.
+
+---
+
 ## v3.48 — Б.6: Live-деактивация DLC без перезагрузки страницы (2026-06-17)
 
 **Бэклог:** Б.6. Затронуто: `dlc/loader.js`, `src/runes.js`, `src/storyarcs.js`, `src/runmap.js`, `src/meta.js`.

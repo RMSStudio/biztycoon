@@ -1,5 +1,6 @@
   :root {
     --bg: #0D1117; --bg2: #161B22; --bg3: #1C2330;
+    --panel: #161B22; /* Б.2: переменная использовалась в competitors.js/game.css, но не была определена → прозрачный фон. Алиас к --bg2. */
     --border: #30363D; --accent: #4F6EF7; --accent2: #6B85FF;
     --green: #3FB950; --red: #F85149; --amber: #D29922;
     --purple: #A855F7; --teal: #2DD4BF;

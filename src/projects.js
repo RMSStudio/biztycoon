@@ -337,6 +337,7 @@ const Projects = (() => {
     const pen = 3;
     if (typeof G !== 'undefined') {
       G.reputation = Math.max(0, (G.reputation || 50) - pen);
+      if (typeof releaseProjectTeam === 'function') releaseProjectTeam(client.id); // Б.9
       G.activeClients = G.activeClients.filter(a => a.id !== client.id);
       if (G.clientNPS) delete G.clientNPS[client.id];
     }
@@ -1379,6 +1380,7 @@ const Projects = (() => {
       terminated: false, failed: false, _cased: false,
     });
 
+    if (typeof releaseProjectTeam === 'function') releaseProjectTeam(client.id); // Б.9
     G.activeClients = G.activeClients.filter(a => a.id !== client.id);
     delete G.clientNPS[client.id];
 
@@ -2047,3 +2049,8 @@ const Projects = (() => {
   };
 
 })();
+
+// Б.8 (2026-06-18): inline-обработчики (onclick="Projects.*") резолвят имена
+// только по свойствам window, а top-level `const Projects` туда не попадает.
+// Без этого все кнопки «Детали» и действия проекта молча падают с ReferenceError.
+if (typeof window !== 'undefined') window.Projects = Projects;
