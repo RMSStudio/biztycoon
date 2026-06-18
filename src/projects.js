@@ -1710,6 +1710,7 @@ const Projects = (() => {
       effectLabel: '+10 😊',
       available: c => (c._lcClientMood || 60) < 90,
       naLabel: 'настроение макс.',
+      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет прогресса для показа',
       apply: c => {
         if ((G.money || 0) < 8000) { notify('Недостаточно средств для показа','error'); return false; }
         G.money -= 8000;
@@ -1740,6 +1741,7 @@ const Projects = (() => {
       costLabel: '−20К',
       effectLabel: '+10% качество',
       available: () => true,
+      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет работы для аудита',
       apply: c => {
         if ((G.money || 0) < 20000) { notify('Недостаточно средств для аудита','error'); return false; }
         G.money -= 20000;
@@ -1794,6 +1796,7 @@ const Projects = (() => {
       cooldownMonths: 1,
       bypassPhaseCheck: true,
       available: c => !((c._actionCooldowns || {}).bonus_demo > 0),
+      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет прогресса для показа',
       apply: c => {
         if ((G.money || 0) < 12000) { notify('Недостаточно средств для демо', 'error'); return false; }
         G.money -= 12000;
@@ -1807,24 +1810,40 @@ const Projects = (() => {
     },
   ];
 
+  // Р.3 / разблок: сколько действий в месяц доступно проекту. База 1.
+  // Источники-бонусы (комбинация, НЕ со старта) — подключаются во 2-м проходе:
+  //   • перк Древа 2.0 (G.perks.extraProjectAction)
+  //   • спец-эффект назначенного специалиста (роль/трейт)
+  //   • roguelite-открытие (G.runMap.bonusProjectAction)
+  function getActionsPerMonth(client) {
+    let n = 1;
+    if (typeof G !== 'undefined') {
+      if (G.perks && G.perks.extraProjectAction) n += (G.perks.extraProjectAction | 0);
+      if (G.runMap && G.runMap.bonusProjectAction) n += (G.runMap.bonusProjectAction | 0);
+      // спец-эффект назначенного на проект специалиста
+      if (client && client._assignedProjectId !== undefined && Array.isArray(G.staff)) {
+        const onProj = G.staff.filter(s => s._assignedProjectId === client.id);
+        n += onProj.reduce((a, s) => a + (s._extraProjectAction | 0), 0);
+      }
+    }
+    return Math.max(1, n);
+  }
+
   function triggerPlayerAction(clientId, actionId) {
     const client = (G.activeClients || []).find(c => c.id === clientId);
     if (!client) return;
     const action = PLAYER_ACTIONS.find(a => a.id === actionId);
     if (!action) return;
 
-    // Б.6: phase объявлен в скоупе функции (раньше — внутри if, что давало
-    // ReferenceError на успешной ветке ниже и тихо рвало notify/render).
-    const phase = client._lcPhase || '';
-    if (!client._phaseActionsUsed) client._phaseActionsUsed = {};
-
-    // Р.5: кулдаун — 1 раз за фазу (пропускаем для calendar-cooldown действий)
-    if (!action.bypassPhaseCheck) {
-      if (client._phaseActionsUsed[actionId] === phase) {
-        notify(`${action.icon} Уже использовано в этой фазе`, 'warning');
-        return;
-      }
+    // Р.3: лимит действий в месяц НА ПРОЕКТ (база 1, расширяется getActionsPerMonth).
+    const perMonth = getActionsPerMonth(client);
+    if ((client._actionsUsedThisMonth || 0) >= perMonth) {
+      notify(`${action.icon} На этот месяц лимит действий по проекту исчерпан (${perMonth}/мес)`, 'warning');
+      return;
     }
+    // Ф.2: нарративный гейт — нечего показывать/аудировать без прогресса работы.
+    const lockReason = action.whenLocked ? action.whenLocked(client) : null;
+    if (lockReason) { notify(`${action.icon} ${lockReason}`, 'warning'); return; }
     // п.18 (Ф.2): calendar-кулдаун
     if ((client._actionCooldowns || {})[actionId] > 0) {
       const left = client._actionCooldowns[actionId];
@@ -1834,7 +1853,7 @@ const Projects = (() => {
 
     const ok = action.apply(client);
     if (ok) {
-      if (!action.bypassPhaseCheck) client._phaseActionsUsed[actionId] = phase;  // фиксируем использование (calendar-cooldown — по своему счётчику)
+      client._actionsUsedThisMonth = (client._actionsUsedThisMonth || 0) + 1;  // Р.3: расход месячного лимита проекта
       addLog(`⚡ ${client.name}: ${action.title} — ${action.effectLabel}`, 'teal');
       notify(`${action.icon} ${action.title}: ${action.effectLabel}`, 'success');
       closeDetailPanel();
@@ -1878,25 +1897,29 @@ const Projects = (() => {
     const isWork = (client._lcPhase || '').startsWith('work_');
     let actionsHtml = '';
     if (isWork && !client._lcPendingDecision) {
-      const usedInPhase = client._phaseActionsUsed || {};
-      const curPhase    = client._lcPhase || '';
       const cdMap       = client._actionCooldowns || {};
+      // Р.3: лимит действий в месяц НА ПРОЕКТ.
+      const perMonth    = getActionsPerMonth(client);
+      const monthLeft   = Math.max(0, perMonth - (client._actionsUsedThisMonth || 0));
+      const monthOver   = monthLeft <= 0;
       // Б.6: показываем ВСЕ действия всегда; недоступные = disabled с причиной (не скрываем).
       const visibleActions = PLAYER_ACTIONS;
       if (visibleActions.length) {
         actionsHtml = `
           <div style="margin-bottom:14px">
-            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия <span style="color:var(--teal);font-weight:500;text-transform:none;letter-spacing:0">· не тратят дни</span></div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px">⚡ Активные действия <span style="color:var(--teal);font-weight:500;text-transform:none;letter-spacing:0">· не тратят дни · осталось ${monthLeft}/${perMonth} в этом месяце</span></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               ${visibleActions.map(a => {
-                const cdLeft = cdMap[a.id] || 0;
-                const phaseUsed = !a.bypassPhaseCheck && usedInPhase[a.id] === curPhase;
-                const naNow     = !cdLeft && !phaseUsed && !a.available(client); // условие не выполнено (Б.6)
-                const disabled  = cdLeft > 0 || phaseUsed || naNow;
-                const statusTag = cdLeft > 0
+                const cdLeft     = cdMap[a.id] || 0;
+                const lockReason = a.whenLocked ? a.whenLocked(client) : null;
+                const naNow      = !cdLeft && !lockReason && !a.available(client);
+                const disabled   = monthOver || cdLeft > 0 || !!lockReason || naNow;
+                const statusTag = monthOver
+                  ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">в этом месяце исчерпано</span>`
+                  : cdLeft > 0
                   ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(168,85,247,.1);color:rgba(168,85,247,.8)">через ${cdLeft} мес.</span>`
-                  : phaseUsed
-                    ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">использовано</span>`
+                  : lockReason
+                    ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">${lockReason}</span>`
                     : naNow
                       ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--muted)">${a.naLabel || 'недоступно сейчас'}</span>`
                       : `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(248,81,73,.12);color:var(--red)">${a.costLabel}</span>

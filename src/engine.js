@@ -1436,7 +1436,9 @@ function advanceMonth() {
     });
   }
   // п.18 (Ф.2): декремент кулдаунов действий влияния на клиента (calendar-based)
+  // Р.3: сброс месячного лимита действий на каждый проект (новый месяц — снова доступно действие)
   G.activeClients.forEach(c => {
+    c._actionsUsedThisMonth = 0;
     if (c._actionCooldowns) {
       Object.keys(c._actionCooldowns).forEach(k => {
         if (c._actionCooldowns[k] > 0) c._actionCooldowns[k]--;
