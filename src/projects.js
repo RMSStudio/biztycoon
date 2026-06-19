@@ -1350,6 +1350,19 @@ const Projects = (() => {
       addLog(`🌟 ${client.name}: клиент в восторге — бонус +${fmtK(bonus)}`, 'green');
     }
 
+    // Р.2: Качество окупается ТОЛЬКО при сдаче — бонус к выплате + репутации.
+    let qPay = 0;
+    if (quality > 0) {
+      qPay = Math.round(payout * Math.min(quality, 50) * 0.004 / 1000) * 1000; // до +20% при Q≥50
+      if (qPay > 0) {
+        G.money += qPay;
+        G.clientEarnings[client.id] = (G.clientEarnings[client.id] || 0) + qPay;
+        addLog(`✨ ${client.name}: высокое качество (+${Math.round(quality)}%) — бонус к оплате +${fmtK(qPay)}`, 'green');
+      }
+      const qRep = Math.min(5, Math.round(quality / 12));
+      if (qRep > 0) G.reputation = Math.min(100, (G.reputation || 50) + qRep);
+    }
+
     // NPS: база 50, настроение ±, качество +, риск −, правки −
     const finalNPS = Math.min(100, Math.max(0, Math.round(
       50
@@ -1375,7 +1388,7 @@ const Projects = (() => {
     G.completedProjects = G.completedProjects || [];
     G.completedProjects.push({
       id: client.id, name: client.name, icon: client.icon,
-      revenue: payout + bonus, tier: client.tier || 1,
+      revenue: payout + bonus + qPay, tier: client.tier || 1,
       finalNPS, monthCompleted: G.month,
       terminated: false, failed: false, _cased: false,
     });
@@ -1384,7 +1397,7 @@ const Projects = (() => {
     G.activeClients = G.activeClients.filter(a => a.id !== client.id);
     delete G.clientNPS[client.id];
 
-    const bonusStr = bonus > 0 ? ` + бонус ${fmtK(bonus)}` : '';
+    const bonusStr = (bonus > 0 ? ` + бонус ${fmtK(bonus)}` : '') + (qPay > 0 ? ` + качество ${fmtK(qPay)}` : '');
     addLog(`🏁 ${client.name}: сдан! +${fmtK(payout)}${bonusStr} · NPS ${finalNPS}`, 'green');
     notify(`${client.icon} ${client.name} — сдан! +${fmtK(payout)}${bonusStr}`, 'success');
     rd(`Завершён: ${client.name} (LC) NPS ${finalNPS}`, 'client');
@@ -1818,12 +1831,14 @@ const Projects = (() => {
   function getActionsPerMonth(client) {
     let n = 1;
     if (typeof G !== 'undefined') {
+      // перк Древа 2.0 (хук — узел выставляет флаг)
       if (G.perks && G.perks.extraProjectAction) n += (G.perks.extraProjectAction | 0);
+      // roguelite-открытие (хук — DLC выставляет бонус)
       if (G.runMap && G.runMap.bonusProjectAction) n += (G.runMap.bonusProjectAction | 0);
-      // спец-эффект назначенного на проект специалиста
-      if (client && client._assignedProjectId !== undefined && Array.isArray(G.staff)) {
-        const onProj = G.staff.filter(s => s._assignedProjectId === client.id);
-        n += onProj.reduce((a, s) => a + (s._extraProjectAction | 0), 0);
+      // спец-эффект: Менеджер, назначенный на этот проект, даёт +1 действие/мес
+      if (client && Array.isArray(G.staff)) {
+        const onProj = G.staff.filter(s => s._assignedProjectId === client.id && s.status !== 'fired');
+        n += onProj.reduce((a, s) => a + (s._extraProjectAction | 0) + (s.role === 'manager' ? 1 : 0), 0);
       }
     }
     return Math.max(1, n);

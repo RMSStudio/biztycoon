@@ -1521,14 +1521,30 @@ function advanceMonth() {
 
   // ② в) LC work-фазы: work-события + авто-переход при 100%
   if (typeof Projects !== 'undefined') {
-    // Work-события: ~25% шанс в месяц при progress 20–90% и нет pending
+    // Work-события + РИСК в процессе (связь риска с геймплеем):
+    //  • высокий риск → шанс «критической ошибки» (−% прогресса) + удар по настроению
+    //    (а упавшее настроение повышает вероятность ухода клиента — см. churn выше);
+    //  • шанс обычного work-события тоже растёт с риском.
     G.activeClients.forEach(c => {
       if (!c._lcPhase || !c._lcPhase.startsWith('work_')) return;
       if (c._lcPendingDecision) return;
       const prog = c._progress || 0;
-      if (prog >= 20 && prog < 95 && Math.random() < 0.25) {
-        Projects.triggerWorkEvent(c);
+      if (prog < 20 || prog >= 95) return;
+      const risk = c._lcRisk || 0;
+      // Критическая ошибка из-за высокого риска (тематическое негативное событие со штрафом)
+      if (risk >= 40 && Math.random() < (risk / 100) * 0.30) {
+        const pen = 10 + Math.round((risk / 100) * 20);   // −10..−30% прогресса
+        c._progress = Math.max(0, prog - pen);
+        c._lcClientMood = Math.max(0, (c._lcClientMood || 60) - 10); // → повышает риск ухода
+        if (typeof G !== 'undefined' && G.clientNPS) G.clientNPS[c.id] = c._lcClientMood;
+        addLog(`🔥 ${c.name}: из-за высокого риска допущена критическая ошибка — −${pen}% прогресса`, 'red');
+        notify(`🔥 ${c.icon} ${c.name}: критическая ошибка (риск ${Math.round(risk)}) — −${pen}% прогресса`, 'error');
+        if (typeof rd === 'function') rd(`Критическая ошибка (риск): ${c.name} −${pen}%`, 'client');
+        return; // в этот месяц обычное событие не дублируем
       }
+      // Обычное work-событие: базовый шанс растёт с риском (20%..40%)
+      const evChance = 0.20 + (risk / 100) * 0.20;
+      if (Math.random() < evChance) Projects.triggerWorkEvent(c);
     });
 
     // Авто-переход при 100% (только если нет pending decision)
