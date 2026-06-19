@@ -1821,6 +1821,58 @@ const Projects = (() => {
         return true;
       },
     },
+    // ── Расширенный пул методов влияния (v3.57) ──
+    {
+      id: 'expectations',
+      icon: '🗣', title: 'Управление ожиданиями',
+      desc: 'Заранее проговорить рамки и приоритеты — клиент спокойнее. Доступно с самого начала.',
+      costLabel: '−5К',
+      effectLabel: '+10 😊',
+      available: c => (c._lcClientMood || 60) < 90,
+      naLabel: 'настроение макс.',
+      apply: c => {
+        if ((G.money || 0) < 5000) { notify('Недостаточно средств', 'error'); return false; }
+        G.money -= 5000;
+        moodDelta(c, +10);
+        logDecision(c, c._lcPhase, 'Управление ожиданиями', '+10 настроения · −5К');
+        return true;
+      },
+    },
+    {
+      id: 'crisis_meeting',
+      icon: '🧯', title: 'Антикризисная встреча',
+      desc: 'Серьёзный разбор проблем с командой и клиентом — сильно снижает риск.',
+      costLabel: '−18К',
+      effectLabel: '−25 ⚠️',
+      cooldownMonths: 2,
+      available: c => (c._lcRisk || 0) > 15 && !((c._actionCooldowns || {}).crisis_meeting > 0),
+      naLabel: 'риск уже низкий',
+      apply: c => {
+        if ((G.money || 0) < 18000) { notify('Недостаточно средств', 'error'); return false; }
+        G.money -= 18000;
+        riskDelta(c, -25);
+        c._actionCooldowns = c._actionCooldowns || {};
+        c._actionCooldowns.crisis_meeting = 2;
+        logDecision(c, c._lcPhase, 'Антикризисная встреча', '−25 риска · −18К');
+        return true;
+      },
+    },
+    {
+      id: 'ux_review',
+      icon: '🔬', title: 'UX-ревью / тест-группа',
+      desc: 'Прогнать работу через тест-группу — заметный прирост качества. Нужна готовая работа.',
+      costLabel: '−14К',
+      effectLabel: '+8% качество',
+      available: () => true,
+      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет работы для теста',
+      apply: c => {
+        if ((G.money || 0) < 14000) { notify('Недостаточно средств', 'error'); return false; }
+        G.money -= 14000;
+        c._lcQualityBonus = (c._lcQualityBonus || 0) + 8;
+        logDecision(c, c._lcPhase, 'UX-ревью / тест-группа', '+8% качество · −14К');
+        return true;
+      },
+    },
   ];
 
   // Р.3 / разблок: сколько действий в месяц доступно проекту. База 1.

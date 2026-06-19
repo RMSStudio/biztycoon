@@ -326,6 +326,14 @@
       apply: g => { g.perkPayoutMult = (g.perkPayoutMult || 0) + 0.15; } },
     { id: 'deal5', branch: 'deals', tier: 5, icon: '🏭', name: 'M&A-отдел',          desc: '(Фаза C) Поглощения конкурентов дешевле',          cost: 1200,
       apply: g => { /* подключается в Фазе C */ } },
+    // ── Аккаунтинг: больше активных действий на проектах (читается getActionsPerMonth) ──
+    { id: 'deal3b', branch: 'deals', tier: 3, icon: '🗂', name: 'Проектный офис',
+      desc: '+1 действие в месяц на КАЖДОМ проекте (стек с менеджером на проекте)', cost: 360,
+      flags: ['extraProjectAction'],
+      apply: g => { g.perks = g.perks || {}; g.perks.extraProjectAction = (g.perks.extraProjectAction || 0) + 1; } },
+    { id: 'deal4c', branch: 'deals', tier: 4, icon: '🎛', name: 'Аккаунт-директорат',
+      desc: 'Ещё +1 действие в месяц на каждом проекте (итого +2 от ветки)', cost: 820,
+      apply: g => { g.perks = g.perks || {}; g.perks.extraProjectAction = (g.perks.extraProjectAction || 0) + 1; } },
   ];
 
   // ── Майлстоуны: DSL + чтение из сценария (v0.8, Фаза A шаг 3) ─────────
@@ -1968,7 +1976,7 @@
         '<span style="font-size:22px">⭐</span>' +
         '<div style="min-width:0;flex:1">' +
           '<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">★XP Опыт студии</div>' +
-          '<div style="font-size:16px;font-weight:800;color:#fbbf24">' + xpNow + ' доступно <span style="color:var(--sub);font-size:11px;font-weight:500">(' + xpEarned + ' всего · ' + treeOwned + '/25 узлов куплено)</span></div>' +
+          '<div style="font-size:16px;font-weight:800;color:#fbbf24">' + xpNow + ' доступно <span style="color:var(--sub);font-size:11px;font-weight:500">(' + xpEarned + ' всего · ' + treeOwned + '/' + TREE_NODES.length + ' узлов куплено)</span></div>' +
         '</div>' +
         '<button onclick="LivingMarket.showTreeModal()" style="background:#fbbf24;border:none;color:#111;font-weight:700;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">Древо 2.0 →</button>' +
       '</div>';
@@ -2058,7 +2066,7 @@
         '<span style="font-size:30px">🌳</span>' +
         '<div style="flex:1">' +
           '<div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase">Древо прокачки 2.0</div>' +
-          '<div style="font-size:17px;font-weight:800;color:var(--text)">5 веток · 5 ярусов · 25 узлов</div>' +
+          '<div style="font-size:17px;font-weight:800;color:var(--text)">5 веток · ' + TREE_NODES.length + ' узлов</div>' +
         '</div>' +
         '<div style="text-align:right">' +
           '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">★XP доступно</div>' +
@@ -2560,7 +2568,7 @@
           if (sub) {
             const xp        = Math.floor((G && G.xp) || 0);
             const owned     = ((G && G.living && G.living.tree2 && G.living.tree2.purchased) || []).length;
-            sub.textContent = '🌳 Древо 2.0 · ★' + xp + ' · ' + owned + '/30 узлов';
+            sub.textContent = '🌳 Древо 2.0 · ★' + xp + ' · ' + owned + '/' + TREE_NODES.length + ' узлов';
           }
         } catch (e) {}
       });
