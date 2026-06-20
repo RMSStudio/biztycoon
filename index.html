@@ -615,6 +615,24 @@
     if (btn && !hasSaves()) btn.disabled = true;
   })();
 
+  // Ф.10: авто-резюм последней сессии при перезагрузке страницы
+  // (вместо выброса в главное меню). Если что-то пойдёт не так — тихо остаёмся в меню.
+  (function autoResumeSession() {
+    try {
+      if (typeof _currentRun !== 'function' || typeof _restore !== 'function') return;
+      const run = _currentRun();
+      if (!run || !run.steps || run.steps.length === 0) return;
+      const newest = run.steps.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0))[0];
+      if (!newest || !newest.state) return;
+      _restore(newest.state);
+      goTo('screen-game');
+      if (typeof renderGame === 'function') renderGame();
+      if (typeof notify === 'function') notify('⏮ Сессия восстановлена', 'info');
+    } catch (e) {
+      console.warn('autoResume failed:', e); // fallback — остаёмся в меню
+    }
+  })();
+
   // Загружаем включённые DLC (асинхронно, не блокирует UI)
   DLC.init();
 
