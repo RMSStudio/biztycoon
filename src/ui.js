@@ -487,6 +487,50 @@ function openCalendar() {
 }
 function closeCalendar() { const m = document.getElementById('calendar-modal'); if (m) m.style.display = 'none'; }
 
+// ── Кастомные тултипы: лёгкий блок под курсором вместо системного title ──
+// Любой элемент с атрибутом data-tip="текст" показывает подсказку сразу при наведении.
+(function initCustomTooltips() {
+  if (typeof document === 'undefined') return;
+  let tip = null;
+  const ensure = () => {
+    if (tip) return tip;
+    tip = document.createElement('div');
+    tip.id = 'bz-tip';
+    tip.style.cssText = [
+      'position:fixed', 'z-index:9999', 'max-width:280px', 'padding:8px 11px',
+      'border-radius:8px', 'background:#0d1117', 'border:1px solid rgba(255,255,255,.14)',
+      'color:#e6edf3', 'font-size:12px', 'line-height:1.45',
+      'box-shadow:0 8px 28px rgba(0,0,0,.55)', 'pointer-events:none', 'display:none',
+      'white-space:normal',
+    ].join(';');
+    document.body.appendChild(tip);
+    return tip;
+  };
+  const place = (e) => {
+    if (!tip || tip.style.display === 'none') return;
+    const pad = 14;
+    const r = tip.getBoundingClientRect();
+    let x = e.clientX + pad, y = e.clientY + pad;
+    if (x + r.width  > window.innerWidth)  x = e.clientX - r.width  - pad;
+    if (y + r.height > window.innerHeight) y = e.clientY - r.height - pad;
+    tip.style.left = Math.max(4, x) + 'px';
+    tip.style.top  = Math.max(4, y) + 'px';
+  };
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (!el) return;
+    const t = ensure();
+    t.textContent = el.getAttribute('data-tip');
+    t.style.display = 'block';
+    place(e);
+  });
+  document.addEventListener('mousemove', place);
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target.closest && e.target.closest('[data-tip]');
+    if (el && tip) tip.style.display = 'none';
+  });
+})();
+
 // ── EventBus → DOM биндинги (Godot: вызовы connect в _ready) ─
 function initEventBus() {
   EventBus.on('notify',       ({ msg, type })                              => _uiNotify(msg, type));
