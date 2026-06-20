@@ -53,7 +53,7 @@ window.SCENARIO_DATA = {
       "bonusLabel": "−10% расходов на команду",
       "passive": "nps_start",
       "passiveVal": 5,
-      "passiveLabel": "+5 NPS каждому клиенту при подписании",
+      "passiveLabel": "+5 к оценке каждому клиенту при подписании",
       "desc": "Продвижение в поиске. Долгосрочный подход и стабильные клиенты."
     },
     "web": {
@@ -75,7 +75,7 @@ window.SCENARIO_DATA = {
       "bonusLabel": "+40% к выплате брендинг-клиентов",
       "passive": "nps_start_store",
       "passiveVal": 10,
-      "passiveLabel": "+10 NPS брендинг-клиентам при подписании",
+      "passiveLabel": "+10 к оценке брендинг-клиентам при подписании",
       "desc": "Айдентика, упаковка, стратегия. Брендовые клиенты — от малого бизнеса до крупных ритейлеров."
     }
   },
@@ -426,7 +426,7 @@ window.SCENARIO_DATA = {
       "gradeLabel": "Junior",
       "name": "HR Jr",
       "icon": "🤝",
-      "desc": "NPS +2/мес · найм за 1 день",
+      "desc": "оценка клиента +2/мес · найм за 1 день",
       "cost": 20000,
       "quality": 0,
       "volume": 0,
@@ -442,7 +442,7 @@ window.SCENARIO_DATA = {
       "gradeLabel": "Middle",
       "name": "HR-менеджер",
       "icon": "🤝",
-      "desc": "NPS +3/мес · найм за 1 день",
+      "desc": "оценка клиента +3/мес · найм за 1 день",
       "cost": 30000,
       "quality": 0,
       "volume": 0,
@@ -458,7 +458,7 @@ window.SCENARIO_DATA = {
       "gradeLabel": "Senior",
       "name": "HR Sr",
       "icon": "🤝",
-      "desc": "NPS +4/мес · найм за 1 день",
+      "desc": "оценка клиента +4/мес · найм за 1 день",
       "cost": 46000,
       "quality": 0,
       "volume": 0,
@@ -521,7 +521,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 3,
-        "label": "+3 NPS/мес"
+        "label": "+3 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.6,
@@ -551,7 +551,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_start",
         "val": 5,
-        "label": "NPS старт +5"
+        "label": "оценка клиента — старт +5"
       },
       "modBadge": "mb-green",
       "prob": 0.5,
@@ -566,7 +566,7 @@ window.SCENARIO_DATA = {
       "tier": 2,
       "icon": "🔴",
       "name": "Онлайн-магазин «Каприз»",
-      "desc": "Клиент с завышенными ожиданиями. Скоуп плывёт, NPS нестабилен. Нужен для проверки ветки scope_creep, юридических рисков и неудовлетворённого ревью.",
+      "desc": "Клиент с завышенными ожиданиями. Скоуп плывёт, оценка клиента нестабильна. Нужен для проверки ветки scope_creep, юридических рисков и неудовлетворённого ревью.",
       "revenue": 38000,
       "minQ": 0,
       "minV": 0,
@@ -581,7 +581,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_drain",
         "val": -4,
-        "label": "−4 NPS/мес"
+        "label": "−4 оценки клиента/мес"
       },
       "modBadge": "mb-amber",
       "prob": 0.45,
@@ -663,7 +663,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 5,
-        "label": "+5 NPS/мес"
+        "label": "+5 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.75
@@ -673,7 +673,7 @@ window.SCENARIO_DATA = {
       "tier": 1,
       "icon": "🤝",
       "name": "Тёплый лид (рекомендация)",
-      "desc": "Пришёл по рекомендации. Уже расположен к вам — NPS стартует выше нормы.",
+      "desc": "Пришёл по рекомендации. Уже расположен к вам — оценка клиента стартует выше нормы.",
       "revenue": 19000,
       "minQ": 0,
       "minV": 0,
@@ -684,7 +684,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_start",
         "val": 14,
-        "label": "NPS старт +14"
+        "label": "оценка клиента — старт +14"
       },
       "modBadge": "mb-green",
       "prob": 0.8
@@ -726,7 +726,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 3,
-        "label": "+3 NPS/мес"
+        "label": "+3 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.7
@@ -747,7 +747,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_start",
         "val": 8,
-        "label": "NPS старт +8"
+        "label": "оценка клиента — старт +8"
       },
       "modBadge": "mb-green",
       "prob": 0.65
@@ -757,7 +757,7 @@ window.SCENARIO_DATA = {
       "tier": 1,
       "icon": "✍️",
       "name": "Блогер-ниша",
-      "desc": "Молодой инфлюенсер, монетизирует аудиторию. Платит немного, но NPS высокий.",
+      "desc": "Молодой инфлюенсер, монетизирует аудиторию. Платит немного, но оценка клиента высокая.",
       "revenue": 15000,
       "minQ": 0,
       "minV": 8,
@@ -768,7 +768,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 4,
-        "label": "+4 NPS/мес"
+        "label": "+4 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.6
@@ -778,7 +778,7 @@ window.SCENARIO_DATA = {
       "tier": 1,
       "icon": "🍽️",
       "name": "Ресторан",
-      "desc": "Владелец ресторана хочет Instagram и рекламу. Сезонность влияет на NPS.",
+      "desc": "Владелец ресторана хочет Instagram и рекламу. Сезонность влияет на оценку клиента.",
       "revenue": 22000,
       "minQ": 0,
       "minV": 5,
@@ -810,7 +810,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 3,
-        "label": "+3 NPS/мес"
+        "label": "+3 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.5
@@ -820,7 +820,7 @@ window.SCENARIO_DATA = {
       "tier": 1,
       "icon": "🌐",
       "name": "Языковая школа",
-      "desc": "Хотят контент-маркетинг и рассылки. Стабильный клиент с умеренным NPS.",
+      "desc": "Хотят контент-маркетинг и рассылки. Стабильный клиент с умеренной оценкой клиента.",
       "revenue": 20000,
       "minQ": 0,
       "minV": 10,
@@ -831,7 +831,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 2,
-        "label": "+2 NPS/мес"
+        "label": "+2 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.55
@@ -852,7 +852,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 3,
-        "label": "+3 NPS/мес"
+        "label": "+3 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.65
@@ -873,7 +873,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 2,
-        "label": "+2 NPS/мес"
+        "label": "+2 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.55
@@ -894,7 +894,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_drain",
         "val": -4,
-        "label": "NPS −4 доп./мес"
+        "label": "оценка клиента −4 доп./мес"
       },
       "modBadge": "mb-amber",
       "prob": 0.5
@@ -904,7 +904,7 @@ window.SCENARIO_DATA = {
       "tier": 2,
       "icon": "🔬",
       "name": "Перфекционист",
-      "desc": "Платит хорошо, но никогда не удовлетворён. NPS тает быстрее без высокого качества.",
+      "desc": "Платит хорошо, но никогда не удовлетворён. оценка клиента тает быстрее без высокого качества.",
       "revenue": 40000,
       "minQ": 10,
       "minV": 0,
@@ -915,7 +915,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_drain",
         "val": -8,
-        "label": "NPS −8 доп./мес"
+        "label": "оценка клиента −8 доп./мес"
       },
       "modBadge": "mb-amber",
       "prob": 0.5
@@ -967,7 +967,7 @@ window.SCENARIO_DATA = {
       "tier": 2,
       "icon": "🏢",
       "name": "Корпоративный KPI",
-      "desc": "Солидный чек, но штраф если NPS опустится ниже порога.",
+      "desc": "Солидный чек, но штраф если оценка клиента опустится ниже порога.",
       "revenue": 90000,
       "minQ": 18,
       "minV": 10,
@@ -979,7 +979,7 @@ window.SCENARIO_DATA = {
         "type": "nps_penalty",
         "val": -22000,
         "threshold": 65,
-        "label": "NPS<65 → штраф 22К/мес"
+        "label": "оценка клиента < 65 → штраф 22К/мес"
       },
       "modBadge": "mb-red",
       "prob": 0.35
@@ -1000,7 +1000,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 2,
-        "label": "+2 NPS/мес"
+        "label": "+2 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.55
@@ -1021,7 +1021,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 3,
-        "label": "+3 NPS/мес"
+        "label": "+3 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.45
@@ -1052,7 +1052,7 @@ window.SCENARIO_DATA = {
       "tier": 2,
       "icon": "📜",
       "name": "Юридическая фирма",
-      "desc": "Консервативный клиент с высокими требованиями к качеству. NPS строгий.",
+      "desc": "Консервативный клиент с высокими требованиями к качеству. оценка клиента строгая.",
       "revenue": 58000,
       "minQ": 12,
       "minV": 0,
@@ -1063,7 +1063,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_drain",
         "val": -5,
-        "label": "NPS −5 доп./мес"
+        "label": "оценка клиента −5 доп./мес"
       },
       "modBadge": "mb-amber",
       "prob": 0.4
@@ -1084,7 +1084,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 2,
-        "label": "+2 NPS/мес"
+        "label": "+2 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.45
@@ -1105,7 +1105,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_start",
         "val": 10,
-        "label": "NPS старт +10"
+        "label": "оценка клиента — старт +10"
       },
       "modBadge": "mb-green",
       "prob": 0.5
@@ -1126,7 +1126,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 2,
-        "label": "+2 NPS/мес"
+        "label": "+2 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.3
@@ -1212,7 +1212,7 @@ window.SCENARIO_DATA = {
         "type": "nps_penalty",
         "val": -30000,
         "threshold": 70,
-        "label": "NPS<70 → штраф 30К/мес"
+        "label": "оценка клиента < 70 → штраф 30К/мес"
       },
       "modBadge": "mb-red",
       "prob": 0.28
@@ -1222,7 +1222,7 @@ window.SCENARIO_DATA = {
       "tier": 3,
       "icon": "🛡️",
       "name": "Страховая компания",
-      "desc": "Консервативный корпоративный клиент. Стабильный доход, но NPS держать сложно.",
+      "desc": "Консервативный корпоративный клиент. Стабильный доход, но к оценке клиента держать сложно.",
       "revenue": 85000,
       "minQ": 14,
       "minV": 10,
@@ -1233,7 +1233,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_drain",
         "val": -6,
-        "label": "NPS −6 доп./мес"
+        "label": "оценка клиента −6 доп./мес"
       },
       "modBadge": "mb-amber",
       "prob": 0.35
@@ -1264,7 +1264,7 @@ window.SCENARIO_DATA = {
       "tier": 3,
       "icon": "🚗",
       "name": "Дилерская сеть",
-      "desc": "Крупный автодилер, хочет digital-присутствие. Платит аккуратно, NPS нестабилен.",
+      "desc": "Крупный автодилер, хочет digital-присутствие. Платит аккуратно, оценка клиента нестабильна.",
       "revenue": 80000,
       "minQ": 14,
       "minV": 10,
@@ -1320,7 +1320,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 4,
-        "label": "+4 NPS/мес"
+        "label": "+4 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.55
@@ -1411,7 +1411,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 3,
-        "label": "+3 NPS/мес"
+        "label": "+3 оценки клиента/мес"
       },
       "modBadge": "mb-teal",
       "prob": 0.5
@@ -1455,7 +1455,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_drain",
         "val": -5,
-        "label": "NPS −5 доп./мес"
+        "label": "оценка клиента −5 доп./мес"
       },
       "modBadge": "mb-amber",
       "prob": 0.28
@@ -1478,7 +1478,7 @@ window.SCENARIO_DATA = {
         "type": "nps_penalty",
         "val": -40000,
         "threshold": 70,
-        "label": "NPS<70 → штраф 40К/мес"
+        "label": "оценка клиента < 70 → штраф 40К/мес"
       },
       "modBadge": "mb-red",
       "prob": 0.15
@@ -1501,7 +1501,7 @@ window.SCENARIO_DATA = {
         "type": "nps_penalty",
         "val": -50000,
         "threshold": 70,
-        "label": "NPS<70 → штраф 50К/мес"
+        "label": "оценка клиента < 70 → штраф 50К/мес"
       },
       "modBadge": "mb-red",
       "prob": 0.2
@@ -1614,7 +1614,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_passive",
         "val": 2,
-        "label": "+2 NPS/мес"
+        "label": "+2 оценки клиента/мес"
       },
       "modBadge": "mb-green",
       "prob": 0.15
@@ -1637,7 +1637,7 @@ window.SCENARIO_DATA = {
         "type": "nps_penalty",
         "val": -60000,
         "threshold": 65,
-        "label": "KPI-штраф при NPS<65"
+        "label": "KPI-штраф при оценка клиента < 65"
       },
       "modBadge": "mb-amber",
       "prob": 0.3
@@ -1682,7 +1682,7 @@ window.SCENARIO_DATA = {
       "modifier": {
         "type": "nps_drain",
         "val": -2,
-        "label": "−2 NPS/мес — капризный борт"
+        "label": "−2 оценки клиента/мес — капризный борт"
       },
       "modBadge": "mb-amber",
       "prob": 0.25
@@ -1779,7 +1779,7 @@ window.SCENARIO_DATA = {
         "type": "nps_penalty",
         "val": -120000,
         "threshold": 70,
-        "label": "KPI-штраф при NPS<70"
+        "label": "KPI-штраф при оценка клиента < 70"
       },
       "modBadge": "mb-amber",
       "prob": 0.15
@@ -2489,7 +2489,7 @@ window.SCENARIO_DATA = {
             { "nudgeRandom": 12 },
             { "rep": 1 },
             { "notify": ["Клиент доволен — отношения укрепились 💪", "success"] },
-            { "rd": ["Личный ответ клиенту — NPS+12", "event"] }
+            { "rd": ["Личный ответ клиенту — оценка клиента +12", "event"] }
           ]
         },
         {

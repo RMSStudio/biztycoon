@@ -80,7 +80,7 @@ const TRAITS = {
   team_player:   { label:'Командный игрок',   icon:'🤜', type:'pos', hidden:false,
     desc:'+8% качества при команде 2+ человек' },
   client_charm:  { label:'Клиентский магнит', icon:'✨', type:'pos', hidden:true,
-    desc:'+8 NPS на проектах с его участием' },
+    desc:'+8 к оценке клиента на проектах с его участием' },
   fast_learner:  { label:'Быстро растёт',     icon:'📈', type:'pos', hidden:true,
     desc:'+1 к качеству каждые 3 месяца работы' },
   crisis_mgr:    { label:'Антикризисник',     icon:'💧', type:'pos', hidden:true,
@@ -549,13 +549,15 @@ function _staffCardHTML(s) {
       </div>
       ${assignBadge}
       <div class="staff-char-bars">
-        <div class="staff-bar-row" title="Настроение: ${mood}%">
+        <div class="staff-bar-row" data-tip="Настроение сотрудника (${mood}%): влияет на его мощность/эффективность. Само убывает со временем — поднимают «Похвала» и «Премия»." style="cursor:help">
           <span class="staff-bar-lbl">😊</span>
           <div class="staff-bar-track"><div class="staff-bar-fill" style="width:${mood}%;background:${_moodColor(mood)}"></div></div>
+          <span style="font-size:10px;font-weight:600;color:${_moodColor(mood)};min-width:30px;text-align:right">${mood}%</span>
         </div>
-        <div class="staff-bar-row" title="Лояльность: ${loy}%">
+        <div class="staff-bar-row" data-tip="Лояльность сотрудника (${loy}%): при низкой (ниже 25) растёт риск ухода к конкуренту. Поднимает «Премия»." style="cursor:help">
           <span class="staff-bar-lbl">🏅</span>
           <div class="staff-bar-track"><div class="staff-bar-fill" style="width:${loy}%;background:${_loyColor(loy)}"></div></div>
+          <span style="font-size:10px;font-weight:600;color:${_loyColor(loy)};min-width:30px;text-align:right">${loy}%</span>
         </div>
       </div>
       ${traitBadges || hidBadge
@@ -993,9 +995,9 @@ function _renderProfileContent(c, result) {
         <div class="profile-stat-val">${c.speedStat}</div>
         <div class="profile-stat-lbl">Скорость</div>
       </div>
-      <div class="profile-stat" data-tip="Влияние на NPS клиента: насколько специалист улучшает (+) или ухудшает (−) оценку клиента при работе на проекте." style="cursor:help">
+      <div class="profile-stat" data-tip="Влияние на оценку клиента: насколько специалист улучшает (+) или ухудшает (−) удовлетворённость клиента при работе на проекте." style="cursor:help">
         <div class="profile-stat-val">${c.npsBonus > 0 ? '+' : ''}${c.npsBonus}</div>
-        <div class="profile-stat-lbl">NPS клиента</div>
+        <div class="profile-stat-lbl">Оценка клиента</div>
       </div>
       ${c.capacity > 0
         ? `<div class="profile-stat" data-tip="Слоты проектов: Менеджер даёт +${c.capacity} — можно вести больше проектов одновременно." style="cursor:help">

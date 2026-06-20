@@ -40,9 +40,9 @@ window.SE_PRESETS = {
     { _label:'Юрист', icon:'⚖️', role:'Юрист Sr', grade:'senior', cost:65000, quality:0, npsBonus:0, speedBonus:0, desc:'Штрафы и риски −70%. Senior (rep ≥75).' },
 
     // HR
-    { _label:'HR', icon:'🤝', role:'HR Jr',         grade:'junior', cost:20000, quality:0, npsBonus:2, speedBonus:0, desc:'NPS +2/мес · найм за 1 день. Junior.' },
-    { _label:'HR', icon:'🤝', role:'HR-менеджер',   grade:'middle', cost:30000, quality:0, npsBonus:3, speedBonus:0, desc:'NPS +3/мес · найм за 1 день. Middle.' },
-    { _label:'HR', icon:'🤝', role:'HR Sr',         grade:'senior', cost:46000, quality:0, npsBonus:4, speedBonus:0, desc:'NPS +4/мес · найм за 1 день. Senior (rep ≥65).' },
+    { _label:'HR', icon:'🤝', role:'HR Jr',         grade:'junior', cost:20000, quality:0, npsBonus:2, speedBonus:0, desc:'оценка клиента +2/мес · найм за 1 день. Junior.' },
+    { _label:'HR', icon:'🤝', role:'HR-менеджер',   grade:'middle', cost:30000, quality:0, npsBonus:3, speedBonus:0, desc:'оценка клиента +3/мес · найм за 1 день. Middle.' },
+    { _label:'HR', icon:'🤝', role:'HR Sr',         grade:'senior', cost:46000, quality:0, npsBonus:4, speedBonus:0, desc:'оценка клиента +4/мес · найм за 1 день. Senior (rep ≥65).' },
   ],
 
   // ── Проекты ───────────────────────────────────────────
@@ -84,7 +84,7 @@ window.SE_PRESETS = {
     {
       _label:'Tier 1 · Стандарт',
       icon:'🤝', name:'Тёплый лид', tier:1, type:'small', rarity:'common',
-      desc:'Пришёл по рекомендации. Уже расположен к вам — NPS стартует выше нормы.',
+      desc:'Пришёл по рекомендации. Уже расположен к вам — оценка клиента стартует выше нормы.',
       npsStart:94, prob:0.80,
       useRangeBudget:true,
       requirements:{ minQ:0, minV:0, minPortfolio:0, requiresDev:false },
@@ -146,7 +146,7 @@ window.SE_PRESETS = {
     {
       _label:'Tier 2',
       icon:'🏢', name:'Корпоративный KPI', tier:2, type:'corp', rarity:'uncommon',
-      desc:'Солидный чек, но штраф если NPS опустится ниже порога.',
+      desc:'Солидный чек, но штраф если оценка клиента опустится ниже порога.',
       npsStart:66, prob:0.35,
       useRangeBudget:true,
       requirements:{ minQ:18, minV:10, minPortfolio:0, requiresDev:false },
@@ -275,28 +275,28 @@ window.SE_PRESETS = {
     {
       _label:'Клиентские',
       icon:'🤝', title:'Клиент просит скидку', requiresClients:true, chance:0.20,
-      body:'Постоянный клиент просит снизить итоговый бюджет на 15%. Отказать — NPS падает, согласиться — теряешь часть выплаты.',
+      body:'Постоянный клиент просит снизить итоговый бюджет на 15%. Отказать — к оценке клиента падает, согласиться — теряешь часть выплаты.',
       choices:[
-        { text:'Согласиться (−15% бюджета)',    desc:'NPS всех клиентов +12', effects:[{ type:'nps_all',   val: 12 }] },
-        { text:'Отказать',                      desc:'NPS у клиента −20',      effects:[{ type:'nps_all',   val:-20 }] },
+        { text:'Согласиться (−15% бюджета)',    desc:'оценка всех клиентов +12', effects:[{ type:'nps_all',   val: 12 }] },
+        { text:'Отказать',                      desc:'оценка клиента −20',      effects:[{ type:'nps_all',   val:-20 }] },
       ],
     },
     {
       _label:'Рыночные',
       icon:'📉', title:'Алгоритм сменился', requiresClients:true, chance:0.18,
-      body:'Апдейт платформ. Клиенты паникуют — NPS всех просел.',
+      body:'Апдейт платформ. Клиенты паникуют — оценка всех клиентов просела.',
       choices:[
-        { text:'Антикризисный аудит (−30 000 ₽)', desc:'NPS +15 у всех',       effects:[{ type:'money_add', val:-30000 }, { type:'nps_all', val: 15 }] },
-        { text:'Переждать',                        desc:'NPS всех клиентов −18', effects:[{ type:'nps_all', val:-18 }] },
+        { text:'Антикризисный аудит (−30 000 ₽)', desc:'оценка клиента +15 у всех',       effects:[{ type:'money_add', val:-30000 }, { type:'nps_all', val: 15 }] },
+        { text:'Переждать',                        desc:'оценка всех клиентов −18', effects:[{ type:'nps_all', val:-18 }] },
       ],
     },
     {
       _label:'Командные',
       icon:'⚡', title:'Конфликт в команде', requiresClients:false, chance:0.15,
-      body:'Напряжение сказывается на работе — NPS клиентов падает, усталость растёт.',
+      body:'Напряжение сказывается на работе — оценка клиентов падает, усталость растёт.',
       choices:[
-        { text:'Тимбилдинг (−25 000 ₽)',  desc:'NPS +10, усталость −15',  effects:[{ type:'money_add', val:-25000 }, { type:'nps_all', val:10 }, { type:'fatigue', val:-15 }] },
-        { text:'Поговорить самому',         desc:'50% шанс — NPS ±8',       effects:[{ type:'random_nps', val:-8 }] },
+        { text:'Тимбилдинг (−25 000 ₽)',  desc:'оценка клиента +10, усталость −15',  effects:[{ type:'money_add', val:-25000 }, { type:'nps_all', val:10 }, { type:'fatigue', val:-15 }] },
+        { text:'Поговорить самому',         desc:'50% шанс — к оценке клиента ±8',       effects:[{ type:'random_nps', val:-8 }] },
       ],
     },
     {
@@ -305,7 +305,7 @@ window.SE_PRESETS = {
       body:'Получил оффер от конкурентов. Можно удержать повышением или отпустить.',
       choices:[
         { text:'Повышение +20 000 ₽/мес', desc:'Остаётся, расходы растут',  effects:[{ type:'money_add', val:-20000 }] },
-        { text:'Отпустить',                desc:'NPS команды −10',           effects:[{ type:'nps_all', val:-10 }] },
+        { text:'Отпустить',                desc:'оценка клиентов −10',           effects:[{ type:'nps_all', val:-10 }] },
       ],
     },
     {
@@ -331,7 +331,7 @@ window.SE_PRESETS = {
       icon:'😤', title:'Клиент недоволен', requiresClients:true, chance:0.16,
       body:'Один из клиентов оставил публичный негативный отзыв. Нужно реагировать.',
       choices:[
-        { text:'Публичный ответ + компенсация (−15 000 ₽)', desc:'NPS −5, репутация +4', effects:[{ type:'money_add', val:-15000 }, { type:'nps_all', val:-5 }, { type:'reputation', val:4 }] },
+        { text:'Публичный ответ + компенсация (−15 000 ₽)', desc:'оценка клиента −5, репутация +4', effects:[{ type:'money_add', val:-15000 }, { type:'nps_all', val:-5 }, { type:'reputation', val:4 }] },
         { text:'Игнорировать',                               desc:'Репутация −8',          effects:[{ type:'reputation', val:-8 }] },
       ],
     },
@@ -341,7 +341,7 @@ window.SE_PRESETS = {
       body:'Усталость достигла опасного уровня. Производительность падает.',
       choices:[
         { text:'Оплачиваемые выходные (−12 000 ₽)', desc:'Усталость −15',            effects:[{ type:'money_add', val:-12000 }, { type:'fatigue', val:-15 }] },
-        { text:'Переждать',                           desc:'NPS всех клиентов −8',    effects:[{ type:'nps_all', val:-8 }] },
+        { text:'Переждать',                           desc:'оценка всех клиентов −8',    effects:[{ type:'nps_all', val:-8 }] },
       ],
     },
   ],

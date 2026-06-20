@@ -449,7 +449,7 @@ function updateAllNPS() {
     G.clientNPS[c.id]=nps;
 
     if      (nps<25) churned.push(c);
-    else if (nps<45) addLog(`⚠️ ${c.name}: NPS ${Math.round(nps)} — клиент недоволен`,'amber');
+    else if (nps<45) addLog(`⚠️ ${c.name}: оценка клиента ${Math.round(nps)} — клиент недоволен`,'amber');
   });
 
   churned.forEach(c=>{
@@ -462,7 +462,7 @@ function updateAllNPS() {
     releaseProjectTeam(c.id); // Б.9
     G.activeClients=G.activeClients.filter(a=>a.id!==c.id);
     delete G.clientNPS[c.id];
-    addLog(`💔 ${c.name} расторг контракт (NPS обнулился)`,'red');
+    addLog(`💔 ${c.name} расторг контракт (оценка клиента обнулилась)`,'red');
     notify(`${c.icon} ${c.name} ушёл сам`,'error');
     rd(`${c.name} ушёл органически`,'churn');
   });
@@ -483,7 +483,7 @@ function investInClient(cid) {
   nudgeClientRating(c, +25); // единый канал: LC → mood, обычные → NPS
   addLog(`💬 Инвестиция в ${c.name}: NPS ${before}→${Math.round(G.clientNPS[cid])}`,'teal');
   notify(`NPS ${c.name}: ${before}→${Math.round(G.clientNPS[cid])} 📈`,'success');
-  rd(`Инвестиция в ${c.name}:  NPS+25`,'event');
+  rd(`Инвестиция в ${c.name}:  оценка клиента +25`,'event');
   _emitRender();
 }
 

@@ -1375,10 +1375,10 @@ const Projects = (() => {
     // Влияние на репутацию агентства
     if (finalNPS >= 85) {
       G.reputation = Math.min(100, (G.reputation || 50) + 3);
-      addLog(`⭐ Репутация +3 — клиент очень доволен (NPS ${finalNPS})`, 'green');
+      addLog(`⭐ Репутация +3 — клиент очень доволен (оценка клиента ${finalNPS})`, 'green');
     } else if (finalNPS <= 35) {
       G.reputation = Math.max(0, (G.reputation || 50) - 5);
-      addLog(`💔 Репутация −5 — провальная сдача (NPS ${finalNPS})`, 'red');
+      addLog(`💔 Репутация −5 — провальная сдача (оценка клиента ${finalNPS})`, 'red');
     }
 
     // Портфолио (v3.0-фикс: LC-сдача не начисляла баллы вообще)
@@ -1398,9 +1398,9 @@ const Projects = (() => {
     delete G.clientNPS[client.id];
 
     const bonusStr = (bonus > 0 ? ` + бонус ${fmtK(bonus)}` : '') + (qPay > 0 ? ` + качество ${fmtK(qPay)}` : '');
-    addLog(`🏁 ${client.name}: сдан! +${fmtK(payout)}${bonusStr} · NPS ${finalNPS}`, 'green');
+    addLog(`🏁 ${client.name}: сдан! +${fmtK(payout)}${bonusStr} · оценка клиента ${finalNPS}`, 'green');
     notify(`${client.icon} ${client.name} — сдан! +${fmtK(payout)}${bonusStr}`, 'success');
-    rd(`Завершён: ${client.name} (LC) NPS ${finalNPS}`, 'client');
+    rd(`Завершён: ${client.name} (LC) оценка клиента ${finalNPS}`, 'client');
     _emitRender();
   }
 

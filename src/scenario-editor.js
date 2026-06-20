@@ -468,7 +468,7 @@ const SE = (() => {
     fatigue:      { label:'Усталость команды ±', unit:'pct', min:-30,     max:30,     step:5    },
     portfolio:    { label:'Портфолио ±',         unit:'q',   min:-10,     max:10,     step:1    },
     random_money: { label:'Случайно: деньги ±₽', unit:'rub', min:0,      max:500000, step:5000 },
-    random_nps:   { label:'Случайно: NPS ±',     unit:'nps', min:-20,    max:20,     step:1    },
+    random_nps:   { label:'Случайно: к оценке клиента ±',     unit:'nps', min:-20,    max:20,     step:1    },
   };
 
   // Пресеты для быстрого старта
@@ -479,10 +479,10 @@ const SE = (() => {
                  { text:'Оплатить сейчас (−50 000 ₽)', desc:'Устраняет проблему быстро', effects:[{type:'money_add', val:-50000}] },
                  { text:'Отложить', desc:'Репутация немного падает', effects:[{type:'reputation', val:-5}] },
                ]}},
-    nps:     { label:'NPS-кризис',       data:{ icon:'📉', title:'Клиенты недовольны', body:'Что-то пошло не так. NPS просел у всех.', requiresClients:true, chance:0.15,
+    nps:     { label:'Кризис оценки клиента',       data:{ icon:'📉', title:'Клиенты недовольны', body:'Что-то пошло не так. оценка клиента просела у всех.', requiresClients:true, chance:0.15,
                choices:[
-                 { text:'Антикризисный аудит (−30 000 ₽)', desc:'NPS +15 у всех', effects:[{type:'money_add', val:-30000},{type:'nps_all', val:15}] },
-                 { text:'Переждать', desc:'NPS −18 у всех', effects:[{type:'nps_all', val:-18}] },
+                 { text:'Антикризисный аудит (−30 000 ₽)', desc:'оценка клиента +15 у всех', effects:[{type:'money_add', val:-30000},{type:'nps_all', val:15}] },
+                 { text:'Переждать', desc:'оценка клиента −18 у всех', effects:[{type:'nps_all', val:-18}] },
                ]}},
     bonus:   { label:'Неожиданный бонус', data:{ icon:'🎉', title:'Удача на рынке', body:'Рынок поднялся, клиент доволен.', requiresClients:false, chance:0.10,
                choices:[
@@ -491,8 +491,8 @@ const SE = (() => {
                ]}},
     team:    { label:'Конфликт в команде', data:{ icon:'⚡', title:'Напряжение в команде', body:'Усталость сказывается на работе.', requiresClients:false, chance:0.12,
                choices:[
-                 { text:'Тимбилдинг (−25 000 ₽)', desc:'NPS +10, усталость −15', effects:[{type:'money_add', val:-25000},{type:'nps_all', val:10},{type:'fatigue', val:-15}] },
-                 { text:'Поговорить самому', desc:'50% шанс — NPS ±8', effects:[{type:'random_nps', val:-8}] },
+                 { text:'Тимбилдинг (−25 000 ₽)', desc:'оценка клиента +10, усталость −15', effects:[{type:'money_add', val:-25000},{type:'nps_all', val:10},{type:'fatigue', val:-15}] },
+                 { text:'Поговорить самому', desc:'50% шанс — к оценке клиента ±8', effects:[{type:'random_nps', val:-8}] },
                ]}},
   };
 
@@ -889,7 +889,7 @@ const SE = (() => {
         </div>
         <div class="se-staff-fields" style="grid-template-columns:1fr 1fr;margin-top:8px">
           ${_staffField(id+'_rev', 'revenue', 'Доход/мес', p.revenue, 0, 500000, 5000, 'rub')}
-          ${_staffField(id+'_nps', 'npsStart', 'NPS старт', p.npsStart, 40, 100, 1, 'nps')}
+          ${_staffField(id+'_nps', 'npsStart', 'оценка клиента — старт', p.npsStart, 40, 100, 1, 'nps')}
         </div>
 
         <!-- Требования -->
@@ -945,7 +945,7 @@ const SE = (() => {
 
   // Helpers для модификаторов
   function _modValLabel(t) {
-    const m = { nps_passive:'NPS/мес', nps_start:'NPS бонус', payment_delay:'Шанс задержки', random_bonus:'Бонус (₽)', revenue_growth:'Рост/мес (₽)' };
+    const m = { nps_passive:'оценки клиента/мес', nps_start:'NPS бонус', payment_delay:'Шанс задержки', random_bonus:'Бонус (₽)', revenue_growth:'Рост/мес (₽)' };
     return m[t] || 'Значение';
   }
   function _modMin(t)  { return t==='nps_passive'||t==='nps_start' ? -20 : 0; }
@@ -1032,7 +1032,7 @@ const SE = (() => {
 
   // ── Unit helpers ──────────────────────────────────────
   function _unitSuffix(unit) {
-    const map = { rub:'₽', rub_mo:'₽/мес', days:'дн.', q:'Q', nps:'NPS', pct:'%' };
+    const map = { rub:'₽', rub_mo:'₽/мес', days:'дн.', q:'кач.', nps:'оценка', pct:'%' };
     return map[unit] || '';
   }
 

@@ -1059,10 +1059,10 @@ function renderGame() {
         </div>
       </div>
       <div class="nps-row">
-        <span class="nps-label">NPS</span>
+        <span class="nps-label" data-tip="Оценка клиента: насколько клиент доволен проектом. Низкая → риск расторжения; высокая → бонус и репутация при сдаче." style="cursor:help">Оценка</span>
         <div class="nps-wrap"><div class="nps-fill" style="width:${nps}%;background:${nc}"></div></div>
         <span class="nps-val" style="color:${nc}">${nps}</span>
-        ${(()=>{ const _aq=G.staff.length>0?Math.round(getQuality()/G.staff.length):0; return _aq>60?`<span data-tip="Среднее качество команды: ${_aq}. Высокое среднее качество (70+) даёт буст к NPS при сдаче." style="font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(251,191,36,.1);color:var(--amber);font-weight:600;cursor:help">⭐ Кач ${_aq}</span>`:''; })()}
+        ${(()=>{ const _aq=G.staff.length>0?Math.round(getQuality()/G.staff.length):0; return _aq>60?`<span data-tip="Среднее качество команды: ${_aq}. Высокое среднее качество (70+) даёт буст к оценке клиента при сдаче." style="font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(251,191,36,.1);color:var(--amber);font-weight:600;cursor:help">⭐ Кач ${_aq}</span>`:''; })()}
         <span class="nps-btn" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
           ${_isLC
             // LC-проект
@@ -1082,7 +1082,7 @@ function renderGame() {
               <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>`
             // Обычный проект: стандартные кнопки
             : `${canComplete?`<button class="btn btn-xs" style="background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.3);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="completeProject('${c.id}')" title="Проект выполнен — получить оплату">🏁 Завершить</button>`:''}
-               <button class="btn btn-xs btn-ghost" onclick="investInClient('${c.id}')" ${!affordable?'disabled':''} title="−20 000₽ → NPS +25">💬 −20К</button>
+               <button class="btn btn-xs btn-ghost" onclick="investInClient('${c.id}')" ${!affordable?'disabled':''} data-tip="−20 000 ₽ → оценка клиента +25 (вложиться в отношения с клиентом)" style="cursor:help">💬 −20К</button>
                <button class="btn btn-xs" style="background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25);padding:4px 8px;font-size:10px;border-radius:5px;font-weight:600;cursor:pointer" onclick="terminateContract('${c.id}')" title="Досрочное расторжение (−10 реп.)">✕</button>`
           }
         </span>
@@ -1246,7 +1246,7 @@ function renderGame() {
       if (def.speedBonus) bonuses.push(`<span style="color:var(--green)">Speed +${Math.round(def.speedBonus*100)}%</span>`);
       if (role==='lawyer')    bonuses.push(`<span style="color:var(--amber);font-size:10px">риски −${def.grade==='sr'?70:def.grade==='jr'?30:50}%</span>`);
       if (role==='smm')       bonuses.push(`<span style="color:var(--teal);font-size:10px">+1 лид/скаут</span>`);
-      if (role==='hr')        bonuses.push(`<span style="color:var(--teal);font-size:10px">NPS +${def.grade==='sr'?4:def.grade==='jr'?2:3}/мес · найм 1 дн</span>`);
+      if (role==='hr')        bonuses.push(`<span style="color:var(--teal);font-size:10px">оценка клиента +${def.grade==='sr'?4:def.grade==='jr'?2:3}/мес · найм 1 дн</span>`);
       if (role==='developer') bonuses.push(`<span style="color:var(--accent2);font-size:10px">тех-проекты</span>`);
 
       let lockHint = '';
@@ -1332,8 +1332,8 @@ function renderGame() {
     { val:15, label:'Гос./Рет.' },
   ];
   const staffQ = G.staff.reduce((s,x)=>s+(x.quality||0),0);
-  const qBar = makeCapBar(qv, 40, qThresholds, qCl, 'Нанять Дизайнера (+20 Q)');
-  const vBar = makeCapBar(vv, 20, vThresholds, vCl, 'Нанять Копирайтера (+15 V)');
+  const qBar = makeCapBar(qv, 40, qThresholds, qCl, 'Нанять Дизайнера (+20 качества)');
+  const vBar = makeCapBar(vv, 20, vThresholds, vCl, 'Нанять Копирайтера (+15 объёма)');
 
   // Q breakdown hint
   const qBreakdown=[];
@@ -1445,7 +1445,7 @@ function renderGame() {
       ${kompaktChip({ label:'Объём', value:vv, valueColor:vCl, bar:vBar,
         tip:'Объём — производственная ёмкость по контенту. Ключ доступа к клиентам (стартапы → гос/ретейл). Поднимают: копирайтеры, SMM.' })}
       ${kompaktChip({ label:'Репутация', value:Math.round(G.reputation), valueColor:repC, bar:repBar,
-        tip:'Репутация агентства (0–100). Открывает более крупные тиры проектов и улучшает входящие предложения. Растёт за удачные сдачи (высокий NPS), падает за провалы и просрочки.' })}
+        tip:'Репутация агентства (0–100). Открывает более крупные тиры проектов и улучшает входящие предложения. Растёт за удачные сдачи (высокая оценка клиента), падает за провалы и просрочки.' })}
       ${kompaktChip({ label:'Портфолио', value:pf, valueColor:pfCl, bar:pfBar,
         tip:'Портфолио — баллы за собранные кейсы. Открывает доступ к крупным клиентам и усиливает качество. Растёт за сдачи и сборку кейсов во вкладке «Портфолио».' })}
     </div>
@@ -1454,8 +1454,8 @@ function renderGame() {
     ${_allClear
       ? `<div style="text-align:center;padding:7px 0 5px;color:var(--muted);font-size:11px;border:1px dashed rgba(255,255,255,.07);border-radius:7px;margin-bottom:8px">✓ всё в норме</div>`
       : `<div style="display:grid;grid-template-columns:${_sigCols};gap:6px;margin-bottom:8px">
-          ${_sigNps  ? mc({ id:'nps',  label:'NPS',                      value:avgNps,              valueColor:npsCl,
-            tip: 'При NPS < 40 клиент расторгает контракт. Повышается инвестицией (−20К → +25 NPS).' }) : ''}
+          ${_sigNps  ? mc({ id:'nps',  label:'Оценка клиента',           value:avgNps,              valueColor:npsCl,
+            tip: 'Средняя оценка клиента (удовлетворённость). При оценке < 40 клиент расторгает контракт. Повышается инвестицией (−20К → +25 оценки).' }) : ''}
           ${_sigLoad ? mc({ id:'load', label:'Мощность',                 value:loadVal,             valueColor:loadCol,
             bar:loadBar, sub:`<span style="${loadSubCol}">${loadSub}</span>`,
             tip: 'Команда / Проекты мощн. Если мощности команды не хватает — прогресс замедляется. Назначь сотрудников на проекты или найми новых.' }) : ''}
@@ -1537,7 +1537,7 @@ function buildDashboard(won) {
   document.getElementById('r-sub').textContent=won
     ?`${spec.name} — ${G.monthsPlayed} мес. · ${fmtK(G.money)} в банке. Можно продолжить или зафиксировать результат.`
     :G.monthsPlayed<4?'Кассовый разрыв: расходы съели стартовый капитал до появления стабильных проектов.'
-    :'Рынок суров. NPS деградировал, клиенты ушли раньше, чем выросла выручка.';
+    :'Рынок суров. Оценка клиентов деградировала, клиенты ушли раньше, чем выросла выручка.';
 
   const peak=Math.max(...G.history.map(h=>h.money));
   const churned=DECISIONS.filter(d=>d.type==='churn').length;
@@ -1630,9 +1630,9 @@ function generateInsights(won) {
 
   if (scouts===0) ins.push({icon:'🔍',text:'<strong>Ни одного проекта не подписано через скаутинг.</strong> Без активного поиска агентство живёт только на overhead — деньги утекают каждый месяц.'});
   if (scouts>0)   ins.push({icon:'📋',text:`<strong>Подписано ${scouts} проект${scouts===1?'':scouts<5?'а':'ов'} через скаутинг.</strong> Качество скаутинга зависит от репутации — чем выше, тем лучше пул предложений.`});
-  if (churned>0)  ins.push({icon:'💔',text:`<strong>${churned} клиент${churned===1?'':churned<5?'а':'ов'} ушли органически.</strong> NPS падает без качества и объёма — Дизайнер и Копирайтер напрямую снижают риск оттока.`});
-  if (churned===0&&scouts>0) ins.push({icon:'✅',text:'<strong>Ни одного органического оттока.</strong> NPS держался выше критического уровня на протяжении всей игры.'});
-  if (hired===0) ins.push({icon:'👤',text:'<strong>Команда так и не собрана.</strong> Без Дизайнера и Копирайтера качество/объём равны нулю — это блокирует дорогие проекты и ускоряет NPS-деградацию.'});
+  if (churned>0)  ins.push({icon:'💔',text:`<strong>${churned} клиент${churned===1?'':churned<5?'а':'ов'} ушли органически.</strong> Оценка клиентов падает без качества и объёма — Дизайнер и Копирайтер напрямую снижают риск оттока.`});
+  if (churned===0&&scouts>0) ins.push({icon:'✅',text:'<strong>Ни одного органического оттока.</strong> Оценка клиентов держалась выше критического уровня на протяжении всей игры.'});
+  if (hired===0) ins.push({icon:'👤',text:'<strong>Команда так и не собрана.</strong> Без Дизайнера и Копирайтера качество/объём равны нулю — это блокирует дорогие проекты и ускоряет деградацию оценки клиентов.'});
   if (peakM>0&&peakM<G.history.length-2) ins.push({icon:'📉',text:`<strong>Пик достигнут в ${G.history[peakM].label}</strong>, затем кривая пошла вниз. Вероятная причина: отток клиентов или рост постоянных расходов без новых проектов.`});
   if (won) ins.push({icon:'📊',text:`<strong>Победа за ${G.monthsPlayed} мес. — специализация: ${SPECS[G.spec].name}.</strong> В реальном агентстве этот путь занимает 18–36 месяцев.`});
   if (!won&&G.monthsPlayed<5) ins.push({icon:'⚡',text:`<strong>Банкротство за ${G.monthsPlayed} мес.</strong> Overhead ${fmt(OVERHEAD)}/мес + зарплаты без выручки — классический кассовый разрыв первого года.`});
@@ -1673,8 +1673,8 @@ function renderPortfolioTab() {
   const bonusSummary=hasBonuses
     ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.2);border-radius:9px;align-items:center">
         <span style="font-size:11px;color:var(--sub)">Суммарные бонусы портфолио:</span>
-        ${totalQ>0?`<span style="font-size:12px;color:var(--teal);font-weight:700">Q +${totalQ}</span>`:''}
-        ${totalRep>0?`<span style="font-size:12px;color:var(--green);font-weight:700">Реп +${totalRep}/мес</span>`:''}
+        ${totalQ>0?`<span style="font-size:12px;color:var(--teal);font-weight:700">Качество +${totalQ}</span>`:''}
+        ${totalRep>0?`<span style="font-size:12px;color:var(--green);font-weight:700">Репутация +${totalRep}/мес</span>`:''}
         ${totalScout>0?`<span style="font-size:12px;color:var(--purple);font-weight:700">+${totalScout} лид/скаутинг</span>`:''}
       </div>` : '';
 
@@ -1702,7 +1702,7 @@ function renderPortfolioTab() {
             <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(168,85,247,.15);color:${gd.color};font-weight:700">${gd.icon} ${gd.label}</span>
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">${bonusPills||`<span style="font-size:10px;color:var(--muted)">без бонусов</span>`}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:3px">NPS при закрытии: ${c.finalNPS} · сборка: ${c.daysSpent} дн.</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">Оценка клиента при закрытии: ${c.finalNPS} · сборка: ${c.daysSpent} дн.</div>
         </div>
         <button class="btn btn-xs" style="background:rgba(248,81,73,.08);color:var(--red);border:1px solid rgba(248,81,73,.2);flex-shrink:0" onclick="removeCase('${c.id}')">Убрать</button>
       </div>`;
@@ -1722,7 +1722,7 @@ function renderPortfolioTab() {
   } else if (available.length===0){
     buildHtml=`<div style="text-align:center;padding:14px 0;color:var(--sub);font-size:13px">Все завершённые проекты уже оформлены в кейсы.</div>`;
   } else {
-    buildHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Потрать рабочие дни на сборку. Больше дней + выше Q + лучший NPS → выше грейд.</div>`;
+    buildHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Потрать рабочие дни на сборку. Больше дней + выше качество + лучше оценка клиента → выше грейд.</div>`;
     buildHtml+=available.map(p=>{
       const g1=CASE_GRADES[calcCaseGrade(p,2)];
       const g2=CASE_GRADES[calcCaseGrade(p,4)];
@@ -1744,7 +1744,7 @@ function renderPortfolioTab() {
           <div class="client-icon">${p.icon}</div>
           <div class="client-info">
             <div class="client-name">${p.name} ${statusBadge}</div>
-            <div class="client-desc">NPS при завершении: <strong style="color:${p.finalNPS>=55?'var(--green)':p.finalNPS>=40?'var(--amber)':'var(--red)'}">${p.finalNPS}</strong> · Tier ${p.tier}</div>
+            <div class="client-desc">Оценка клиента при завершении: <strong style="color:${p.finalNPS>=55?'var(--green)':p.finalNPS>=40?'var(--amber)':'var(--red)'}">${p.finalNPS}</strong> · Tier ${p.tier}</div>
           </div>
         </div>
         <div style="margin-top:10px">
@@ -1857,9 +1857,9 @@ function renderAITab() {
 
   // Пассивные бонусы текущего уровня
   const passives = [];
-  if (currentLevel.passiveQ)   passives.push(`+${currentLevel.passiveQ} Q/мес`);
-  if (currentLevel.passiveRep) passives.push(`+${currentLevel.passiveRep} реп/мес`);
-  if (currentLevel.passiveV)   passives.push(`+${currentLevel.passiveV} V/мес`);
+  if (currentLevel.passiveQ)   passives.push(`+${currentLevel.passiveQ} качества/мес`);
+  if (currentLevel.passiveRep) passives.push(`+${currentLevel.passiveRep} репутации/мес`);
+  if (currentLevel.passiveV)   passives.push(`+${currentLevel.passiveV} объёма/мес`);
   if (currentLevel.autoScout)  passives.push('Авто-скаутинг 🔍');
 
   // Рендер чата
@@ -1892,9 +1892,9 @@ function renderAITab() {
     if (isLocked)   cls += ' locked';
 
     const bonuses = [];
-    if (lvl.passiveQ)   bonuses.push(`Q +${lvl.passiveQ}`);
-    if (lvl.passiveRep) bonuses.push(`Реп +${lvl.passiveRep}`);
-    if (lvl.passiveV)   bonuses.push(`V +${lvl.passiveV}`);
+    if (lvl.passiveQ)   bonuses.push(`Качество +${lvl.passiveQ}`);
+    if (lvl.passiveRep) bonuses.push(`Репутация +${lvl.passiveRep}`);
+    if (lvl.passiveV)   bonuses.push(`Объём +${lvl.passiveV}`);
     if (lvl.autoScout)  bonuses.push('Авто-скаут');
 
     return `<div class="${cls}">
