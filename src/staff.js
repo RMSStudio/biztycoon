@@ -520,12 +520,12 @@ function _staffCardHTML(s) {
   const traitBadges = visTraits.slice(0, 3).map(t => {
     const td = TRAITS[t.id] || {};
     const cls = td.type === 'pos' ? 'trait-badge trait-pos' : 'trait-badge trait-neg';
-    return `<span class="${cls}" title="${td.desc || ''}">${td.icon || '?'} ${td.label || t.id}</span>`;
+    return `<span class="${cls}" data-tip="${(td.label || t.id) + (td.desc ? ' — ' + td.desc : '')}" style="cursor:help">${td.icon || '?'} ${td.label || t.id}</span>`;
   }).join('');
 
   const hidCount = (s.traits || []).filter(t => !t.revealed).length;
   const hidBadge = hidCount > 0
-    ? `<span class="trait-badge trait-hidden" title="Раскрываются в работе">❓ ×${hidCount}</span>` : '';
+    ? `<span class="trait-badge trait-hidden" data-tip="Скрытые трейты — раскроются в собеседовании или во время работы." style="cursor:help">❓ ×${hidCount}</span>` : '';
 
   return `<div class="staff-char-card">
     <div class="staff-char-avatar" style="background:${color}20;border:1.5px solid ${color}40">
@@ -828,8 +828,8 @@ function _candidateCard(c) {
   const traitHtml = vis.map(t => {
     const td = TRAITS[t.id] || {};
     const cls = td.type === 'pos' ? 'trait-badge trait-pos' : 'trait-badge trait-neg';
-    return `<span class="${cls}" title="${td.desc || ''}">${td.icon || '?'} ${td.label || t.id}</span>`;
-  }).join('') + (hidden > 0 ? `<span class="trait-badge trait-hidden">❓ ×${hidden}</span>` : '');
+    return `<span class="${cls}" data-tip="${(td.label || t.id) + (td.desc ? ' — ' + td.desc : '')}" style="cursor:help">${td.icon || '?'} ${td.label || t.id}</span>`;
+  }).join('') + (hidden > 0 ? `<span class="trait-badge trait-hidden" data-tip="Скрытые трейты — раскроются в собеседовании или во время работы." style="cursor:help">❓ ×${hidden}</span>` : '');
 
   const id = c.uid || c.id;
   return `
@@ -985,20 +985,20 @@ function _renderProfileContent(c, result) {
     </div>
 
     <div class="profile-stats-row">
-      <div class="profile-stat">
+      <div class="profile-stat" data-tip="Качество специалиста (0–10): его вклад в итоговое Качество проектов." style="cursor:help">
         <div class="profile-stat-val">${c.qStat || c.quality}</div>
         <div class="profile-stat-lbl">Качество</div>
       </div>
-      <div class="profile-stat">
+      <div class="profile-stat" data-tip="Скорость специалиста (0–10): вклад в темп выполнения проектов." style="cursor:help">
         <div class="profile-stat-val">${c.speedStat}</div>
         <div class="profile-stat-lbl">Скорость</div>
       </div>
-      <div class="profile-stat">
+      <div class="profile-stat" data-tip="Влияние на NPS клиента: насколько специалист улучшает (+) или ухудшает (−) оценку клиента при работе на проекте." style="cursor:help">
         <div class="profile-stat-val">${c.npsBonus > 0 ? '+' : ''}${c.npsBonus}</div>
-        <div class="profile-stat-lbl">NPS</div>
+        <div class="profile-stat-lbl">NPS клиента</div>
       </div>
       ${c.capacity > 0
-        ? `<div class="profile-stat">
+        ? `<div class="profile-stat" data-tip="Слоты проектов: Менеджер даёт +${c.capacity} — можно вести больше проектов одновременно." style="cursor:help">
             <div class="profile-stat-val">+${c.capacity}</div>
             <div class="profile-stat-lbl">Слоты</div>
           </div>`
