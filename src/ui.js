@@ -1062,7 +1062,7 @@ function renderGame() {
         <span class="nps-label">NPS</span>
         <div class="nps-wrap"><div class="nps-fill" style="width:${nps}%;background:${nc}"></div></div>
         <span class="nps-val" style="color:${nc}">${nps}</span>
-        ${(()=>{ const _aq=G.staff.length>0?Math.round(getQuality()/G.staff.length):0; return _aq>60?`<span title="Среднее качество команды: ${_aq}. Q>70 даёт NPS-буст при сдаче" style="font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(251,191,36,.1);color:var(--amber);font-weight:600;cursor:help">⭐ Q${_aq}</span>`:''; })()}
+        ${(()=>{ const _aq=G.staff.length>0?Math.round(getQuality()/G.staff.length):0; return _aq>60?`<span data-tip="Среднее качество команды: ${_aq}. Высокое среднее качество (70+) даёт буст к NPS при сдаче." style="font-size:10px;padding:1px 5px;border-radius:4px;background:rgba(251,191,36,.1);color:var(--amber);font-weight:600;cursor:help">⭐ Кач ${_aq}</span>`:''; })()}
         <span class="nps-btn" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
           ${_isLC
             // LC-проект
@@ -1421,10 +1421,10 @@ function renderGame() {
   // Репутация
   const repBar=`<div style="height:3px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="height:100%;width:${G.reputation}%;background:${repC};border-radius:2px"></div></div>`;
 
-  // ── Compact access chip (без тултипа — лаконичность) ──
-  const kompaktChip = ({ label, value, valueColor, bar }) => `
-    <div style="background:var(--bg2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:7px 8px">
-      <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;line-height:1">${label}</div>
+  // ── Compact access chip (с кастомной подсказкой data-tip) ──
+  const kompaktChip = ({ label, value, valueColor, bar, tip }) => `
+    <div ${tip ? `data-tip="${tip}"` : ''} style="background:var(--bg2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:7px 8px${tip ? ';cursor:help' : ''}">
+      <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
       <div style="font-size:18px;font-weight:700;color:${valueColor};line-height:1;margin-bottom:4px">${value}</div>
       ${bar}
     </div>`;
@@ -1440,10 +1440,14 @@ function renderGame() {
   document.getElementById('g-metrics').innerHTML=`
     <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;padding:0 1px">Ключи доступа</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px">
-      ${kompaktChip({ label:'Q', value:qv, valueColor:qCl, bar:qBar })}
-      ${kompaktChip({ label:'V', value:vv, valueColor:vCl, bar:vBar })}
-      ${kompaktChip({ label:'Реп', value:Math.round(G.reputation), valueColor:repC, bar:repBar })}
-      ${kompaktChip({ label:'Пф', value:pf, valueColor:pfCl, bar:pfBar })}
+      ${kompaktChip({ label:'Качество', value:qv, valueColor:qCl, bar:qBar,
+        tip:'Качество агентства — суммарное качество команды и бонусов. Ключ доступа к клиентам: чем выше, тем крупнее заказчики (стартапы → корпораты → госзаказ). Поднимают: дизайнеры, кейсы в портфолио, перки качества.' })}
+      ${kompaktChip({ label:'Объём', value:vv, valueColor:vCl, bar:vBar,
+        tip:'Объём — производственная ёмкость по контенту. Ключ доступа к клиентам (стартапы → гос/ретейл). Поднимают: копирайтеры, SMM.' })}
+      ${kompaktChip({ label:'Репутация', value:Math.round(G.reputation), valueColor:repC, bar:repBar,
+        tip:'Репутация агентства (0–100). Открывает более крупные тиры проектов и улучшает входящие предложения. Растёт за удачные сдачи (высокий NPS), падает за провалы и просрочки.' })}
+      ${kompaktChip({ label:'Портфолио', value:pf, valueColor:pfCl, bar:pfBar,
+        tip:'Портфолио — баллы за собранные кейсы. Открывает доступ к крупным клиентам и усиливает качество. Растёт за сдачи и сборку кейсов во вкладке «Портфолио».' })}
     </div>
 
     <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;padding:0 1px">Сигнальные лампы</div>
@@ -1462,11 +1466,11 @@ function renderGame() {
     }
 
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 2px;border-top:1px solid rgba(255,255,255,.06);font-size:10px">
-      <span style="color:var(--muted)">Скорость</span><span style="font-weight:700;color:${spdCol}">${spdPct}%</span>
+      <span data-tip="Скорость команды — общий множитель темпа выполнения проектов. Растёт от специалистов и перков производства." style="color:var(--muted);cursor:help">Скорость</span><span style="font-weight:700;color:${spdCol}">${spdPct}%</span>
       <span style="color:rgba(255,255,255,.12)">·</span>
-      <span style="color:var(--muted)">Слоты</span><span style="font-weight:700;color:var(--fg)">${G.activeClients.length}/${getCapacity()}</span>
+      <span data-tip="Слоты проектов — сколько проектов можно вести одновременно (занято/всего). Расширяются наймом Менеджера." style="color:var(--muted);cursor:help">Слоты</span><span style="font-weight:700;color:var(--fg)">${G.activeClients.length}/${getCapacity()}</span>
       <span style="color:rgba(255,255,255,.12)">·</span>
-      <span style="color:var(--muted)">Overhead</span><span style="font-weight:600;color:var(--red)">−${fmtK(OVERHEAD)}/мес</span>
+      <span data-tip="Overhead — постоянные расходы агентства в месяц (аренда, инструменты и т.п.), не зависят от проектов." style="color:var(--muted);cursor:help">Overhead</span><span style="font-weight:600;color:var(--red)">−${fmtK(OVERHEAD)}/мес</span>
     </div>`;
 
   // ── Log ──

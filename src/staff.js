@@ -542,10 +542,10 @@ function _staffCardHTML(s) {
         <div class="staff-char-cost">−${_fmtStaffMoney(cost)}</div>
       </div>
       <div class="staff-char-stats">
-        <span title="Качество">Q ${s.quality || s.qStat || '—'}</span>
-        <span title="Скорость">⚡ ${s.speedStat || '—'}</span>
-        <span title="Мощность — вклад специалиста в прогресс проекта" style="color:var(--teal)">⚙ ${wu} мощн.</span>
-        ${s.capacity > 0 ? `<span title="Слоты проектов">📂 +${s.capacity}</span>` : ''}
+        <span data-tip="Качество специалиста (0–10): вклад в итоговое Качество проектов." style="cursor:help">Кач ${s.quality || s.qStat || '—'}</span>
+        <span data-tip="Скорость специалиста (0–10): вклад в темп выполнения проектов." style="cursor:help">⚡ ${s.speedStat || '—'}</span>
+        <span data-tip="Мощность — вклад специалиста в прогресс проекта за месяц (грейд × качество × настроение)." style="color:var(--teal);cursor:help">⚙ ${wu} мощн.</span>
+        ${s.capacity > 0 ? `<span data-tip="Слоты проектов: Менеджер даёт +${s.capacity} — больше проектов одновременно." style="cursor:help">📂 +${s.capacity}</span>` : ''}
       </div>
       ${assignBadge}
       <div class="staff-char-bars">
@@ -562,18 +562,18 @@ function _staffCardHTML(s) {
         ? `<div class="staff-char-traits">${traitBadges}${hidBadge}</div>` : ''}
       <div style="display:flex;gap:5px;margin-top:7px">
         <button onclick="praiseStaff('${iid}')" ${praiseUsed ? 'disabled' : ''}
-          title="Похвалить: +10 настроения (раз в месяц, бесплатно)"
+          data-tip="Похвалить: +10 настроения. Бесплатно, раз в месяц на сотрудника."
           style="flex:1;font-size:10px;padding:4px 6px;border-radius:5px;cursor:${praiseUsed ? 'default' : 'pointer'};
                  border:1px solid rgba(45,212,191,.25);background:rgba(45,212,191,.06);color:var(--text);opacity:${praiseUsed ? '.45' : '1'}">
           👏 Похвала${praiseUsed ? ' ✓' : ''}</button>
         <button onclick="bonusStaff('${iid}')" ${bonusUsed ? 'disabled' : ''}
-          title="Премия: +12 настроения, +12 лояльности (раз в месяц, −${_fmtStaffMoney(bonusCost)})"
+          data-tip="Премия: +12 настроения и +12 лояльности. Стоит ${_fmtStaffMoney(bonusCost)} (≈половина оклада), раз в месяц на сотрудника."
           style="flex:1;font-size:10px;padding:4px 6px;border-radius:5px;cursor:${bonusUsed ? 'default' : 'pointer'};
                  border:1px solid rgba(99,102,241,.25);background:rgba(99,102,241,.06);color:var(--text);opacity:${bonusUsed ? '.45' : '1'}">
           💰 Премия${bonusUsed ? ' ✓' : ''}</button>
       </div>
     </div>
-    <button class="staff-fire-btn" onclick="fireStaffById('${iid}')" title="Уволить (выходное пособие: ${_fmtStaffMoney(cost*0.5)})">✕</button>
+    <button class="staff-fire-btn" onclick="fireStaffById('${iid}')" data-tip="Уволить сотрудника. Выходное пособие: ${_fmtStaffMoney(cost*0.5)} (≈половина оклада).">✕</button>
   </div>`;
 }
 
@@ -846,10 +846,10 @@ function _candidateCard(c) {
           <div class="cand-salary">${_fs(c.salaryAsk)}/мес</div>
         </div>
         <div class="cand-stats">
-          <span title="Качество">Q <strong>${c.qStat || c.quality}</strong></span>
-          <span title="Скорость">⚡ <strong>${c.speedStat}</strong></span>
-          <span title="Опыт">🕐 ${c.experience} л</span>
-          <span title="Мощность — вклад специалиста в прогресс проекта" style="color:var(--teal)">⚙ <strong>${wu}</strong> мощн.</span>
+          <span data-tip="Качество специалиста (0–10): вклад в итоговое Качество проектов." style="cursor:help">Кач <strong>${c.qStat || c.quality}</strong></span>
+          <span data-tip="Скорость специалиста (0–10): вклад в темп выполнения проектов." style="cursor:help">⚡ <strong>${c.speedStat}</strong></span>
+          <span data-tip="Опыт работы, лет." style="cursor:help">🕐 ${c.experience} л</span>
+          <span data-tip="Мощность — вклад специалиста в прогресс проекта за месяц." style="color:var(--teal);cursor:help">⚙ <strong>${wu}</strong> мощн.</span>
         </div>
         <div class="cand-traits">${traitHtml}</div>
       </div>
