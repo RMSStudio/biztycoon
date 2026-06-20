@@ -402,6 +402,7 @@ function fireStaffById(id) {
 // ── Monthly Processing ─────────────────────────────────
 
 function processStaffMonth() {
+  const _loyaltyLeavers = [];
   (G.staff || []).forEach(s => {
     if (s.state !== 'hired') return;
     s.monthsWithAgency = (s.monthsWithAgency || 0) + 1;
@@ -418,8 +419,26 @@ function processStaffMonth() {
       s.qStat      = s.quality;
     }
 
-    // Mood normalization
-    s.mood = Math.min(100, Math.max(10, s.mood || 70));
+    // Р.1: настроение сотрудника само убывает со временем (быстрее при усталости команды).
+    // mood влияет на эффективность (moodMult в calcStaffWorkUnit) — игроку надо его поддерживать.
+    const _fat = (typeof G !== 'undefined' && G.teamFatigue) || 0;
+    const _moodDecay = 3 + (_fat >= 60 ? 2 : 0) + (_fat >= 85 ? 2 : 0);
+    s.mood = Math.min(100, Math.max(10, (s.mood ?? 80) - _moodDecay));
+
+    // Р.1: низкая лояльность → риск ухода к конкуренту (последствие падения лояльности).
+    // Трейт «reliable» (никогда не уходит без предупреждения) — иммунитет.
+    if (!_hasTrait(s, 'reliable') && (s.loyalty || 0) < 25) {
+      const leaveChance = (25 - (s.loyalty || 0)) / 100 * 0.5; // до ~12% при лояльности 0
+      if (Math.random() < leaveChance) _loyaltyLeavers.push(s);
+    }
+  });
+
+  // Р.1: обработка уходов по лояльности (инфраструктура — как у fatigue-quit)
+  _loyaltyLeavers.forEach(s => {
+    if (typeof EventBus !== 'undefined') EventBus.emit('staff_quit', { staff: { ...s }, reason: 'loyalty' });
+    G.staff = G.staff.filter(x => x._iid !== s._iid);
+    if (typeof addLog === 'function') addLog(`🚪 ${s.name} ушёл к конкуренту — низкая лояльность`, 'red');
+    if (typeof checkCapacityExceeded === 'function') checkCapacityExceeded(s.name);
   });
 
   // Remove candidates that "went to competitors" (30% per month if pool > 2)
@@ -430,6 +449,35 @@ function processStaffMonth() {
 
 function _hasTrait(staff, traitId) {
   return (staff.traits || []).some(t => t.id === traitId && t.revealed);
+}
+
+// ── Р.1: персональные действия заботы (из окна «Команда») ──
+function _findStaffByIid(iid) {
+  return (G.staff || []).find(s => String(s._iid || s.uid || s.id) === String(iid));
+}
+function praiseStaff(iid) {
+  const s = _findStaffByIid(iid);
+  if (!s) return;
+  if (s._praiseMonth === G.month) { notify('👏 Уже хвалили в этом месяце', 'warning'); return; }
+  s.mood = Math.min(100, (s.mood ?? 80) + 10);
+  s._praiseMonth = G.month;
+  if (typeof addLog === 'function') addLog(`👏 ${s.name}: похвала — +10 настроения`, 'teal');
+  notify(`👏 ${s.name}: +10 настроения`, 'success');
+  if (typeof renderGame === 'function') renderGame();
+}
+function bonusStaff(iid) {
+  const s = _findStaffByIid(iid);
+  if (!s) return;
+  if (s._bonusMonth === G.month) { notify('💰 Премия уже выдана в этом месяце', 'warning'); return; }
+  const cost = Math.round((s.cost || s.salary || 0) * 0.5);
+  if ((G.money || 0) < cost) { notify('Недостаточно средств для премии', 'error'); return; }
+  G.money -= cost;
+  s.mood    = Math.min(100, (s.mood ?? 80) + 12);
+  s.loyalty = Math.min(100, (s.loyalty ?? 70) + 12);
+  s._bonusMonth = G.month;
+  if (typeof addLog === 'function') addLog(`💰 ${s.name}: премия −${_fmtStaffMoney(cost)} — +12 настроения, +12 лояльности`, 'teal');
+  notify(`💰 ${s.name}: +12 😊 · +12 🏅`, 'success');
+  if (typeof renderGame === 'function') renderGame();
 }
 
 // ── Team Panel Render ─────────────────────────────────
@@ -450,6 +498,12 @@ function _staffCardHTML(s) {
   const mood  = s.mood  ?? 80;
   const loy   = s.loyalty ?? 70;
   const iid   = s._iid || s.uid || s.id;
+
+  // Р.1: персональные действия заботы (раз в месяц на сотрудника)
+  const curMonth   = (typeof G !== 'undefined' ? G.month : 0);
+  const praiseUsed = s._praiseMonth === curMonth;
+  const bonusUsed  = s._bonusMonth  === curMonth;
+  const bonusCost  = Math.round((cost || 0) * 0.5);
 
   _recomputeWU(s);
   const wu = s._wu || 0;
@@ -506,6 +560,18 @@ function _staffCardHTML(s) {
       </div>
       ${traitBadges || hidBadge
         ? `<div class="staff-char-traits">${traitBadges}${hidBadge}</div>` : ''}
+      <div style="display:flex;gap:5px;margin-top:7px">
+        <button onclick="praiseStaff('${iid}')" ${praiseUsed ? 'disabled' : ''}
+          title="Похвалить: +10 настроения (раз в месяц, бесплатно)"
+          style="flex:1;font-size:10px;padding:4px 6px;border-radius:5px;cursor:${praiseUsed ? 'default' : 'pointer'};
+                 border:1px solid rgba(45,212,191,.25);background:rgba(45,212,191,.06);color:var(--text);opacity:${praiseUsed ? '.45' : '1'}">
+          👏 Похвала${praiseUsed ? ' ✓' : ''}</button>
+        <button onclick="bonusStaff('${iid}')" ${bonusUsed ? 'disabled' : ''}
+          title="Премия: +12 настроения, +12 лояльности (раз в месяц, −${_fmtStaffMoney(bonusCost)})"
+          style="flex:1;font-size:10px;padding:4px 6px;border-radius:5px;cursor:${bonusUsed ? 'default' : 'pointer'};
+                 border:1px solid rgba(99,102,241,.25);background:rgba(99,102,241,.06);color:var(--text);opacity:${bonusUsed ? '.45' : '1'}">
+          💰 Премия${bonusUsed ? ' ✓' : ''}</button>
+      </div>
     </div>
     <button class="staff-fire-btn" onclick="fireStaffById('${iid}')" title="Уволить (выходное пособие: ${_fmtStaffMoney(cost*0.5)})">✕</button>
   </div>`;
