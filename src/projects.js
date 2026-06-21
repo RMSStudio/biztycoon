@@ -232,6 +232,27 @@ const Projects = (() => {
 
   let _lcState = null; // { client, step, ... }
 
+  // Ф.1: выход из переговоров с возвратом на тот же шаг. При выходе сохраняем
+  // снимок _lcState на клиенте; при повторном входе в ту же фазу — резюмим.
+  function _exitLCFlow() {
+    if (_lcState && _lcState.client) {
+      const c = _lcState.client;
+      const snap = Object.assign({}, _lcState);
+      delete snap.client;
+      c._lcResume = { phase: c._lcPhase, snap };
+    }
+    _closeLCModal();
+    try { EventBus.emit('render'); } catch (_) {}
+  }
+  function _consumeResume(client, phase) {
+    if (client && client._lcResume && client._lcResume.phase === phase) {
+      const snap = client._lcResume.snap || {};
+      client._lcResume = null;
+      return snap;
+    }
+    return null;
+  }
+
   function showPhasePopup(client) {
     switch (client._lcPhase) {
       case 'proposal':    _showProposal(client);    break;
@@ -246,7 +267,7 @@ const Projects = (() => {
   }
 
   // Главный рендер LC-модалки
-  function _showLCModal({ client, icon, title, phaseLabel, body, choices, artGradient, artIcon, atmosphere }) {
+  function _showLCModal({ client, icon, title, phaseLabel, body, choices, artGradient, artIcon, atmosphere, exitable }) {
     // Auto-inject phase art if caller didn't provide explicit art
     if (!artGradient && client?._lcPhase && PHASE_ART[client._lcPhase]) {
       const pa = PHASE_ART[client._lcPhase];
@@ -303,6 +324,15 @@ const Projects = (() => {
 
     const choicesEl = document.getElementById('lc-modal-choices');
     choicesEl.innerHTML = '';
+    if (exitable) {
+      const ex = document.createElement('button');
+      ex.className = 'modal-choice';
+      ex.style.cssText = 'border-color:rgba(148,163,184,.25);background:rgba(255,255,255,.02);color:var(--sub);margin-bottom:6px';
+      ex.innerHTML = '<div class="choice-title">↩ Выйти (вернуться к этому шагу позже)</div>'
+        + '<div class="choice-desc" style="margin-top:3px;line-height:1.4">Прогресс переговоров сохранится — продолжите с текущего вопроса.</div>';
+      ex.onclick = () => _exitLCFlow();
+      choicesEl.appendChild(ex);
+    }
     _allChoices.forEach(ch => {
       const btn = document.createElement('button');
       btn.className = 'modal-choice';
@@ -475,13 +505,15 @@ const Projects = (() => {
   function _showProposal(client) {
     // Разовые и микро-проекты — всегда быстрый вариант (1 комбинированный вопрос)
     const tier = client.oneTime ? 'quick' : (client._negotiationTier || 'standard');
-    _lcState = { client, step: 0 };
+    const r = _consumeResume(client, 'proposal');
+    _lcState = r ? Object.assign({ client }, r) : { client, step: 0 };
+    const at = _lcState.step || 0;
     if (tier === 'quick') {
       _showProposalQuick(client);
     } else if (tier === 'challenge') {
-      _showChallengeStep(0);
+      _showChallengeStep(at);
     } else {
-      _showProposalStep(0);
+      _showProposalStep(at);
     }
   }
 
@@ -540,6 +572,7 @@ const Projects = (() => {
       icon:       q.icon,
       title:      q.title,
       phaseLabel: `${client.icon} ${client.name}  ·  КП — ${stepIdx + 1}/${total}`,
+      exitable:   true,
       body:       `<span style="color:var(--sub)">${q.body}</span>`,
       choices:    q.choices.map(ch => ({
         text: ch.text, desc: ch.desc, effect: ch.effect, highlight: ch.highlight,
@@ -577,6 +610,7 @@ const Projects = (() => {
       icon:       step.icon,
       title:      step.title,
       phaseLabel: `${client.icon} ${client.name}  ·  Переговоры — ${stepIdx + 1}/${total}`,
+      exitable:   true,
       body: `<div>
         <div style="font-size:13px;font-style:italic;color:var(--text);margin-bottom:8px;
              line-height:1.5;padding:8px 10px;border-left:2px solid rgba(148,163,184,.3);
@@ -618,8 +652,13 @@ const Projects = (() => {
   // Клиентская реакция убрана — для standard/quick она лишняя,
   // для challenge переговоры уже прошли в F1 пинг-понге.
   function _showNegotiation(client) {
-    // Тихий штраф если в КП умолчали о команде
-    if (hasTag(client, 'no_team_in_kp')) moodDelta(client, -5);
+    // Тихий штраф если в КП умолчали о команде (один раз на проект — не дублировать при возврате)
+    if (hasTag(client, 'no_team_in_kp') && !client._negPenaltyApplied) {
+      moodDelta(client, -5);
+      client._negPenaltyApplied = true;
+    }
+    _consumeResume(client, 'negotiation');
+    _lcState = { client, step: 0 };
     _negStep1(client);
   }
 
@@ -628,6 +667,7 @@ const Projects = (() => {
       client,
       icon: '💰', title: 'Условия оплаты',
       phaseLabel: `${client.icon} ${client.name}  ·  Переговоры — 2/2`,
+      exitable:   true,
       body: '<span style="color:var(--sub)">Как структурировать оплату по проекту?</span>',
       choices: [
         // v3.0: предоплата — не гарантия, а переговорный ролл с шансом проекта.
@@ -859,10 +899,15 @@ const Projects = (() => {
 
   function _showBrief(client) {
     // challenge — 2 события (полный бриф), standard — 1 (оперативно)
-    const count = client._negotiationTier === 'challenge' ? 2 : 1;
-    const pool  = [...BRIEF_EVENTS].sort(() => Math.random() - 0.5).slice(0, count);
-    _lcState = { client, step: 0, briefEvents: pool };
-    _showBriefStep(0);
+    const r = _consumeResume(client, 'brief');
+    if (r && Array.isArray(r.briefEvents)) {
+      _lcState = Object.assign({ client }, r);
+    } else {
+      const count = client._negotiationTier === 'challenge' ? 2 : 1;
+      const pool  = [...BRIEF_EVENTS].sort(() => Math.random() - 0.5).slice(0, count);
+      _lcState = { client, step: 0, briefEvents: pool };
+    }
+    _showBriefStep(_lcState.step || 0);
   }
 
   function _showBriefStep(stepIdx) {
@@ -874,6 +919,7 @@ const Projects = (() => {
       client,
       icon: ev.icon, title: ev.title,
       phaseLabel: `${client.icon} ${client.name}  ·  Бриф — ${stepIdx + 1}/${total}`,
+      exitable:   true,
       body: `<span style="color:var(--sub)">${ev.body}</span>`,
       choices: ev.choices.map(ch => ({
         text: ch.text, desc: ch.desc, effect: ch.effect, highlight: ch.highlight,
@@ -972,9 +1018,14 @@ const Projects = (() => {
   ];
 
   function _showLegal(client) {
-    const hasLawyer = typeof hasRole !== 'undefined' && hasRole('lawyer');
-    _lcState = { client, step: 0, hasLawyer };
-    _showLegalStep(0);
+    const r = _consumeResume(client, 'legal');
+    if (r) {
+      _lcState = Object.assign({ client }, r);
+    } else {
+      const hasLawyer = typeof hasRole !== 'undefined' && hasRole('lawyer');
+      _lcState = { client, step: 0, hasLawyer };
+    }
+    _showLegalStep(_lcState.step || 0);
   }
 
   function _showLegalStep(stepIdx) {
@@ -990,6 +1041,7 @@ const Projects = (() => {
       client,
       icon: pt.icon, title: pt.title,
       phaseLabel: `${client.icon} ${client.name}  ·  Юридика — ${stepIdx + 1}/${total}`,
+      exitable:   true,
       body: `<span style="color:var(--sub)">${pt.body}</span>${lawyerHint}`,
       choices: pt.choices.map(ch => ({
         text: ch.text, desc: ch.desc, effect: ch.effect,

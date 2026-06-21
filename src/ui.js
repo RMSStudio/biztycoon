@@ -978,15 +978,20 @@ function renderGame() {
       const barW   = Math.min(100, (effPct / 220) * 100);
 
       // Фаундер — всегда на каждом проекте (+2 базовых)
-      const chips = [`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
+      const founderChip = `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
         border-radius:4px;background:rgba(255,255,255,.05);color:var(--muted);border:1px solid rgba(255,255,255,.1);
-        font-size:10px;font-weight:600" title="Фаундер работает на всех проектах">👤 Ты +2</span>`];
+        font-size:10px;font-weight:600" title="Фаундер работает на всех проектах">👤 Ты +2</span>`;
 
+      // Ф.1: чипы назначенных — всегда; остальные — сворачиваются при большом штате
+      const assignedChips = [];
+      const restChips = [];
+      let freeCount = 0;
       team.forEach(s => {
         const iid   = s._iid || s.uid || s.id;
         const here  = (c._assignedStaff || []).includes(iid);
         const other = s._assignedProjectId && s._assignedProjectId !== c.id
           ? (G.activeClients || []).find(x => x.id === s._assignedProjectId) : null;
+        if (!here && !other) freeCount++;
         const wu    = calcStaffWorkUnit(s);
         const first = (s.name || '').split(' ')[0] || '?';
         const style = here
@@ -998,10 +1003,22 @@ function renderGame() {
           : other ? `Сейчас на «${other.name}» — кликни, чтобы перевести сюда`
           : 'Назначить на проект';
         const act   = here ? `unassignAndRefresh('${iid}','${c.id}')` : `assignAndRefresh('${iid}','${c.id}')`;
-        chips.push(`<button style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
+        const chipHtml = `<button style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
           border-radius:4px;${style};font-size:10px;font-weight:600;cursor:pointer" title="${hint}"
-          onclick="${act}">${s.icon || '👤'} ${first} +${wu}${other ? ' ↪' : here ? ' ✕' : ''}</button>`);
+          onclick="${act}">${s.icon || '👤'} ${first} +${wu}${other ? ' ↪' : here ? ' ✕' : ''}</button>`;
+        (here ? assignedChips : restChips).push(chipHtml);
       });
+
+      // Сворачивание: при штате >6 прячем неназначенных за «развернуть»
+      const collapse = team.length > 6;
+      const expanded = !!_teamChipsExpanded[c.id];
+      const chips = [founderChip, ...assignedChips];
+      if (!collapse || expanded) {
+        chips.push(...restChips);
+        if (collapse && restChips.length) chips.push(`<button onclick="toggleTeamChips('${c.id}')" style="padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.04);color:var(--sub);border:1px solid rgba(255,255,255,.14);font-size:10px;font-weight:600;cursor:pointer" title="Свернуть">▲ свернуть</button>`);
+      } else if (restChips.length) {
+        chips.push(`<button onclick="toggleTeamChips('${c.id}')" style="padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.04);color:var(--sub);border:1px dashed rgba(255,255,255,.2);font-size:10px;font-weight:600;cursor:pointer" title="Показать остальных">＋ ещё ${restChips.length} (развернуть)</button>`);
+      }
 
       const hintRow = team.length === 0
         ? `<span style="font-size:10px;color:var(--amber)">Команды нет — проект идёт только на твоей мощности (+2)</span>`
@@ -1014,8 +1031,12 @@ function renderGame() {
       return `<div style="margin-top:6px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px">
           <span style="font-size:10px;color:var(--sub)">👥 Команда на проекте · ⚙ ${Math.round(pThr)} / ${pLoad} мощн. · <b style="color:${barCol}">${effPct}%${capped ? ' <span style=\'color:var(--muted);font-weight:400\'>убыв. отдача</span>' : ''}</b></span>
-          <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px;flex-shrink:0;white-space:nowrap"
-            onclick="openAssignModal('${c.id}')">Подробнее</button>
+          <span style="display:flex;gap:5px;flex-shrink:0">
+            <button class="btn btn-xs" ${freeCount === 0 ? 'disabled' : ''} style="font-size:10px;padding:2px 8px;white-space:nowrap;background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.35);border-radius:5px;font-weight:700;cursor:${freeCount === 0 ? 'not-allowed' : 'pointer'};${freeCount === 0 ? 'opacity:.45' : ''}"
+              title="${freeCount === 0 ? 'Нет свободных специалистов' : 'Подобрать команду автоматически под нагрузку проекта'}" onclick="autoAssignAndRefresh('${c.id}')">⚡ Авто</button>
+            <button class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 7px;white-space:nowrap"
+              onclick="openAssignModal('${c.id}')">Подробнее</button>
+          </span>
         </div>
         <div style="height:3px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden;margin-bottom:4px">
           <div style="height:100%;width:${barW}%;background:${barCol};border-radius:2px;transition:width .4s"></div>
@@ -2087,7 +2108,11 @@ function _renderAssignModal() {
         effPct >= 100 ? ' · <span style="color:var(--green)">✓ достаточно</span>' : ''}
     </div>
   </div>
-  <div style="font-size:11px;color:var(--sub);margin-bottom:8px;font-weight:600">СОТРУДНИКИ</div>`;
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <span style="font-size:11px;color:var(--sub);font-weight:600">СОТРУДНИКИ</span>
+    <button class="btn btn-xs" style="font-size:11px;padding:4px 12px;background:rgba(45,212,191,.12);color:var(--teal);border:1px solid rgba(45,212,191,.35);border-radius:6px;font-weight:700;cursor:pointer"
+      title="Подобрать свободных под нагрузку проекта" onclick="autoAssignAndRefresh('${pid}')">⚡ Авто-подбор</button>
+  </div>`;
 
   if (staff.length === 0) {
     html += `<div style="text-align:center;color:var(--sub);padding:24px;font-size:13px">Команды пока нет — наймите специалистов</div>`;
@@ -2149,6 +2174,29 @@ function unassignAndRefresh(staffId, projectId) {
     _renderAssignModal();
     renderGame();
   }
+}
+
+// Ф.1: состояние «развёрнуты ли чипы команды» по карточке проекта
+let _teamChipsExpanded = {};
+function toggleTeamChips(cid) {
+  _teamChipsExpanded[cid] = !_teamChipsExpanded[cid];
+  renderGame();
+}
+
+// Ф.1: авто-подбор команды прямо с карточки проекта (переиспользует autoAssignOptimal)
+function autoAssignAndRefresh(cid) {
+  const c = (G.activeClients || []).find(x => x.id === cid);
+  if (!c) return;
+  if (typeof autoAssignOptimal !== 'function' || typeof assignStaffToProject !== 'function') return;
+  const picks = autoAssignOptimal(c) || [];
+  if (!picks.length) {
+    if (typeof notify === 'function') notify('Нет свободных специалистов для авто-назначения', 'error');
+    return;
+  }
+  picks.forEach(s => assignStaffToProject(s._iid || s.uid || s.id, cid));
+  if (typeof notify === 'function') notify(`⚡ Авто-назначено: ${picks.length} спец. на «${c.name}»`, 'success');
+  if (document.getElementById('staff-assign-modal')?.classList.contains('active')) _renderAssignModal();
+  renderGame();
 }
 
 // ══════════════════════════════════════════════════════
