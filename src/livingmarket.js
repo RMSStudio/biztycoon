@@ -2569,7 +2569,8 @@
   if (typeof EventBus !== 'undefined' && EventBus.on) {
     EventBus.on('render', () => {
       try {
-        if (typeof G !== 'undefined' && G && G._spec) {  // партия запущена
+        // партия запущена (G._spec теряется при авто-резюме — проверяем надёжнее)
+        if (typeof G !== 'undefined' && G && (G._spec || G.month != null || G.market)) {
           _initLiving();
           _renderStagePill();
         }

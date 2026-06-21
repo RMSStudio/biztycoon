@@ -145,6 +145,7 @@ const inlined = [
   `      _restore(newest.state);`,
   `      goTo('screen-game');`,
   `      if (typeof renderGame === 'function') renderGame();`,
+  `      if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('render');`,
   `      if (typeof notify === 'function') notify('⏮ Сессия восстановлена', 'info');`,
   `    } catch (e) { console.warn('autoResume failed:', e); }`,
   `  })();`,
