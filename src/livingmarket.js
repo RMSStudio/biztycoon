@@ -140,7 +140,7 @@
           { label: 'топ-3 ИЛИ награда года', cur: (rank <= 3 || awards >= 1) ? 1 : 0, max: 1 },
         ]);
       },
-      unlocks: 'второй офис (+capacity), хантинг у конкурентов, T5-сделки',
+      unlocks: 'второй офис (+capacity), хантинг и поглощение конкурентов, T5-сделки',
     },
     {
       id: 'holding',
@@ -154,14 +154,16 @@
         const staff      = _countStaff(g);
         const rev        = _cumulativeRevenue(g);
         const monthsAt1  = (g.market && g.market.monthsAtRank1) || 0;
+        const acq        = (g.market && g.market.acquisitions) || 0;
         return _composite([
           { label: 'сдач',              cur: dels,       max: 50 },
           { label: 'штат',              cur: staff,      max: 18 },
           { label: 'выручка',           cur: rev,        max: 200_000_000, fmt: 'money' },
           { label: 'мес. на #1 рейтинга', cur: monthsAt1, max: 3 },
+          { label: 'поглощений',        cur: acq,        max: 1 },
         ]);
       },
-      unlocks: 'саббренды (параллельные команды), поглощение конкурентов, T6',
+      unlocks: 'саббренды (параллельные команды), T6-сделки',
     },
     {
       id: 'empire',
@@ -169,7 +171,7 @@
       name: 'Империя',
       icon: '👑',
       color: '#fde047',
-      sub: '100 сдач · поглощён ≥1 конкурент · 500M ₽',
+      sub: '100 сдач · поглощено ≥3 конкурента · 500M ₽',
       gate: (g) => {
         const dels = _countDeliveries(g);
         const rev  = _cumulativeRevenue(g);
@@ -177,7 +179,7 @@
         return _composite([
           { label: 'сдач',         cur: dels, max: 100 },
           { label: 'выручка',      cur: rev,  max: 500_000_000, fmt: 'money' },
-          { label: 'поглощений',   cur: acq,  max: 1 },
+          { label: 'поглощений',   cur: acq,  max: 3 },
         ]);
       },
       unlocks: 'T7, престиж-цели, режим «легаси»',
@@ -1339,25 +1341,116 @@
     return { ok: true, id };
   }
 
-  // cost = 500 000 + 3× месячная выручка конкурента
-  // Эффект: конкурент исчезает, G.market.acquisitions++, +1 скаутинг, +3 реп
-  function acquireCompetitor(competitorId) {
+  // ── Поглощения (Ф.8) ────────────────────────────────────────────────
+  // Доступно со стадии «Сеть» (3). Цена от размера конкурента; перк
+  // «M&A-отдел» (deal5) даёт скидку −32%, владеемая доля (слой A) — ещё
+  // пропорционально %. acquisitions++ кормит гейты Холдинга (≥1) и
+  // Империи (≥3). При выкупе игрок выбирает режим присвоения активов.
+
+  function _hasMAdept() { return _isNodeOwned('deal5'); }
+
+  // Доля игрока в конкуренте (слой A — постепенный выкуп). 0..100.
+  function _equityOwned(competitorId) {
+    return (G.market && G.market.holdings && G.market.holdings[competitorId]) || 0;
+  }
+
+  // Полная цена выкупа конкурента (превью для UI). Учитывает перк и долю.
+  function acquisitionCost(comp) {
+    if (!comp) return 0;
+    const mr = comp.monthlyRevenue || Math.round((comp.revenue || 0) / 12) || 200_000;
+    let cost = 600_000 + Math.round(mr * 3) + Math.round((comp.revenue || 0) * 0.04);
+    if (_hasMAdept()) cost = Math.round(cost * 0.68);          // −32% за «M&A-отдел»
+    const owned = _equityOwned(comp.id);
+    if (owned > 0) cost = Math.round(cost * (1 - owned / 100)); // доплата за остаток
+    return Math.max(50_000, Math.round(cost / 1000) * 1000);
+  }
+
+  // Что игрок получит при поглощении (превью + применение). От архетипа.
+  function acquisitionYield(comp) {
+    const arch = comp.archetype || 'networker';
+    let staffN = 2;
+    if (arch === 'machine' || arch === 'hireMachine' || arch === 'factory') staffN = 3;
+    else if (arch === 'boutique') staffN = 1;     // мало, но топовые
+    else if (arch === 'networker') staffN = 2;
+    const topGrade  = (arch === 'boutique');
+    const portfolio = Math.max(1, Math.round((comp.deliveries || 0) / 6) + 1);
+    const leads     = (arch === 'networker') ? 2 : 1;
+    const cash      = Math.round((comp.revenue || 0) * 0.35 / 1000) * 1000;
+    return { staffN, topGrade, portfolio, leads, cash, arch };
+  }
+
+  function _integrateStaff(comp, y) {
+    if (typeof generateCandidate !== 'function') return 0;
+    const roles  = ['designer', 'developer', 'manager', 'copywriter', 'smm'];
+    const grades = y.topGrade ? ['senior', 'lead'] : ['middle', 'senior', 'junior'];
+    let n = 0;
+    for (let i = 0; i < y.staffN; i++) {
+      try {
+        const role  = roles[Math.floor(Math.random() * roles.length)];
+        const grade = grades[Math.floor(Math.random() * grades.length)];
+        const c = generateCandidate(role, grade);
+        c.state            = 'hired';
+        c.cost             = c.salaryAsk;
+        c.salary           = c.cost;
+        c.monthsWithAgency = 0;
+        // интеграционный фрикшен (Р.1): приходят настороженными
+        c.mood    = 35 + Math.floor(Math.random() * 16);   // 35..50
+        c.loyalty = 30 + Math.floor(Math.random() * 16);   // 30..45
+        c._acquiredFrom = comp.name;
+        G.staff = [...(G.staff || []), c];
+        n++;
+      } catch (_) {}
+    }
+    return n;
+  }
+
+  // mode: 'integrate' (по умолч.) | 'liquidate' | 'subbrand'
+  function acquireCompetitor(competitorId, mode) {
     if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
     const stage = (G.living && (G.living.stage || 0)) || 0;
-    if (stage < 4) return { ok: false, reason: 'stage_required', stageReq: 4 };
+    if (stage < 3) return { ok: false, reason: 'stage_required', stageReq: 3 };
     const idx = (G.market.competitors || []).findIndex(c => c.id === competitorId);
     if (idx === -1) return { ok: false, reason: 'competitor_not_found' };
     const comp = G.market.competitors[idx];
-    const cost = 500_000 + Math.round((comp.monthlyRevenue || 200_000) * 3);
+    const cost = acquisitionCost(comp);
     if ((G.money || 0) < cost) return { ok: false, reason: 'insufficient_funds', cost };
+
+    mode = mode || 'integrate';
+    if (mode === 'subbrand' && stage < 4) mode = 'integrate'; // саббренды — c Холдинга
+    const y = acquisitionYield(comp);
+
     G.money -= cost;
     G.market.competitors.splice(idx, 1);
+    if (G.market.holdings) delete G.market.holdings[competitorId];
     G.market.acquisitions = (G.market.acquisitions || 0) + 1;
-    G.caseScoutBonus = (G.caseScoutBonus || 0) + 1;
-    G.reputation = Math.min(100, (G.reputation || 0) + 3);
-    try { EventBus.emit('assets_changed', { type: 'acquisition', id: competitorId }); } catch (_) {}
-    try { EventBus.emit('render');                                                      } catch (_) {}
-    return { ok: true, competitorId, cost, acquisitions: G.market.acquisitions };
+    G.reputation = Math.min(100, (G.reputation || 0) + 4);
+
+    let detail = '';
+    if (mode === 'liquidate') {
+      G.money     += y.cash;
+      const pf     = Math.max(1, Math.round(y.portfolio / 2));
+      G.portfolio  = (G.portfolio || 0) + pf;
+      detail = 'ликвидация: +' + _formatMoneyShort(y.cash) + ', +' + pf + ' портфолио';
+    } else if (mode === 'subbrand') {
+      G.portfolio      = (G.portfolio || 0) + y.portfolio;
+      G.caseScoutBonus = (G.caseScoutBonus || 0) + 1;
+      detail = 'саббренд: +' + y.portfolio + ' портфолио, +1 к скаутингу';
+    } else {
+      const hired      = _integrateStaff(comp, y);
+      G.portfolio      = (G.portfolio || 0) + y.portfolio;
+      G.caseScoutBonus = (G.caseScoutBonus || 0) + y.leads;
+      detail = 'интеграция: +' + hired + ' спец., +' + y.portfolio + ' портфолио, +' + y.leads + ' лид(ов)';
+    }
+
+    if (typeof addLog === 'function')
+      addLog('🤝 Поглощение: ' + comp.name + ' за ' + _formatMoneyShort(cost) + ' — ' + detail, 'violet');
+    if (typeof notify === 'function')
+      notify('Поглощён ' + comp.name + '! ' + (comp.icon || ''), 'success');
+
+    try { EventBus.emit('assets_changed', { type: 'acquisition', id: competitorId, mode }); } catch (_) {}
+    try { EventBus.emit('render');                                                            } catch (_) {}
+    if (typeof autoSave === 'function') { try { autoSave(); } catch (_) {} }
+    return { ok: true, competitorId, cost, mode, acquisitions: G.market.acquisitions };
   }
 
   function _initMarket() {
@@ -2642,6 +2735,9 @@
     purchaseOffice,
     createSubBrand,
     acquireCompetitor,
+    acquisitionCost,
+    acquisitionYield,
+    hasMAdept:             _hasMAdept,
     showAssetsModal,
     _renderAssetsModal,
     // v0.9 (Фаза C) — конкуренты + рейтинг рынка

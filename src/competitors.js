@@ -320,7 +320,14 @@
       else if (c.rank === 2) medal = '🥈';
       else if (c.rank === 3) medal = '🥉';
       const archLabel = c.isPlayer ? 'игрок' : (arch ? arch.name : c.archetype);
-      return '<div style="display:grid;grid-template-columns:36px 1fr 90px 70px 70px 60px;gap:8px;align-items:center;padding:8px 10px;border:1px solid ' + rowBorder + ';border-left:3px solid ' + rowColor + ';background:' + rowBg + ';border-radius:7px">' +
+      const pf  = (c.portfolio != null) ? c.portfolio : Math.max(0, Math.round((c.deliveries || 0) / 6));
+      const stf = (c.staff != null) ? c.staff : '—';
+      const acq = !c.isPlayer && _canAcquire();
+      const clickAttr = acq
+        ? ' onclick="Competitors.openAcquire(\'' + c.id + '\')" title="Поглотить конкурента" style="cursor:pointer;'
+        : ' style="';
+      return '<div' + clickAttr + 'display:grid;grid-template-columns:36px 1fr 90px 64px 56px 48px 28px;gap:8px;align-items:center;padding:8px 10px;border:1px solid ' + rowBorder + ';border-left:3px solid ' + rowColor + ';background:' + rowBg + ';border-radius:7px' + (acq ? ';transition:background .12s' : '') + '"' +
+        (acq ? ' onmouseover="this.style.background=\'rgba(167,139,250,.12)\'" onmouseout="this.style.background=\'' + rowBg + '\'"' : '') + '>' +
         '<div style="font-size:14px;font-weight:800;color:' + rowColor + ';text-align:center">' + medal + '</div>' +
         '<div style="min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text)"><span>' + c.icon + '</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + c.name + '</span></div>' +
@@ -328,13 +335,17 @@
         '</div>' +
         '<div style="text-align:right;font-size:11px;font-weight:700;color:var(--text)">' + _formatMoneyShort(c.revenue) + ' <span style="color:' + trendRevC + ';font-weight:800">' + trendRev + '</span></div>' +
         '<div style="text-align:right;font-size:11px;color:var(--text)">⭐ ' + Math.floor(c.reputation) + ' <span style="color:' + trendRepC + ';font-weight:800">' + trendRep + '</span></div>' +
-        '<div style="text-align:right;font-size:11px;color:var(--text)">📚 ' + c.portfolio + '</div>' +
-        '<div style="text-align:right;font-size:11px;color:var(--text)">👥 ' + c.staff + '</div>' +
+        '<div style="text-align:right;font-size:11px;color:var(--text)">📚 ' + pf + '</div>' +
+        '<div style="text-align:right;font-size:11px;color:var(--text)">👥 ' + stf + '</div>' +
+        '<div style="text-align:center;font-size:12px;color:' + (acq ? '#a78bfa' : 'transparent') + '">' + (acq ? '🤝' : '') + '</div>' +
       '</div>';
     }).join('');
-    const head = '<div style="display:grid;grid-template-columns:36px 1fr 90px 70px 70px 60px;gap:8px;padding:0 10px 6px;font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">' +
-        '<div></div><div>Конкурент</div><div style="text-align:right">Выручка</div><div style="text-align:right">Реп.</div><div style="text-align:right">Портф.</div><div style="text-align:right">Штат</div>' +
+    const head = '<div style="display:grid;grid-template-columns:36px 1fr 90px 64px 56px 48px 28px;gap:8px;padding:0 10px 6px;font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">' +
+        '<div></div><div>Конкурент</div><div style="text-align:right">Выручка</div><div style="text-align:right">Реп.</div><div style="text-align:right">Портф.</div><div style="text-align:right">Штат</div><div></div>' +
       '</div>';
+    const acqHint = _canAcquire()
+      ? '<div style="font-size:10px;color:#a78bfa;margin-top:8px;text-align:center">🤝 Кликните конкурента, чтобы поглотить его</div>'
+      : '<div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:center;font-style:italic">Поглощения откроются на стадии «Сеть»</div>';
     return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:660px;max-height:85vh;display:flex;flex-direction:column;width:96vw">' +
       '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">' +
         '<span style="font-size:28px">🏆</span>' +
@@ -346,8 +357,96 @@
       head +
       '<div style="display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1">' + rows + '</div>' +
       '<div style="font-size:10px;color:var(--muted);margin-top:10px;text-align:center;font-style:italic">Скоринг: выручка × 50/M + репутация × 0.3 + портфолио × 0.5</div>' +
+      acqHint +
       '<button onclick="document.getElementById(\'cmp-market-modal\').style.display=\'none\'" style="margin-top:10px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;align-self:center">Закрыть</button>' +
     '</div>';
+  }
+
+  // ── Поглощения (Ф.8) — диалог с карточки конкурента ──────────────────
+
+  function _LM() { return (typeof window !== 'undefined') ? window.LivingMarket : null; }
+
+  // Доступны ли поглощения игроку (стадия «Сеть» = 3+)
+  function _canAcquire() {
+    return !!(typeof G !== 'undefined' && G && G.living && (G.living.stage || 0) >= 3);
+  }
+
+  function openAcquire(id) {
+    if (!_canAcquire()) return;
+    const lm   = _LM();
+    const comp = (G.market && G.market.competitors || []).find(c => c.id === id);
+    if (!comp || !lm) return;
+    let m = document.getElementById('cmp-acquire-modal');
+    if (!m) {
+      m = document.createElement('div');
+      m.id = 'cmp-acquire-modal';
+      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:340;display:flex;align-items:center;justify-content:center';
+      m.onclick = e => { if (e.target === m) m.style.display = 'none'; };
+      document.body.appendChild(m);
+    }
+    m.innerHTML = _renderAcquireDialog(comp);
+    m.style.display = 'flex';
+  }
+
+  function _renderAcquireDialog(comp) {
+    const lm    = _LM();
+    const cost  = lm.acquisitionCost ? lm.acquisitionCost(comp) : 0;
+    const y     = lm.acquisitionYield ? lm.acquisitionYield(comp) : { staffN: 0, portfolio: 0, leads: 0, cash: 0 };
+    const perk  = lm.hasMAdept && lm.hasMAdept();
+    const money = (G && G.money) || 0;
+    const afford = money >= cost;
+    const stage  = (G && G.living && G.living.stage) || 0;
+    const arch   = ARCHETYPES[comp.archetype];
+    const pf     = (comp.portfolio != null) ? comp.portfolio : Math.max(0, Math.round((comp.deliveries || 0) / 6));
+
+    const modeBtn = (mode, icon, title, sub, on) => {
+      const dis = !on;
+      return '<button ' + (dis ? 'disabled' : 'onclick="Competitors.doAcquire(\'' + comp.id + '\',\'' + mode + '\')"') +
+        ' style="display:block;width:100%;text-align:left;margin-top:8px;padding:10px 12px;border-radius:9px;border:1px solid ' +
+        (dis ? 'var(--border)' : 'rgba(167,139,250,.5)') + ';background:' + (dis ? 'rgba(255,255,255,.02)' : 'rgba(167,139,250,.10)') +
+        ';color:' + (dis ? 'var(--muted)' : 'var(--text)') + ';cursor:' + (dis ? 'not-allowed' : 'pointer') + '">' +
+        '<div style="font-size:12px;font-weight:800">' + icon + ' ' + title + '</div>' +
+        '<div style="font-size:10px;color:var(--sub);margin-top:2px">' + sub + '</div>' +
+      '</button>';
+    };
+
+    const stat = (label, val) => '<div style="flex:1;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">' + label + '</div><div style="font-size:13px;font-weight:700;color:var(--text);margin-top:1px">' + val + '</div></div>';
+
+    return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:440px;width:94vw;max-height:88vh;overflow-y:auto">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
+        '<span style="font-size:26px">' + (comp.icon || '🏢') + '</span>' +
+        '<div><div style="font-size:16px;font-weight:800;color:var(--text);line-height:1.1">' + comp.name + '</div>' +
+        '<div style="font-size:10px;color:var(--sub)">' + (arch ? arch.name : comp.archetype) + ' · поглощение</div></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;margin:14px 0;padding:10px;background:rgba(255,255,255,.03);border-radius:9px">' +
+        stat('Выручка', _formatMoneyShort(comp.revenue)) + stat('Реп.', '⭐ ' + Math.floor(comp.reputation || 0)) + stat('Портф.', '📚 ' + pf) +
+      '</div>' +
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;padding:8px 0;border-top:1px dashed var(--border);border-bottom:1px dashed var(--border)">' +
+        '<span style="font-size:11px;color:var(--muted)">Цена выкупа' + (perk ? ' <span style="color:#86efac">(−32% M&A-отдел)</span>' : '') + '</span>' +
+        '<span style="font-size:16px;font-weight:800;color:' + (afford ? 'var(--text)' : '#fca5a5') + '">' + _formatMoneyShort(cost) + '</span>' +
+      '</div>' +
+      (afford ? '' : '<div style="font-size:10px;color:#fca5a5;margin-top:6px;text-align:center">Недостаточно средств (есть ' + _formatMoneyShort(money) + ')</div>') +
+      '<div style="font-size:10px;color:var(--muted);margin-top:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Что сделать с активами</div>' +
+      modeBtn('integrate', '🧩', 'Интегрировать', 'Влить ~' + y.staffN + ' спец. (со сниж. лояльностью), +' + y.portfolio + ' портфолио, +' + y.leads + ' лид(ов)', afford) +
+      modeBtn('liquidate', '💰', 'Ликвидировать', 'Распродать: +' + _formatMoneyShort(y.cash) + ', +' + Math.max(1, Math.round(y.portfolio / 2)) + ' портфолио', afford) +
+      modeBtn('subbrand', '🏷', 'Сделать саббрендом', stage >= 4 ? ('+' + y.portfolio + ' портфолио, +1 к скаутингу') : 'Откроется на стадии «Холдинг»', afford && stage >= 4) +
+      '<button onclick="document.getElementById(\'cmp-acquire-modal\').style.display=\'none\'" style="margin-top:14px;width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">Отмена</button>' +
+    '</div>';
+  }
+
+  function doAcquire(id, mode) {
+    const lm = _LM();
+    if (!lm || !lm.acquireCompetitor) return;
+    const res = lm.acquireCompetitor(id, mode);
+    if (res && res.ok) {
+      const am = document.getElementById('cmp-acquire-modal'); if (am) am.style.display = 'none';
+      try { _renderRankPill(); } catch (_) {}
+      if (document.getElementById('cmp-market-modal')) { try { showMarketModal(); } catch (_) {} }
+    } else if (res && res.reason === 'insufficient_funds') {
+      if (typeof notify === 'function') notify('Недостаточно средств для поглощения', 'error');
+    } else if (res && res.reason === 'stage_required') {
+      if (typeof notify === 'function') notify('Поглощения откроются на стадии «Сеть»', 'error');
+    }
   }
 
   // ── Обёртки startGame / advanceMonth ─────────────────────────────────
@@ -402,6 +501,9 @@
       getMarketSize,
       getScore,
       showMarketModal,
+      openAcquire,
+      doAcquire,
+      canAcquire:     _canAcquire,
       // dev/test
       _initMarket,
       _tickMarket,
