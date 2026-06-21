@@ -160,7 +160,7 @@ function startGame() {
   G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
-  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.calendarEvents=[]; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0; G.secondSpec=null; G._pendingNegAudit=null; G.perks={};
+  G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.calendarEvents=[]; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0; G.secondSpec=null; G._pendingNegAudit=null; G.perks={}; G._negUsedThisMonth=0;
   // ИИ-нейросеть
   G.ai = {
     purchased:         false,   // куплен доступ
@@ -315,6 +315,37 @@ function autoAssignOptimal(project) {
   }
   // Гарантируем хотя бы одного, если есть свободные
   return selected.length ? selected : (scored[0] ? [scored[0].s] : []);
+}
+
+// ── Ф.3: переговорщики (авто-подписание проектов) ──────
+// Спец роли 'salesrep' даёт 1 авто-подписание/мес. Грейд → условия сделки.
+// Оплата гибрид: премиальный оклад (staff.js ×1.4) + комиссия % с бюджета.
+function getNegotiators() {
+  return (G.staff || []).filter(s => s.role === 'salesrep' && s.status !== 'fired');
+}
+function negotiatorCapacity() { return getNegotiators().length; }
+function negotiatorFree() { return Math.max(0, negotiatorCapacity() - (G._negUsedThisMonth || 0)); }
+function bestFreeNegotiator() {
+  const order = { star: 5, lead: 4, senior: 3, middle: 2, junior: 1 };
+  return getNegotiators().slice().sort((a, b) => (order[b.grade] || 0) - (order[a.grade] || 0))[0] || null;
+}
+function delegateSign(pid) {
+  if (negotiatorFree() <= 0) { notify('Нет свободного переговорщика в этом месяце', 'error'); return; }
+  const neg = bestFreeNegotiator();
+  if (!neg) { notify('Нет переговорщика в штате', 'error'); return; }
+  signProject(pid, { autoNeg: neg });
+}
+// Комиссия + расход заряда переговорщика (гибрид-оплата). Вызывается из signProject.
+function _applyNegotiatorDeal(client, neg) {
+  G._negUsedThisMonth = (G._negUsedThisMonth || 0) + 1;
+  neg._negDealsMonth = (neg._negDealsMonth || 0) + 1;
+  let commPct = 0.05;
+  if (G.upgrades && G.upgrades['negotiator']) commPct *= 0.5;  // перк «M&A/Переговорщик» — вдвое меньше комиссия
+  const comm = Math.round((client._totalBudget || 0) * commPct / 1000) * 1000;
+  if (comm > 0) {
+    G.money -= comm;
+    addLog(`💼 ${neg.name} закрыл сделку «${client.name}» — комиссия −${fmtK(comm)}`, 'amber');
+  }
 }
 
 // Мощность, которую требует проект (по тиру) — целевая нагрузка/мес.
@@ -747,6 +778,11 @@ function _legacyShowScout(offers) {
       })()}
       ${reqRow}
       ${canTake?`<button class="btn btn-primary btn-sm" style="width:100%;justify-content:center;margin-top:10px;" onclick="startSign('${p.id}')">Подписать контракт</button>`:''}
+      ${canTake && negotiatorFree() > 0 ? (() => {
+        const _ng = bestFreeNegotiator();
+        const _gl = _ng ? ((typeof GRADE_CFG!=='undefined' && GRADE_CFG[_ng.grade] && GRADE_CFG[_ng.grade].label) || _ng.grade) : '';
+        return `<button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:6px;background:rgba(20,184,166,.12);color:#2dd4bf;border:1px solid rgba(20,184,166,.4);font-weight:700" title="Переговорщик авто-проведёт КП и условия по своему грейду (комиссия 5%). Свободно в этом месяце: ${negotiatorFree()}" onclick="delegateSign('${p.id}')">💼 Поручить переговорщику · ${_gl} <span style="opacity:.7;font-weight:500">(своб. ${negotiatorFree()})</span></button>`;
+      })() : ''}
     `;
     grid.appendChild(card);
   });
@@ -754,7 +790,7 @@ function _legacyShowScout(offers) {
   modal.classList.add('active');
 } // end _legacyShowScout
 
-function signProject(pid) {
+function signProject(pid, opts) {
   const def=PROJECT_POOL.find(p=>p.id===pid);
   if (!def) return;
   if (G.activeClients.length>=getCapacity()){ notify('Нет свободного слота','error'); return; }
@@ -874,7 +910,14 @@ function signProject(pid) {
   closeScout();
   if (typeof Projects !== 'undefined') {
     Projects.initLCState(client);
-    Projects.showPhasePopup(client);
+    if (opts && opts.autoNeg && typeof Projects.autoResolveNegotiation === 'function') {
+      // Ф.3: переговорщик авто-проходит КП+условия по своему грейду
+      Projects.autoResolveNegotiation(client, opts.autoNeg);
+      _applyNegotiatorDeal(client, opts.autoNeg);
+      notify(`💼 ${opts.autoNeg.name} закрыл переговоры по «${client.name}»`, 'success');
+    } else {
+      Projects.showPhasePopup(client);
+    }
   }
   _emitRender();
 }
@@ -883,12 +926,10 @@ function signProject(pid) {
 // Если пёрк negotiator куплен — показывает pre-sign аудит через Projects.
 // Иначе — прямой вызов signProject.
 function startSign(pid) {
-  if (G.upgrades && G.upgrades['negotiator'] &&
-      typeof Projects !== 'undefined' && Projects.preSignAudit) {
-    Projects.preSignAudit(pid);
-  } else {
-    signProject(pid);
-  }
+  // Ф.3 (v3.72): pre-sign аудит из v3.47 убран — ручное подписание идёт напрямую
+  // в переговорный флоу. Авто-переговоры теперь у нанимаемого переговорщика
+  // (delegateSign → signProject{autoNeg}). Перк negotiator → −50% комиссии.
+  signProject(pid);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1435,6 +1476,9 @@ function advanceMonth() {
       if (G.fatigueActionCooldowns[k] > 0) G.fatigueActionCooldowns[k]--;
     });
   }
+  // Ф.3: сброс месячного заряда переговорщиков (1 авто-подписание/мес на спеца)
+  G._negUsedThisMonth = 0;
+  (G.staff || []).forEach(s => { if (s._negDealsMonth) s._negDealsMonth = 0; });
   // п.18 (Ф.2): декремент кулдаунов действий влияния на клиента (calendar-based)
   // Р.3: сброс месячного лимита действий на каждый проект (новый месяц — снова доступно действие)
   G.activeClients.forEach(c => {

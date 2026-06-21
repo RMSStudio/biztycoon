@@ -45,7 +45,11 @@ const ROLE_META = _SCEN_ROLE_META || {
   smm:        { id:'smm',        label:'SMM',         emoji:'📱', color:'#10b981' },
   lawyer:     { id:'lawyer',     label:'Юрист',       emoji:'⚖️', color:'#8b5cf6' },
   hr:         { id:'hr',         label:'HR',          emoji:'🤝', color:'#f97316' },
+  salesrep:   { id:'salesrep',   label:'Переговорщик',emoji:'💼', color:'#14b8a6' },
 };
+// Ф.3: подстраховка — если сценарий задаёт свой roleMeta без переговорщика,
+// всё равно добавляем роль (нужна для авто-переговоров).
+if (!ROLE_META.salesrep) ROLE_META.salesrep = { id:'salesrep', label:'Переговорщик', emoji:'💼', color:'#14b8a6' };
 const ROLE_IDS = Object.keys(ROLE_META);
 
 // ── Role Categories (для найма-фильтра) ───────────────
@@ -197,7 +201,9 @@ function generateCandidate(roleId, grade) {
   const qStat     = _rnd(cfg.q[0],   cfg.q[1]);
   const speedStat = _rnd(cfg.speed[0], cfg.speed[1]);
 
-  const salaryAsk = _rnd(cfg.salary[0], cfg.salary[1]);
+  // Ф.3: переговорщик — премиальная роль (оклад ×1.4)
+  const _roleSalMul = roleId === 'salesrep' ? 1.4 : 1;
+  const salaryAsk = Math.round(_rnd(cfg.salary[0], cfg.salary[1]) * _roleSalMul);
   const salaryMin = Math.round(salaryAsk * _rnd(75, 92) / 100);
 
   // Traits: posCount ceil(n/2), negCount floor(n/2)

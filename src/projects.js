@@ -201,6 +201,55 @@ const Projects = (() => {
     showPhasePopup(client);
   }
 
+  // ── Ф.3: авто-переговоры переговорщиком ──────────────────
+  // Применяет условия сделки по грейду спеца и пропускает фазы
+  // КП (proposal) + Переговоры (negotiation), сажая проект на след. фазу.
+  function autoResolveNegotiation(client, neg) {
+    const grade = (neg && neg.grade) || 'middle';
+    const T = ({
+      junior: { budgetMul: 0.92, mood: -2, risk:  3, q: 0, advance: 0    },
+      middle: { budgetMul: 1.00, mood:  0, risk:  0, q: 0, advance: 0    },
+      senior: { budgetMul: 1.00, mood:  3, risk: -2, q: 2, advance: 0.15 },
+      lead:   { budgetMul: 1.04, mood:  5, risk: -4, q: 3, advance: 0.20 },
+      star:   { budgetMul: 1.08, mood:  8, risk: -6, q: 5, advance: 0.25 },
+    })[grade] || { budgetMul: 1, mood: 0, risk: 0, q: 0, advance: 0 };
+
+    client._totalBudget    = Math.round((client._totalBudget || 0) * T.budgetMul / 1000) * 1000;
+    client._originalBudget = client._totalBudget;
+    if (T.mood) moodDelta(client, T.mood);
+    if (T.risk) riskDelta(client, T.risk);
+    if (T.q)    client._lcQualityBonus = (client._lcQualityBonus || 0) + T.q;
+    applyTag(client, 'neg_auto', { grade });
+
+    // Аванс (предоплата) для senior+ — выбивается переговорщиком
+    if (T.advance > 0) {
+      const adv = Math.round((client._totalBudget || 0) * T.advance / 1000) * 1000;
+      if (adv > 0) {
+        client._totalBudget = Math.max(0, client._totalBudget - adv);
+        if (typeof G !== 'undefined') G.money += adv;
+        addLog(`💰 ${client.name}: аванс ${Math.round(T.advance * 100)}% выбит переговорщиком — +${fmtK(adv)}`, 'green');
+      }
+    }
+    logDecision(client, 'negotiation', `Авто-переговоры (${grade})`, `бюджет ×${T.budgetMul}${T.advance ? ` · аванс ${Math.round(T.advance * 100)}%` : ''}`);
+
+    // Пропуск proposal+negotiation → след. фаза после 'negotiation'
+    const chain = client._lcChain || [];
+    let idx = chain.indexOf('negotiation');
+    if (idx < 0) idx = chain.indexOf('proposal');
+    if (idx < 0) idx = 0;
+    const nextIdx = Math.min(idx + 1, chain.length - 1);
+    client._lcPhaseIdx = nextIdx;
+    client._lcPhase    = chain[nextIdx];
+    client._phaseActionsUsed = {};
+    addLog(`💼 ${client.name}: переговоры закрыл переговорщик (${grade}) — далее ${PHASE_LABELS[client._lcPhase] || client._lcPhase}`, 'teal');
+
+    if (client._lcPhase && client._lcPhase.startsWith('work_')) {
+      if (client._workStartMonth == null) client._workStartMonth = client._monthsSigned || 0;
+    }
+    // Бриф/юридику игрок открывает сам с карточки (кнопка фазы) — не навязываем поп-ап
+    _emitRender();
+  }
+
   // ── Применить/проверить тег ─────────────────────────────
   function applyTag(client, tag, data = {}) {
     if (tag) client._lcTags[tag] = Object.assign({ month: G.month }, data);
@@ -2185,6 +2234,7 @@ const Projects = (() => {
     buildPhaseChain,
     initLCState,
     advancePhase,
+    autoResolveNegotiation,
     showPhasePopup,
     renderPhaseBadge,
     triggerWorkEvent,
