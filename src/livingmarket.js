@@ -1505,6 +1505,7 @@
   // Доли дают дивиденды (% от месячной выручки) и скидку при выкупе.
 
   const EQUITY_PAYOUT = 0.5;   // доля месячной выручки, идущая дивидендами
+  const EQUITY_MINORITY_CAP = 25;  // потолок доли до стадии «Сеть» (миноритарный пакет)
 
   function competitorValuation(comp) {
     if (!comp) return 0;
@@ -1530,16 +1531,22 @@
     return Math.round((comp.monthlyRevenue || 0) * (owned / 100) * EQUITY_PAYOUT);
   }
 
+  // Потолок доли на текущей стадии: до «Сети» — только миноритарный пакет.
+  function equityCap() {
+    const stage = (G && G.living && (G.living.stage || 0)) || 0;
+    return stage < 3 ? EQUITY_MINORITY_CAP : 100;
+  }
+
   function buyEquity(competitorId, pct) {
     if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
-    const stage = (G.living && (G.living.stage || 0)) || 0;
-    if (stage < 3) return { ok: false, reason: 'stage_required', stageReq: 3 };
     const comp = (G.market.competitors || []).find(c => c.id === competitorId);
     if (!comp) return { ok: false, reason: 'competitor_not_found' };
     pct = Math.max(1, Math.round(pct || 0));
     const owned = equityOwned(competitorId);
-    if (owned + pct > 100) pct = 100 - owned;
-    if (pct <= 0) return { ok: false, reason: 'already_full' };
+    const cap   = equityCap();
+    if (owned >= cap) return { ok: false, reason: 'minority_cap', cap };
+    if (owned + pct > cap) pct = cap - owned;
+    if (pct <= 0) return { ok: false, reason: 'minority_cap', cap };
     const cost = pct * equityPrice1pct(comp);
     if ((G.money || 0) < cost) return { ok: false, reason: 'insufficient_funds', cost };
     G.money -= cost;
@@ -2904,6 +2911,7 @@
     equityPrice1pct,
     equityOwned,
     equityDividend,
+    equityCap,
     buyEquity,
     sellEquity,
     showAssetsModal,

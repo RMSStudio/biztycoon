@@ -322,13 +322,13 @@
       const archLabel = c.isPlayer ? 'игрок' : (arch ? arch.name : c.archetype);
       const pf  = (c.portfolio != null) ? c.portfolio : Math.max(0, Math.round((c.deliveries || 0) / 6));
       const stf = (c.staff != null) ? c.staff : '—';
-      const acq = !c.isPlayer && _canAcquire();
+      const tradable = !c.isPlayer;
       const own = (!c.isPlayer && G.market && G.market.holdings && G.market.holdings[c.id]) || 0;
-      const clickAttr = acq
-        ? ' onclick="Competitors.openAcquire(\'' + c.id + '\')" title="Поглотить конкурента" style="cursor:pointer;'
+      const clickAttr = tradable
+        ? ' onclick="Competitors.openAcquire(\'' + c.id + '\')" title="Доли · поглощение" style="cursor:pointer;'
         : ' style="';
-      return '<div' + clickAttr + 'display:grid;grid-template-columns:36px 1fr 90px 64px 56px 48px 28px;gap:8px;align-items:center;padding:8px 10px;border:1px solid ' + rowBorder + ';border-left:3px solid ' + rowColor + ';background:' + rowBg + ';border-radius:7px' + (acq ? ';transition:background .12s' : '') + '"' +
-        (acq ? ' onmouseover="this.style.background=\'rgba(167,139,250,.12)\'" onmouseout="this.style.background=\'' + rowBg + '\'"' : '') + '>' +
+      return '<div' + clickAttr + 'display:grid;grid-template-columns:36px 1fr 90px 64px 56px 48px 28px;gap:8px;align-items:center;padding:8px 10px;border:1px solid ' + rowBorder + ';border-left:3px solid ' + rowColor + ';background:' + rowBg + ';border-radius:7px' + (tradable ? ';transition:background .12s' : '') + '"' +
+        (tradable ? ' onmouseover="this.style.background=\'rgba(167,139,250,.12)\'" onmouseout="this.style.background=\'' + rowBg + '\'"' : '') + '>' +
         '<div style="font-size:14px;font-weight:800;color:' + rowColor + ';text-align:center">' + medal + '</div>' +
         '<div style="min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text)"><span>' + c.icon + '</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + c.name + '</span></div>' +
@@ -338,15 +338,15 @@
         '<div style="text-align:right;font-size:11px;color:var(--text)">⭐ ' + Math.floor(c.reputation) + ' <span style="color:' + trendRepC + ';font-weight:800">' + trendRep + '</span></div>' +
         '<div style="text-align:right;font-size:11px;color:var(--text)">📚 ' + pf + '</div>' +
         '<div style="text-align:right;font-size:11px;color:var(--text)">👥 ' + stf + '</div>' +
-        '<div style="text-align:center;font-size:12px;color:' + (acq ? '#a78bfa' : 'transparent') + '">' + (acq ? '🤝' : '') + '</div>' +
+        '<div style="text-align:center;font-size:12px;color:' + (tradable ? '#a78bfa' : 'transparent') + '">' + (tradable ? '🤝' : '') + '</div>' +
       '</div>';
     }).join('');
     const head = '<div style="display:grid;grid-template-columns:36px 1fr 90px 64px 56px 48px 28px;gap:8px;padding:0 10px 6px;font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase">' +
         '<div></div><div>Конкурент</div><div style="text-align:right">Выручка</div><div style="text-align:right">Реп.</div><div style="text-align:right">Портф.</div><div style="text-align:right">Штат</div><div></div>' +
       '</div>';
     const acqHint = _canAcquire()
-      ? '<div style="font-size:10px;color:#a78bfa;margin-top:8px;text-align:center">🤝 Кликните конкурента, чтобы поглотить его</div>'
-      : '<div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:center;font-style:italic">Поглощения откроются на стадии «Сеть»</div>';
+      ? '<div style="font-size:10px;color:#a78bfa;margin-top:8px;text-align:center">🤝 Кликните конкурента: доли и поглощение</div>'
+      : '<div style="font-size:10px;color:#a78bfa;margin-top:8px;text-align:center">🤝 Кликните конкурента: доли с любой стадии · поглощение с «Сети»</div>';
     return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:660px;max-height:85vh;display:flex;flex-direction:column;width:96vw">' +
       '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">' +
         '<span style="font-size:28px">🏆</span>' +
@@ -373,7 +373,6 @@
   }
 
   function openAcquire(id) {
-    if (!_canAcquire()) return;
     const lm   = _LM();
     const comp = (G.market && G.market.competitors || []).find(c => c.id === id);
     if (!comp || !lm) return;
@@ -418,11 +417,12 @@
     const owned   = lm.equityOwned   ? lm.equityOwned(comp.id)    : 0;
     const price1  = lm.equityPrice1pct ? lm.equityPrice1pct(comp) : 0;
     const divNow  = lm.equityDividend  ? lm.equityDividend(comp)  : 0;
+    const cap     = lm.equityCap ? lm.equityCap() : 100;
     const control = owned >= 50;
 
     const buyBtn = (p) => {
       const c = p * price1;
-      const can = money >= c && owned + p <= 100;
+      const can = money >= c && owned + p <= cap;
       return '<button ' + (can ? 'onclick="Competitors.doBuyEquity(\'' + comp.id + '\',' + p + ')"' : 'disabled') +
         ' style="flex:1;padding:7px 4px;border-radius:7px;border:1px solid ' + (can ? 'rgba(34,211,238,.5)' : 'var(--border)') +
         ';background:' + (can ? 'rgba(34,211,238,.10)' : 'rgba(255,255,255,.02)') + ';color:' + (can ? 'var(--text)' : 'var(--muted)') +
@@ -438,6 +438,7 @@
         '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--sub)"><span>Ваша доля: <b style="color:var(--text)">' + owned + '%</b></span>' +
           (owned > 0 ? '<span>Дивиденд: <b style="color:#86efac">+' + _formatMoneyShort(divNow) + '/мес</b></span>' : '<span style="font-style:italic">доли дают дивиденды и скидку при выкупе</span>') + '</div>' +
         '<div style="display:flex;gap:6px;margin-top:10px">' + buyBtn(5) + buyBtn(10) + buyBtn(25) + '</div>' +
+        (cap < 100 ? '<div style="font-size:9px;color:var(--muted);margin-top:6px;text-align:center;font-style:italic">До стадии «Сеть» — миноритарный пакет, до ' + cap + '%</div>' : '') +
         (owned > 0 ? '<button onclick="Competitors.doSellEquity(\'' + comp.id + '\',' + owned + ')" style="width:100%;margin-top:6px;padding:6px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--sub);cursor:pointer;font-size:10px;font-weight:700">Продать всё (' + owned + '%)</button>' : '') +
       '</div>';
 
@@ -451,15 +452,17 @@
         stat('Выручка', _formatMoneyShort(comp.revenue)) + stat('Реп.', '⭐ ' + Math.floor(comp.reputation || 0)) + stat('Портф.', '📚 ' + pf) + stat('Штат', '👥 ' + stf) +
       '</div>' +
       equityBlock +
-      '<div style="font-size:10px;color:var(--muted);margin-top:16px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Поглощение' + (owned > 0 ? ' · доплата за ' + (100 - owned) + '%' : '') + '</div>' +
-      '<div style="display:flex;align-items:baseline;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--border)">' +
-        '<span style="font-size:11px;color:var(--muted)">Цена выкупа' + (perk ? ' <span style="color:#86efac">(−32%)</span>' : '') + '</span>' +
-        '<span style="font-size:16px;font-weight:800;color:' + (afford ? 'var(--text)' : '#fca5a5') + '">' + _formatMoneyShort(cost) + '</span>' +
-      '</div>' +
-      (afford ? '' : '<div style="font-size:10px;color:#fca5a5;margin-top:6px;text-align:center">Недостаточно средств (есть ' + _formatMoneyShort(money) + ')</div>') +
-      modeBtn('integrate', '🧩', 'Интегрировать', 'Влить ~' + y.staffN + ' спец. (со сниж. лояльностью), +' + y.portfolio + ' портфолио, +' + y.leads + ' лид(ов)', afford) +
-      modeBtn('liquidate', '💰', 'Ликвидировать', 'Распродать: +' + _formatMoneyShort(y.cash) + ', +' + Math.max(1, Math.round(y.portfolio / 2)) + ' портфолио', afford) +
-      modeBtn('subbrand', '🏷', 'Сделать саббрендом', stage >= 4 ? ('+' + y.portfolio + ' портфолио, +1 к скаутингу') : 'Откроется на стадии «Холдинг»', afford && stage >= 4) +
+      '<div style="font-size:10px;color:var(--muted);margin-top:16px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Поглощение' + (stage < 3 ? ' · с «Сети»' : (owned > 0 ? ' · доплата за ' + (100 - owned) + '%' : '')) + '</div>' +
+      (stage < 3
+        ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;text-align:center;font-style:italic">Полный выкуп и присвоение активов откроются на стадии «Сеть». Сейчас — только доли.</div>'
+        : '<div style="display:flex;align-items:baseline;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--border)">' +
+            '<span style="font-size:11px;color:var(--muted)">Цена выкупа' + (perk ? ' <span style="color:#86efac">(−32%)</span>' : '') + '</span>' +
+            '<span style="font-size:16px;font-weight:800;color:' + (afford ? 'var(--text)' : '#fca5a5') + '">' + _formatMoneyShort(cost) + '</span>' +
+          '</div>' +
+          (afford ? '' : '<div style="font-size:10px;color:#fca5a5;margin-top:6px;text-align:center">Недостаточно средств (есть ' + _formatMoneyShort(money) + ')</div>') +
+          modeBtn('integrate', '🧩', 'Интегрировать', 'Влить ~' + y.staffN + ' спец. (со сниж. лояльностью), +' + y.portfolio + ' портфолио, +' + y.leads + ' лид(ов)', afford) +
+          modeBtn('liquidate', '💰', 'Ликвидировать', 'Распродать: +' + _formatMoneyShort(y.cash) + ', +' + Math.max(1, Math.round(y.portfolio / 2)) + ' портфолио', afford) +
+          modeBtn('subbrand', '🏷', 'Сделать саббрендом', stage >= 4 ? ('+' + y.portfolio + ' портфолио, +1 к скаутингу') : 'Откроется на стадии «Холдинг»', afford && stage >= 4)) +
       '<button onclick="document.getElementById(\'cmp-acquire-modal\').style.display=\'none\'" style="margin-top:14px;width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">Закрыть</button>' +
     '</div>';
   }
