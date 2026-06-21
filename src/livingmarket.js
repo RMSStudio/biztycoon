@@ -1491,6 +1491,7 @@
 
     if (typeof addLog === 'function')
       addLog('🤝 Поглощение: ' + comp.name + ' за ' + _formatMoneyShort(cost) + ' — ' + detail, 'violet');
+    _pushTicker('🏆 вы поглотили «' + comp.name + '»', 'act');
     if (typeof notify === 'function')
       notify('Поглощён ' + comp.name + '! ' + (comp.icon || ''), 'success');
 
@@ -1506,6 +1507,14 @@
 
   const EQUITY_PAYOUT = 0.5;   // доля месячной выручки, идущая дивидендами
   const EQUITY_MINORITY_CAP = 25;  // потолок доли до стадии «Сеть» (миноритарный пакет)
+
+  // Лента событий для бегущей строки (последние 20).
+  function _pushTicker(msg, kind) {
+    if (!G || !G.market) return;
+    if (!G.market.tickerFeed) G.market.tickerFeed = [];
+    G.market.tickerFeed.unshift({ msg: msg, kind: kind || 'info', month: G.month || 0 });
+    if (G.market.tickerFeed.length > 20) G.market.tickerFeed.length = 20;
+  }
 
   function competitorValuation(comp) {
     if (!comp) return 0;
@@ -1554,6 +1563,7 @@
     G.market.holdings[competitorId] = owned + pct;
     if (typeof addLog === 'function')
       addLog('📈 Куплено ' + pct + '% «' + comp.name + '» за ' + _formatMoneyShort(cost) + ' (доля ' + (owned + pct) + '%)', 'cyan');
+    _pushTicker('🤝 вы купили ' + pct + '% «' + comp.name + '»', 'act');
     try { EventBus.emit('assets_changed', { type: 'equity_buy', id: competitorId, pct }); } catch (_) {}
     try { EventBus.emit('render'); } catch (_) {}
     if (typeof autoSave === 'function') { try { autoSave(); } catch (_) {} }
@@ -1575,6 +1585,7 @@
     else G.market.holdings[competitorId] = left;
     if (typeof addLog === 'function')
       addLog('📉 Продано ' + pct + '% «' + comp.name + '» за ' + _formatMoneyShort(proceeds) + ' (осталось ' + left + '%)', 'amber');
+    _pushTicker('📉 вы продали ' + pct + '% «' + comp.name + '»', 'act');
     try { EventBus.emit('assets_changed', { type: 'equity_sell', id: competitorId, pct }); } catch (_) {}
     try { EventBus.emit('render'); } catch (_) {}
     if (typeof autoSave === 'function') { try { autoSave(); } catch (_) {} }
@@ -1593,6 +1604,7 @@
       G.money += total;
       if (typeof addLog === 'function')
         addLog('💰 Дивиденды с долей: +' + _formatMoneyShort(total), 'green');
+      _pushTicker('💰 дивиденды с долей: +' + _formatMoneyShort(total), 'div');
     }
   }
 
@@ -1602,6 +1614,7 @@
       G.market = {
         competitors:   _createCompetitors(),
         holdings:      {},    // Ф.8 слой A: { [compId]: ownedPct }
+        tickerFeed:    [],    // лента событий для бегущей строки
         playerRank:    null,
         monthsAtRank1: 0,
         acquisitions:  0,
@@ -1617,6 +1630,7 @@
         G.market.holdings = {};
       }
       if (!G.market.holdings)             G.market.holdings      = {};
+      if (!G.market.tickerFeed)           G.market.tickerFeed    = [];
       if (G.market.monthsAtRank1 == null) G.market.monthsAtRank1 = 0;
       if (G.market.acquisitions  == null) G.market.acquisitions  = 0;
       if (G.market.awardsWon     == null) G.market.awardsWon     = 0;
@@ -1662,7 +1676,7 @@
       if (Math.random() < a.staffRate)    c.staff     = (c.staff || 0) + 1;
       // история (тренды в модале рынка)
       if (!c.history) c.history = [];
-      c.history.push({ month: G.month || 0, revenue: c.revenue, reputation: c.reputation, portfolio: c.portfolio, staff: c.staff });
+      c.history.push({ month: G.month || 0, revenue: c.revenue, monthlyRevenue: c.monthlyRevenue, reputation: c.reputation, portfolio: c.portfolio, staff: c.staff });
       if (c.history.length > 60) c.history = c.history.slice(-60);
     }
 

@@ -6,6 +6,15 @@
     --purple: #A855F7; --teal: #2DD4BF;
     --text: #E6EDF3; --sub: #8B949E; --muted: #484F58;
   }
+  /* ── Рынок: бегущая строка (Ф.8) ── */
+  .mkt-ticker{height:36px;background:#0a0d13;border-bottom:1px solid var(--border);display:flex;align-items:center;overflow:hidden;cursor:pointer;position:relative}
+  .mkt-ticker:hover .mkt-tk-track{animation-play-state:paused}
+  .mkt-tk-tag{flex:none;height:100%;display:flex;align-items:center;gap:6px;padding:0 13px;background:var(--bg3);border-right:1px solid var(--border);font-size:11px;font-weight:800;color:var(--amber);letter-spacing:.06em;z-index:2}
+  .mkt-tk-view{flex:1;overflow:hidden}
+  .mkt-tk-track{display:inline-flex;align-items:center;gap:28px;white-space:nowrap;padding-left:24px;animation:mktscroll 60s linear infinite;font-size:12px}
+  .mkt-tk-track span{color:var(--sub)}
+  .mkt-up{color:var(--green);font-weight:700}.mkt-dn{color:var(--red);font-weight:700}.mkt-ev{color:#d6b6ff;font-weight:700}
+  @keyframes mktscroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
     background:var(--bg); color:var(--text);

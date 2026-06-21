@@ -144,6 +144,9 @@
     </div>
   </div>
 
+  <!-- Бегущая строка рынка (Ф.8 · вариант B) -->
+  <div id="mkt-ticker" class="mkt-ticker" style="display:none" onclick="switchTab('market')" title="Открыть рынок"></div>
+
   <!-- Actions bar — клик открывает календарь-планировщик (v3.5) -->
   <div class="actions-bar" onclick="openCalendar()" style="cursor:pointer" title="Открыть календарь-планировщик">
     <div class="actions-label">📅 Рабочие дни <span style="color:var(--muted);font-weight:400;font-size:9px">· календарь ▸</span></div>
@@ -162,6 +165,7 @@
       🤖 Нейросеть
       <span class="tab-badge" id="tab-ai-badge" style="display:none;background:var(--purple)">!</span>
     </button>
+    <button class="gtab" id="tab-btn-market" onclick="switchTab('market')">📈 Рынок</button>
   </div>
 
   <!-- Main tab -->
@@ -221,6 +225,9 @@
 
     <!-- RIGHT — действия + команда + апгрейды -->
     <div class="col-side">
+
+      <!-- Рынок — виджет-крючок (Ф.8 · вариант B) -->
+      <div id="g-market-widget"></div>
 
       <!-- Скаутинг -->
       <div class="panel">
@@ -291,6 +298,11 @@
   <!-- AI tab -->
   <div id="tab-panel-ai" class="tab-panel">
     <div id="g-ai-content"></div>
+  </div>
+
+  <!-- Market tab (Ф.8 · вариант C) -->
+  <div id="tab-panel-market" class="tab-panel">
+    <div id="g-market-content"></div>
   </div>
 
 </div>

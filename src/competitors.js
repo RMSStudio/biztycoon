@@ -100,6 +100,10 @@
     },
   };
 
+  // Русские имена архетипов живого ростра (ключи livingmarket).
+  const ARCH_RU = { dumper:'Демпер', boutique:'Бутик', machine:'Машина найма', networker:'Сетевик', wildcard:'Дикая карта' };
+  function _archName(key) { return ARCH_RU[key] || (ARCHETYPES[key] && ARCHETYPES[key].name) || key; }
+
   // Встроенный стартовый пул — 4 конкурента, по одному на архетип.
   const DEFAULT_COMPETITORS = [
     { id: 'comp_lean',    name: 'Lean Studio',     archetype: 'demper' },
@@ -252,7 +256,7 @@
       pill.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,.03);transition:background .15s';
       pill.onmouseover = () => { pill.style.background = 'rgba(255,255,255,.07)'; };
       pill.onmouseout  = () => { pill.style.background = 'rgba(255,255,255,.03)'; };
-      pill.onclick = (e) => { e.stopPropagation(); showMarketModal(); };
+      pill.onclick = (e) => { e.stopPropagation(); if (typeof switchTab === 'function') switchTab('market'); else showMarketModal(); };
       host.appendChild(pill);
     }
     const rank = getPlayerRank();
@@ -319,7 +323,7 @@
       if (c.rank === 1) medal = '🥇';
       else if (c.rank === 2) medal = '🥈';
       else if (c.rank === 3) medal = '🥉';
-      const archLabel = c.isPlayer ? 'игрок' : (arch ? arch.name : c.archetype);
+      const archLabel = c.isPlayer ? 'игрок' : _archName(c.archetype);
       const pf  = (c.portfolio != null) ? c.portfolio : Math.max(0, Math.round((c.deliveries || 0) / 6));
       const stf = (c.staff != null) ? c.staff : '—';
       const tradable = !c.isPlayer;
@@ -446,7 +450,7 @@
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
         '<span style="font-size:26px">' + (comp.icon || '🏢') + '</span>' +
         '<div><div style="font-size:16px;font-weight:800;color:var(--text);line-height:1.1">' + comp.name + '</div>' +
-        '<div style="font-size:10px;color:var(--sub)">' + (arch ? arch.name : comp.archetype) + (comp.tier ? ' · тир ' + comp.tier : '') + '</div></div>' +
+        '<div style="font-size:10px;color:var(--sub)">' + _archName(comp.archetype) + (comp.tier ? ' · тир ' + comp.tier : '') + '</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:6px;margin:14px 0;padding:10px;background:rgba(255,255,255,.03);border-radius:9px">' +
         stat('Выручка', _formatMoneyShort(comp.revenue)) + stat('Реп.', '⭐ ' + Math.floor(comp.reputation || 0)) + stat('Портф.', '📚 ' + pf) + stat('Штат', '👥 ' + stf) +
@@ -495,6 +499,132 @@
     }
   }
 
+  // ── Бегущая строка (вариант B) ───────────────────────────────────────
+
+  function _renderTicker() {
+    const el = document.getElementById('mkt-ticker');
+    if (!el) return;
+    if (typeof G === 'undefined' || !G || !G.market || !Array.isArray(G.market.competitors) || !G.market.competitors.length) {
+      el.style.display = 'none'; return;
+    }
+    el.style.display = 'flex';
+    const comps = G.market.competitors;
+    const quotes = comps.slice().sort((a, b) => (b.revenue || 0) - (a.revenue || 0)).map(c => {
+      let pct = null;
+      const h = c.history;
+      if (Array.isArray(h) && h.length >= 2) {
+        const a = h[h.length - 1].monthlyRevenue || 0, b = h[h.length - 2].monthlyRevenue || 0;
+        if (b > 0) pct = (a - b) / b * 100;
+      }
+      const arrow = pct == null ? '·' : (pct >= 0 ? '▲' : '▼');
+      const cls = pct == null ? '' : (pct >= 0 ? 'mkt-up' : 'mkt-dn');
+      const own = (G.market.holdings && G.market.holdings[c.id]) || 0;
+      const pctStr = pct == null ? '' : (' <span class="' + cls + '">' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%</span>');
+      return '<span><b class="' + cls + '">' + arrow + ' ' + c.name + '</b> ' + _formatMoneyShort(c.revenue) + pctStr + (own ? ' <span style="color:var(--teal)">📈' + own + '%</span>' : '') + '</span>';
+    });
+    const evts = (G.market.tickerFeed || []).map(e => '<span class="mkt-ev">' + e.msg + '</span>');
+    const items = []; let qi = 0, ei = 0;
+    while (qi < quotes.length || ei < evts.length) {
+      for (let k = 0; k < 3 && qi < quotes.length; k++) items.push(quotes[qi++]);
+      if (ei < evts.length) items.push(evts[ei++]);
+    }
+    const seq = items.join('');
+    el.innerHTML = '<div class="mkt-tk-tag">📈 РЫНОК</div><div class="mkt-tk-view"><div class="mkt-tk-track">' + seq + seq + '</div></div>';
+  }
+
+  // ── Виджет-крючок на главном экране (вариант B) ──────────────────────
+
+  function _portfolioStats() {
+    const lm = _LM(); let pv = 0, div = 0, n = 0;
+    const h = (G.market && G.market.holdings) || {};
+    Object.keys(h).forEach(id => {
+      const c = (G.market.competitors || []).find(x => x.id === id);
+      if (!c) return;
+      n++;
+      pv  += (h[id] / 100) * (lm && lm.competitorValuation ? lm.competitorValuation(c) : 0);
+      div += (lm && lm.equityDividend ? lm.equityDividend(c) : 0);
+    });
+    return { pv: Math.round(pv), div: Math.round(div), n };
+  }
+
+  function _renderMarketWidget() {
+    const el = document.getElementById('g-market-widget');
+    if (!el) return;
+    if (typeof G === 'undefined' || !G || !G.market || !Array.isArray(G.market.competitors) || !G.market.competitors.length) {
+      el.innerHTML = ''; return;
+    }
+    const rank = getPlayerRank(), size = getMarketSize();
+    const ps = _portfolioStats();
+    const acq = (G.market.acquisitions) || 0;
+    const top = getRanking().filter(r => !r.isPlayer).slice(0, 3).map(r => {
+      const arch = ARCHETYPES[r.archetype];
+      return '<div style="display:flex;align-items:center;gap:7px;padding:5px 0;font-size:11px">' +
+        '<span>' + (r.icon || '🏢') + '</span>' +
+        '<span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + r.name + '</span>' +
+        '<span style="color:var(--sub)">' + _formatMoneyShort(r.revenue) + '</span></div>';
+    }).join('');
+    el.innerHTML =
+      '<div class="panel" style="cursor:pointer;border-color:#2b3a52" onclick="switchTab(\'market\')" title="Открыть рынок">' +
+        '<div class="panel-title" style="color:#8fb4ff">📈 Рынок <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:600">19 агентств ▸</span></div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+          '<div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px 10px"><div style="font-size:17px;font-weight:800">#' + (rank || '—') + '<span style="font-size:11px;color:var(--sub)"> / ' + (size || '—') + '</span></div><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:.05em">место</div></div>' +
+          '<div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px 10px"><div style="font-size:15px;font-weight:800;color:var(--teal)">' + _formatMoneyShort(ps.pv) + '</div><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:.05em">доли' + (ps.div > 0 ? ' · +' + _formatMoneyShort(ps.div) + '/мес' : '') + '</div></div>' +
+        '</div>' +
+        top +
+      '</div>';
+  }
+
+  // ── Вкладка-дашборд «Рынок» (вариант C) ──────────────────────────────
+
+  function renderMarketTab() {
+    const el = document.getElementById('g-market-content');
+    if (!el) return;
+    if (typeof G === 'undefined' || !G || !G.market || !Array.isArray(G.market.competitors) || !G.market.competitors.length) {
+      el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--sub);font-style:italic">Рынок ещё не инициализирован.</div>'; return;
+    }
+    const rank = getPlayerRank(), size = getMarketSize();
+    const ps = _portfolioStats();
+    const acq = (G.market.acquisitions) || 0;
+    const kpi = (v, l, color) => '<div style="flex:1;min-width:120px;background:var(--bg3);border-radius:10px;padding:12px 14px"><div style="font-size:20px;font-weight:800' + (color ? ';color:' + color : '') + '">' + v + '</div><div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">' + l + '</div></div>';
+    const kpis = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">' +
+      kpi('#' + (rank || '—') + ' <span style="font-size:12px;color:var(--sub)">/ ' + size + '</span>', 'ваше место') +
+      kpi(_formatMoneyShort(ps.pv), 'портфель долей', 'var(--teal)') +
+      kpi('+' + _formatMoneyShort(ps.div), 'дивиденды/мес', 'var(--green)') +
+      kpi(acq + ' / 3', 'поглощений') +
+    '</div>';
+
+    const ranked = getRanking();
+    const cards = ranked.map(r => {
+      if (r.isPlayer) {
+        return '<div style="border:1px solid #fbbf24;border-radius:11px;padding:11px;background:rgba(251,191,36,.06)">' +
+          '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">👑</span><div style="flex:1"><b style="font-size:13px">Вы</b><small style="display:block;font-size:10px;color:var(--sub)">ваше агентство</small></div><span style="font-size:12px;font-weight:800;color:#fbbf24">#' + r.rank + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:8px"><span>Выручка</span><b style="color:var(--text)">' + _formatMoneyShort(r.revenue) + '</b></div>' +
+        '</div>';
+      }
+      const arch = ARCHETYPES[r.archetype];
+      const comp = G.market.competitors.find(x => x.id === r.id) || {};
+      let pct = null; const h = comp.history;
+      if (Array.isArray(h) && h.length >= 2) { const a = h[h.length-1].monthlyRevenue||0, b = h[h.length-2].monthlyRevenue||0; if (b>0) pct=(a-b)/b*100; }
+      const arrow = pct == null ? '<span style="color:var(--sub)">·</span>' : (pct>=0?'<span class="mkt-up">▲</span>':'<span class="mkt-dn">▼</span>');
+      const own = (G.market.holdings && G.market.holdings[r.id]) || 0;
+      let medal = '#' + r.rank;
+      if (r.rank === 1) medal = '🥇'; else if (r.rank === 2) medal = '🥈'; else if (r.rank === 3) medal = '🥉';
+      return '<div onclick="Competitors.openAcquire(\'' + r.id + '\')" style="border:1px solid ' + (own?'rgba(45,212,191,.4)':'var(--border)') + ';border-radius:11px;padding:11px;background:rgba(255,255,255,.015);cursor:pointer;transition:border-color .12s,background .12s" onmouseover="this.style.borderColor=\'#3a4a66\';this.style.background=\'rgba(168,85,247,.06)\'" onmouseout="this.style.borderColor=\'' + (own?'rgba(45,212,191,.4)':'var(--border)') + '\';this.style.background=\'rgba(255,255,255,.015)\'">' +
+        '<div style="display:flex;align-items:center;gap:8px"><span style="width:28px;height:28px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:15px">' + (r.icon||'🏢') + '</span>' +
+          '<div style="flex:1;min-width:0"><b style="font-size:13px">' + r.name + '</b><small style="display:block;font-size:10px;color:var(--sub)">' + _archName(r.archetype) + (comp.tier?' · тир '+comp.tier:'') + (own?' · <span style="color:var(--teal)">📈'+own+'%</span>':'') + '</small></div>' +
+          '<span style="font-size:12px;font-weight:800;color:var(--sub)">' + medal + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:8px"><span>Выручка</span><b style="color:var(--text)">' + _formatMoneyShort(r.revenue) + ' ' + arrow + '</b></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:2px"><span>Репутация</span><b style="color:var(--text)">⭐ ' + Math.floor(r.reputation||0) + '</b></div>' +
+      '</div>';
+    }).join('');
+
+    const canAcq = _canAcquire();
+    const hint = '<div style="font-size:11px;color:' + (canAcq?'#a78bfa':'var(--muted)') + ';margin:4px 0 12px">' + (canAcq ? '🤝 Кликни карточку — доли и поглощение' : '🤝 Кликни карточку — доли уже доступны, поглощение с «Сети»') + '</div>';
+
+    el.innerHTML = kpis + hint +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px">' + cards + '</div>';
+  }
+
   // ── Обёртки startGame / advanceMonth ─────────────────────────────────
 
   if (typeof window !== 'undefined' && typeof window.startGame === 'function' && !window.startGame.__competitorsWrapped) {
@@ -516,6 +646,8 @@
         _initMarket();
         _tickMarket();
         _renderRankPill();
+        _renderTicker();
+        _renderMarketWidget();
         if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('market_ticked', { month: G.month });
       } catch (e) { try { console.warn('[competitors] advanceMonth wrap', e); } catch (_) {} }
       return r;
@@ -530,6 +662,10 @@
         if (typeof G !== 'undefined' && G && (G._spec || G.month != null || G.market)) {
           _initMarket();
           _renderRankPill();
+          _renderTicker();
+          _renderMarketWidget();
+          const mt = document.getElementById('tab-panel-market');
+          if (mt && mt.classList.contains('active')) renderMarketTab();
         }
       } catch (e) {}
     });
@@ -552,6 +688,9 @@
       doAcquire,
       doBuyEquity,
       doSellEquity,
+      renderMarketTab,
+      renderTicker:   _renderTicker,
+      renderWidget:   _renderMarketWidget,
       canAcquire:     _canAcquire,
       // dev/test
       _initMarket,

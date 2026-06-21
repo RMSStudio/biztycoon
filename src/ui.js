@@ -1654,6 +1654,7 @@ function switchTab(tab) {
     const badge = document.getElementById('tab-ai-badge');
     if (badge) badge.style.display = 'none';
   }
+  if (tab==='market' && typeof Competitors !== 'undefined' && Competitors.renderMarketTab) Competitors.renderMarketTab();
 }
 
 function renderPortfolioTab() {
