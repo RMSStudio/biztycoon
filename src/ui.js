@@ -648,11 +648,17 @@ function renderGame() {
   mEl.textContent=fmt(G.money);
   mEl.className='v '+(G.money>100000?'green':G.money>0?'amber':'red');
 
-  // Cashflow
-  const cf=getCashflow();
+  // Cashflow — чистый поток/мес: средний приток проектов + дивиденды − расходы
+  const _cfBurn = getTotalStaffCost() + OVERHEAD + (G.loan ? G.loan.monthlyPayment : 0);
+  const _cfDiv  = (typeof LivingMarket !== 'undefined' && LivingMarket.totalDividends) ? LivingMarket.totalDividends() : 0;
+  const _cfInf  = (typeof forecastInflows === 'function') ? forecastInflows(6) : [];
+  const _cfProjRate = _cfInf.length ? Math.round(_cfInf.reduce((s,f)=>s+f.sum,0)/6) : 0;
+  const cf = _cfProjRate + _cfDiv - _cfBurn;
   const cfEl=document.getElementById('g-cashflow');
   cfEl.textContent=(cf>=0?'+':'')+fmt(cf);
   cfEl.className='v '+(cf>=0?'green':'red');
+  cfEl.setAttribute('data-tip', 'Чистый поток/мес (оценка):\n• проекты ~+' + fmtK(_cfProjRate) + ' (среднее за 6 мес.)\n• дивиденды +' + fmtK(_cfDiv) + '\n• расходы −' + fmtK(_cfBurn) + ' (ФОТ+overhead' + (G.loan?'+кредит':'') + ')');
+  cfEl.style.cursor='help';
 
   // Reputation (legacy header chip — может быть удалён из DOM)
   const repEl=document.getElementById('g-rep');
@@ -1101,12 +1107,14 @@ function renderGame() {
   const burnRate  = staffCost + OVERHEAD + loanCost;
   const pipeline  = G.activeClients.filter(c=>!c.oneTime).reduce((s,c)=>s+(c._totalBudget||0),0);
   const oneTimeV  = G.activeClients.filter(c=>c.oneTime).reduce((s,c)=>s+(c._totalBudget||0),0);
+  const divFlow   = (typeof LivingMarket!=='undefined' && LivingMarket.totalDividends) ? LivingMarket.totalDividends() : 0;
 
   document.getElementById('g-pnl').innerHTML=`
     ${pipeline>0?`<div class="pnl-row"><span style="color:var(--sub)">Пайплайн проектов</span><span style="color:var(--teal);font-weight:700">${fmtK(pipeline)}</span></div>`:''}
     ${oneTimeV>0?`<div class="pnl-row"><span style="color:var(--purple)">Разовые заказы</span><span style="color:var(--purple)">${fmtK(oneTimeV)}</span></div>`:''}
     ${G.delayedIncome>0?`<div class="pnl-row"><span style="color:var(--amber)">🕐 В пути (задержано)</span><span style="color:var(--amber)">+${fmt(G.delayedIncome)}</span></div>`:''}
-    ${(pipeline>0||oneTimeV>0)?'<div class="divider"></div>':''}
+    ${divFlow>0?`<div class="pnl-row"><span style="color:var(--teal)">📈 Дивиденды с долей</span><span style="color:var(--green);font-weight:700">+${fmt(divFlow)}/мес</span></div>`:''}
+    ${(pipeline>0||oneTimeV>0||divFlow>0)?'<div class="divider"></div>':''}
     <div class="pnl-row"><span>Зарплаты</span><span class="neg">−${fmt(staffCost)}</span></div>
     <div class="pnl-row"><span>Overhead</span><span class="neg">−${fmt(OVERHEAD)}</span></div>
     ${G.loan ? `<div class="pnl-row">
@@ -1142,10 +1150,13 @@ function renderGame() {
     if (el) {
       const _sc = getTotalStaffCost(), _lc = G.loan ? G.loan.monthlyPayment : 0;
       const _burn = _sc + OVERHEAD + _lc;
-      const _cf = getCashflow();
+      const _div = (typeof LivingMarket!=='undefined' && LivingMarket.totalDividends) ? LivingMarket.totalDividends() : 0;
+      const _inf = (typeof forecastInflows==='function') ? forecastInflows(6) : [];
+      const _pr  = _inf.length ? Math.round(_inf.reduce((s,f)=>s+f.sum,0)/6) : 0;
+      const _cf = _pr + _div - _burn;
       const _netCol = _cf >= 0 ? 'var(--green)' : 'var(--red)';
       const _netSign = _cf >= 0 ? '+' : '';
-      el.innerHTML = `<span style="color:var(--muted)">−${fmtK(_burn)}/мес</span> · <span style="color:${_netCol};font-weight:600">${_netSign}${fmtK(_cf)}</span>`;
+      el.innerHTML = `<span style="color:var(--muted)">−${fmtK(_burn)}/мес</span> · <span style="color:${_netCol};font-weight:600">${_netSign}${fmtK(_cf)} чистыми</span>`;
     }
   }
 

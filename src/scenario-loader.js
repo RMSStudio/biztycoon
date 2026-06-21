@@ -246,10 +246,23 @@ const ScenarioLoader = (() => {
     const m = cfg.mods || {};
     const s = sc.settings;
     const oldWin = s.winCondition;
-    if (m.startMoneyMul != null)      s.startMoney      = Math.round(s.startMoney * m.startMoneyMul);
-    if (m.overheadMul   != null)      s.overhead        = Math.round(s.overhead * m.overheadMul);
-    if (m.winConditionMul != null)    s.winCondition    = Math.round(s.winCondition * m.winConditionMul);
-    if (m.startReputationAdd != null) s.startReputation = Math.max(0, Math.min(100, (s.startReputation ?? 60) + m.startReputationAdd));
+    // Снимок базовых настроек (один раз) — множители сложности всегда
+    // считаются ОТ базы, а не от уже изменённого значения. Иначе повторные
+    // вызовы applyDifficulty компаундят (1M→550k→302k→…→~50k) — баланс ломался.
+    if (!sc._baseSettings) {
+      sc._baseSettings = {
+        startMoney:     s.startMoney,
+        overhead:       s.overhead,
+        winCondition:   s.winCondition,
+        startReputation: s.startReputation ?? 60,
+      };
+    }
+    const base = sc._baseSettings;
+    // Всегда переустанавливаем от базы (сброс при смене сложности на «normal» и т.п.)
+    s.startMoney      = (m.startMoneyMul   != null) ? Math.round(base.startMoney   * m.startMoneyMul)   : base.startMoney;
+    s.overhead        = (m.overheadMul     != null) ? Math.round(base.overhead     * m.overheadMul)     : base.overhead;
+    s.winCondition    = (m.winConditionMul != null) ? Math.round(base.winCondition * m.winConditionMul) : base.winCondition;
+    s.startReputation = (m.startReputationAdd != null) ? Math.max(0, Math.min(100, base.startReputation + m.startReputationAdd)) : base.startReputation;
     // Синхронизируем число цели в introText, если сложность сдвинула winCondition
     if (s.introText && s.winCondition !== oldWin) {
       const oldStr = _fmtRubText(oldWin);

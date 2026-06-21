@@ -1592,6 +1592,17 @@
     return { ok: true, owned: left, proceeds, pct };
   }
 
+  // Суммарный ожидаемый дивиденд/мес по всем долям (для P&L и cashflow).
+  function totalDividends() {
+    if (!G || !G.market || !G.market.holdings) return 0;
+    let t = 0;
+    Object.keys(G.market.holdings).forEach(id => {
+      const comp = (G.market.competitors || []).find(c => c.id === id);
+      if (comp) t += equityDividend(comp);
+    });
+    return t;
+  }
+
   // Начислить дивиденды по всем долям (вызывается из _processMarketMonth).
   function _processEquityDividends() {
     if (!G || !G.market || !G.market.holdings) return;
@@ -2926,6 +2937,7 @@
     equityPrice1pct,
     equityOwned,
     equityDividend,
+    totalDividends,
     equityCap,
     buyEquity,
     sellEquity,
