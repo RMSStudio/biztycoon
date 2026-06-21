@@ -1237,13 +1237,51 @@
   // Хранится в сейве через saves.js (_snap/G целиком).
   // _lastRankings — кэш рейтинга, пересчитывается каждый месяц, НЕ в сейве.
 
+  // revenueRange — базовый месячный прирост (до множителя тира).
+  // growth — множитель прироста; repBias — склонность к росту репутации;
+  // pfRate — прирост портфолио/мес; staffRate — шанс +1 в штат; vol —
+  // волатильность (разброс месяца, дикая карта = высокий).
   const COMPETITOR_ARCHETYPES = {
-    dumper:    { name: 'Демпер',       icon: '🔨', desc: 'Берёт объёмом, цена ниже рынка',       revenueRange: [150_000, 400_000] },
-    boutique:  { name: 'Бутик',        icon: '💎', desc: 'Высокий чек, нишевые проекты',          revenueRange: [180_000, 480_000] },
-    machine:   { name: 'Машина найма', icon: '🏭', desc: 'Агрессивный рост команды и мощности',   revenueRange: [220_000, 520_000] },
-    networker: { name: 'Сетевик',      icon: '🌐', desc: 'Репутация и партнёрская сеть',           revenueRange: [100_000, 280_000] },
-    wildcard:  { name: 'Дикая карта',  icon: '🃏', desc: 'Непредсказуемые скачки роста',            revenueRange: [50_000,  750_000] },
+    dumper:    { name: 'Демпер',       icon: '🔨', desc: 'Берёт объёмом, цена ниже рынка',         revenueRange: [150_000, 400_000], growth: 1.15, repBias: 0.10, pfRate: 0.9, staffRate: 0.22, vol: 0.25 },
+    boutique:  { name: 'Бутик',        icon: '💎', desc: 'Высокий чек, нишевые проекты',           revenueRange: [180_000, 480_000], growth: 0.95, repBias: 0.55, pfRate: 1.4, staffRate: 0.08, vol: 0.20 },
+    machine:   { name: 'Машина найма', icon: '🏭', desc: 'Агрессивный рост команды и мощности',    revenueRange: [220_000, 520_000], growth: 1.25, repBias: 0.20, pfRate: 1.1, staffRate: 0.45, vol: 0.22 },
+    networker: { name: 'Сетевик',      icon: '🌐', desc: 'Репутация и партнёрская сеть, филиалы',  revenueRange: [100_000, 280_000], growth: 1.05, repBias: 0.40, pfRate: 1.2, staffRate: 0.25, vol: 0.18 },
+    wildcard:  { name: 'Дикая карта',  icon: '🃏', desc: 'Непредсказуемые скачки роста',           revenueRange: [50_000,  750_000], growth: 1.10, repBias: 0.25, pfRate: 1.0, staffRate: 0.20, vol: 0.65 },
   };
+
+  // Стартовый профиль по тиру (≈ масштаб стадий игрока: 1≈Гараж … 5≈Холдинг).
+  // [revenue, reputation, portfolio, staff] — нижняя/верхняя границы.
+  const COMPETITOR_TIERS = {
+    1: { rev: [2_000_000,   5_000_000],   rep: [25, 40], pf: [2, 4],   staff: [2, 4],   mult: 0.6 },
+    2: { rev: [6_000_000,   12_000_000],  rep: [35, 50], pf: [4, 7],   staff: [4, 7],   mult: 0.9 },
+    3: { rev: [14_000_000,  26_000_000],  rep: [45, 62], pf: [7, 12],  staff: [8, 14],  mult: 1.3 },
+    4: { rev: [32_000_000,  58_000_000],  rep: [58, 72], pf: [12, 20], staff: [16, 28], mult: 1.9 },
+    5: { rev: [75_000_000, 135_000_000],  rep: [70, 86], pf: [20, 34], staff: [30, 55], mult: 2.8 },
+  };
+
+  // Ростер рынка — 18 именованных агентств, разные модели и тиры.
+  const COMPETITOR_ROSTER = [
+    { id: 'comp_podval',   name: 'Подвал Дизайн',   archetype: 'dumper',    tier: 1 },
+    { id: 'comp_coffee',   name: 'Кофе и Пиксель',  archetype: 'boutique',  tier: 1 },
+    { id: 'comp_garazh',   name: 'Гаражная лига',   archetype: 'machine',   tier: 1 },
+    { id: 'comp_nulstud',  name: 'Нуль-студия',     archetype: 'wildcard',  tier: 1 },
+    { id: 'comp_briefkol', name: 'Бриф на коленке', archetype: 'dumper',    tier: 2 },
+    { id: 'comp_shrift',   name: 'Шрифт и точка',   archetype: 'boutique',  tier: 2 },
+    { id: 'comp_kontur',   name: 'Контур',          archetype: 'networker', tier: 2 },
+    { id: 'comp_setka12',  name: 'Сетка 12',        archetype: 'boutique',  tier: 3 },
+    { id: 'comp_maketpro', name: 'Макет Про',       archetype: 'machine',   tier: 3 },
+    { id: 'comp_demphall', name: 'Демпинг-холл',    archetype: 'dumper',    tier: 3 },
+    { id: 'comp_orbita',   name: 'Орбита Медиа',    archetype: 'networker', tier: 3 },
+    { id: 'comp_zavod',    name: 'Завод креатива',  archetype: 'machine',   tier: 4 },
+    { id: 'comp_gildiya',  name: 'Гильдия',         archetype: 'boutique',  tier: 4 },
+    { id: 'comp_viral',    name: 'Вирал Лаб',       archetype: 'wildcard',  tier: 4 },
+    { id: 'comp_meta',     name: 'Мета Агентство',  archetype: 'networker', tier: 5 },
+    { id: 'comp_prime',    name: 'Прайм Холдинг',   archetype: 'machine',   tier: 5 },
+    { id: 'comp_atrium',   name: 'Атриум',          archetype: 'boutique',  tier: 5 },
+    { id: 'comp_skachok',  name: 'Скачок',          archetype: 'wildcard',  tier: 5 },
+  ];
+
+  function _ri(lo, hi) { return Math.round(lo + Math.random() * (hi - lo)); }
 
 
   // ── Фаза E: Офисы ─────────────────────────────────────────────────────
@@ -1291,17 +1329,26 @@
   ];
 
   function _createCompetitors() {
-    return Object.keys(COMPETITOR_ARCHETYPES).map((arch) => ({
-      id:            'comp_' + arch,
-      name:          COMPETITOR_ARCHETYPES[arch].name,
-      icon:          COMPETITOR_ARCHETYPES[arch].icon,
-      archetype:     arch,
-      revenue:       0,
-      reputation:    Math.floor(20 + Math.random() * 30),
-      deliveries:    0,
-      monthlyRevenue: 0,
-      awardsWon:     0,   // Phase D: ежегодные награды
-    }));
+    return COMPETITOR_ROSTER.map((r) => {
+      const arch = COMPETITOR_ARCHETYPES[r.archetype] || COMPETITOR_ARCHETYPES.dumper;
+      const t    = COMPETITOR_TIERS[r.tier] || COMPETITOR_TIERS[2];
+      const rev  = Math.round(_ri(t.rev[0], t.rev[1]) / 1000) * 1000;
+      return {
+        id:            r.id,
+        name:          r.name,
+        icon:          arch.icon,
+        archetype:     r.archetype,
+        tier:          r.tier,
+        revenue:       rev,
+        reputation:    _ri(t.rep[0], t.rep[1]),
+        portfolio:     _ri(t.pf[0], t.pf[1]),
+        staff:         _ri(t.staff[0], t.staff[1]),
+        deliveries:    Math.round(rev / 240_000),
+        monthlyRevenue: Math.round(rev * 0.04 / 1000) * 1000,
+        awardsWon:     0,
+        history:       [],
+      };
+    });
   }
 
 
@@ -1453,11 +1500,101 @@
     return { ok: true, competitorId, cost, mode, acquisitions: G.market.acquisitions };
   }
 
+  // ── Слой A: доли / акции конкурентов ─────────────────────────────────
+  // Оценка компании растёт вместе с её показателями; цена 1% = оценка/100.
+  // Доли дают дивиденды (% от месячной выручки) и скидку при выкупе.
+
+  const EQUITY_PAYOUT = 0.5;   // доля месячной выручки, идущая дивидендами
+
+  function competitorValuation(comp) {
+    if (!comp) return 0;
+    return Math.round(
+      (comp.revenue || 0) * 1.4 +
+      (comp.reputation || 0) * 60_000 +
+      (comp.portfolio || 0) * 90_000 +
+      (comp.staff || 0) * 40_000
+    );
+  }
+
+  function equityPrice1pct(comp) {
+    return Math.max(1000, Math.round(competitorValuation(comp) / 100 / 1000) * 1000);
+  }
+
+  function equityOwned(competitorId) {
+    return (G.market && G.market.holdings && G.market.holdings[competitorId]) || 0;
+  }
+
+  function equityDividend(comp) {
+    if (!comp) return 0;
+    const owned = equityOwned(comp.id);
+    return Math.round((comp.monthlyRevenue || 0) * (owned / 100) * EQUITY_PAYOUT);
+  }
+
+  function buyEquity(competitorId, pct) {
+    if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
+    const stage = (G.living && (G.living.stage || 0)) || 0;
+    if (stage < 3) return { ok: false, reason: 'stage_required', stageReq: 3 };
+    const comp = (G.market.competitors || []).find(c => c.id === competitorId);
+    if (!comp) return { ok: false, reason: 'competitor_not_found' };
+    pct = Math.max(1, Math.round(pct || 0));
+    const owned = equityOwned(competitorId);
+    if (owned + pct > 100) pct = 100 - owned;
+    if (pct <= 0) return { ok: false, reason: 'already_full' };
+    const cost = pct * equityPrice1pct(comp);
+    if ((G.money || 0) < cost) return { ok: false, reason: 'insufficient_funds', cost };
+    G.money -= cost;
+    G.market.holdings = G.market.holdings || {};
+    G.market.holdings[competitorId] = owned + pct;
+    if (typeof addLog === 'function')
+      addLog('📈 Куплено ' + pct + '% «' + comp.name + '» за ' + _formatMoneyShort(cost) + ' (доля ' + (owned + pct) + '%)', 'cyan');
+    try { EventBus.emit('assets_changed', { type: 'equity_buy', id: competitorId, pct }); } catch (_) {}
+    try { EventBus.emit('render'); } catch (_) {}
+    if (typeof autoSave === 'function') { try { autoSave(); } catch (_) {} }
+    return { ok: true, owned: G.market.holdings[competitorId], cost, pct };
+  }
+
+  function sellEquity(competitorId, pct) {
+    if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
+    const comp = (G.market.competitors || []).find(c => c.id === competitorId);
+    if (!comp) return { ok: false, reason: 'competitor_not_found' };
+    const owned = equityOwned(competitorId);
+    pct = Math.max(1, Math.round(pct || 0));
+    if (pct > owned) pct = owned;
+    if (pct <= 0) return { ok: false, reason: 'no_holdings' };
+    const proceeds = Math.round(pct * equityPrice1pct(comp) * 0.95);   // 5% спред
+    G.money += proceeds;
+    const left = owned - pct;
+    if (left <= 0) delete G.market.holdings[competitorId];
+    else G.market.holdings[competitorId] = left;
+    if (typeof addLog === 'function')
+      addLog('📉 Продано ' + pct + '% «' + comp.name + '» за ' + _formatMoneyShort(proceeds) + ' (осталось ' + left + '%)', 'amber');
+    try { EventBus.emit('assets_changed', { type: 'equity_sell', id: competitorId, pct }); } catch (_) {}
+    try { EventBus.emit('render'); } catch (_) {}
+    if (typeof autoSave === 'function') { try { autoSave(); } catch (_) {} }
+    return { ok: true, owned: left, proceeds, pct };
+  }
+
+  // Начислить дивиденды по всем долям (вызывается из _processMarketMonth).
+  function _processEquityDividends() {
+    if (!G || !G.market || !G.market.holdings) return;
+    let total = 0;
+    Object.keys(G.market.holdings).forEach(id => {
+      const comp = (G.market.competitors || []).find(c => c.id === id);
+      if (comp) total += equityDividend(comp);
+    });
+    if (total > 0) {
+      G.money += total;
+      if (typeof addLog === 'function')
+        addLog('💰 Дивиденды с долей: +' + _formatMoneyShort(total), 'green');
+    }
+  }
+
   function _initMarket() {
     if (typeof G === 'undefined' || !G) return;
     if (!G.market) {
       G.market = {
         competitors:   _createCompetitors(),
+        holdings:      {},    // Ф.8 слой A: { [compId]: ownedPct }
         playerRank:    null,
         monthsAtRank1: 0,
         acquisitions:  0,
@@ -1466,23 +1603,34 @@
       };
     } else {
       // back-compat: добиваем недостающие поля
-      if (!G.market.competitors || !G.market.competitors.length)
+      const old = G.market.competitors || [];
+      // Миграция Ф.8: старый ростер (5 шт. без поля tier) → новый именованный
+      if (!old.length || old.some(c => c.tier == null)) {
         G.market.competitors = _createCompetitors();
+        G.market.holdings = {};
+      }
+      if (!G.market.holdings)             G.market.holdings      = {};
       if (G.market.monthsAtRank1 == null) G.market.monthsAtRank1 = 0;
       if (G.market.acquisitions  == null) G.market.acquisitions  = 0;
       if (G.market.awardsWon     == null) G.market.awardsWon     = 0;
       if (!('dumpingWave' in G.market))   G.market.dumpingWave   = null;
-      // Добавляем awardsWon каждому конкуренту (back-compat старых сейвов)
       (G.market.competitors || []).forEach(c => {
         if (c.awardsWon == null) c.awardsWon = 0;
+        if (!c.history)          c.history   = [];
       });
     }
   }
 
-  function _competitorMonthlyDelta(archetype) {
-    const a = COMPETITOR_ARCHETYPES[archetype] || COMPETITOR_ARCHETYPES.dumper;
+  function _competitorMonthlyDelta(c) {
+    const arch = (typeof c === 'string') ? c : (c && c.archetype);
+    const a    = COMPETITOR_ARCHETYPES[arch] || COMPETITOR_ARCHETYPES.dumper;
+    const tier = (c && c.tier) || 2;
+    const t    = COMPETITOR_TIERS[tier] || COMPETITOR_TIERS[2];
     const [lo, hi] = a.revenueRange;
-    return Math.round((lo + Math.random() * (hi - lo)) / 1000) * 1000;
+    let base = (lo + Math.random() * (hi - lo)) * a.growth * t.mult;
+    const v  = 1 + (Math.random() * 2 - 1) * a.vol;     // волатильность
+    base *= Math.max(0.2, v);
+    return Math.round(base / 1000) * 1000;
   }
 
   function _processMarketMonth() {
@@ -1494,13 +1642,24 @@
     // Тик каждого конкурента
     for (let i = 0; i < market.competitors.length; i++) {
       const c     = market.competitors[i];
-      const delta = _competitorMonthlyDelta(c.archetype);
+      const a     = COMPETITOR_ARCHETYPES[c.archetype] || COMPETITOR_ARCHETYPES.dumper;
+      const delta = _competitorMonthlyDelta(c);
       c.monthlyRevenue = delta;
       c.revenue       += delta;
-      c.deliveries    += Math.round(delta / 220_000);
-      if (Math.random() < 0.3) c.reputation = Math.min(100, (c.reputation || 0) + 1);
+      c.deliveries    += Math.round(delta / 240_000);
+      // репутация — склонность по архетипу, у дикой карты бывают просадки
+      if (Math.random() < a.repBias) c.reputation = Math.min(100, (c.reputation || 0) + 1);
+      else if (a.vol > 0.5 && Math.random() < 0.10) c.reputation = Math.max(0, (c.reputation || 0) - 1);
+      // портфолио и штат
+      if (Math.random() < a.pfRate * 0.5) c.portfolio = (c.portfolio || 0) + 1;
+      if (Math.random() < a.staffRate)    c.staff     = (c.staff || 0) + 1;
+      // история (тренды в модале рынка)
+      if (!c.history) c.history = [];
+      c.history.push({ month: G.month || 0, revenue: c.revenue, reputation: c.reputation, portfolio: c.portfolio, staff: c.staff });
+      if (c.history.length > 60) c.history = c.history.slice(-60);
     }
 
+    _processEquityDividends();  // Ф.8 слой A: дивиденды с долей
     _updateMarketRankings();
     _tickDumpingWave();        // Phase D: демпинг-волны
     _tickStaffPoaching();      // Phase D: хантинг сотрудников
@@ -2657,6 +2816,8 @@
     if (typeof EventBus !== 'undefined' && EventBus.on) {
       EventBus.on('render', () => {
         try {
+          // Ф.8: миграция рынка при резюме сейва (старый ростер → новый)
+          if (typeof G !== 'undefined' && G && (G.market || G.month != null)) _initMarket();
           const sub = document.getElementById('perk-btn-sub');
           if (sub) {
             const xp        = Math.floor((G && G.xp) || 0);
@@ -2738,6 +2899,13 @@
     acquisitionCost,
     acquisitionYield,
     hasMAdept:             _hasMAdept,
+    // Ф.8 слой A — доли/акции
+    competitorValuation,
+    equityPrice1pct,
+    equityOwned,
+    equityDividend,
+    buyEquity,
+    sellEquity,
     showAssetsModal,
     _renderAssetsModal,
     // v0.9 (Фаза C) — конкуренты + рейтинг рынка
