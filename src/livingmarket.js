@@ -1401,15 +1401,26 @@
     return (G.market && G.market.holdings && G.market.holdings[competitorId]) || 0;
   }
 
-  // Полная цена выкупа конкурента (превью для UI). Учитывает перк и долю.
+  // Надбавка за контроль: выкуп остатка дороже рыночной доли (премия за контроль).
+  const CONTROL_PREMIUM = 1.2;
+
+  // Цена выкупа КОНТРОЛЯ = доплата за остаток долей по оценке × премия за контроль.
+  // Связано с competitorValuation (та же шкала, что у цены акций) — больше нет
+  // дешёвого «добора остатка» (эконом-фикс абуза 2026-06-21).
   function acquisitionCost(comp) {
     if (!comp) return 0;
-    const mr = comp.monthlyRevenue || Math.round((comp.revenue || 0) / 12) || 200_000;
-    let cost = 600_000 + Math.round(mr * 3) + Math.round((comp.revenue || 0) * 0.04);
-    if (_hasMAdept()) cost = Math.round(cost * 0.68);          // −32% за «M&A-отдел»
+    const V = competitorValuation(comp);
     const owned = _equityOwned(comp.id);
-    if (owned > 0) cost = Math.round(cost * (1 - owned / 100)); // доплата за остаток
-    return Math.max(50_000, Math.round(cost / 1000) * 1000);
+    const remaining = Math.max(0, 100 - owned) / 100;
+    let cost = V * remaining * CONTROL_PREMIUM;
+    if (_hasMAdept()) cost *= 0.78;   // −22% за «M&A-отдел»
+    return Math.max(100_000, Math.round(cost / 1000) * 1000);
+  }
+
+  // Ликвидационная (пожарная) стоимость — меньше вложенного: ликвидация это
+  // стратегический ход «убрать конкурента + забрать кэш», а не прибыль.
+  function liquidationValue(comp) {
+    return Math.max(0, Math.round(competitorValuation(comp) * 0.5 / 1000) * 1000);
   }
 
   // Что игрок получит при поглощении (превью + применение). От архетипа.
@@ -1451,34 +1462,58 @@
     return n;
   }
 
-  // mode: 'integrate' (по умолч.) | 'liquidate' | 'subbrand'
-  function acquireCompetitor(competitorId, mode) {
+  const DAYS_ACQUIRE = 6;        // поглощение тратит рабочие дни
+  const LIQUIDATION_LOCK = 12;   // распродать поглощённую компанию можно через 12 мес
+
+  // mode: 'integrate' (по умолч.) | 'subbrand'. Ликвидация — отдельным действием
+  // позже (liquidateSubsidiary), не из окна поглощения (эконом-фикс абуза).
+  // opts (необяз., из ветвистого процесса поглощения): { costMult, yieldMult, extraDays }
+  //   — итог переговоров/дью-дилидженс. По умолчанию нейтральны (прямой вызов = как раньше).
+  function acquireCompetitor(competitorId, mode, opts) {
     if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
     const stage = (G.living && (G.living.stage || 0)) || 0;
     if (stage < 3) return { ok: false, reason: 'stage_required', stageReq: 3 };
     const idx = (G.market.competitors || []).findIndex(c => c.id === competitorId);
     if (idx === -1) return { ok: false, reason: 'competitor_not_found' };
     const comp = G.market.competitors[idx];
-    const cost = acquisitionCost(comp);
+    const o        = opts || {};
+    const costMult = (o.costMult  != null) ? o.costMult  : 1;
+    const yieldMult= (o.yieldMult != null) ? o.yieldMult : 1;
+    const days     = DAYS_ACQUIRE + (o.extraDays || 0);
+    const cost = Math.max(100_000, Math.round(acquisitionCost(comp) * costMult / 1000) * 1000);
     if ((G.money || 0) < cost) return { ok: false, reason: 'insufficient_funds', cost };
+    if ((G.actions || 0) < days) return { ok: false, reason: 'no_days', days };
 
     mode = mode || 'integrate';
     if (mode === 'subbrand' && stage < 4) mode = 'integrate'; // саббренды — c Холдинга
-    const y = acquisitionYield(comp);
+    const y0 = acquisitionYield(comp);
+    const y  = {
+      cash:      y0.cash,
+      portfolio: Math.max(0, Math.round((y0.portfolio || 0) * yieldMult)),
+      leads:     Math.max(0, Math.round((y0.leads     || 0) * yieldMult)),
+      staffN:    Math.max(0, Math.round((y0.staffN    || 0) * yieldMult)),
+      topGrade:  y0.topGrade,
+      arch:      y0.arch,
+    };
+    const V = competitorValuation(comp);
 
-    G.money -= cost;
+    G.money   -= cost;
+    G.actions -= days;
     G.market.competitors.splice(idx, 1);
     if (G.market.holdings) delete G.market.holdings[competitorId];
     G.market.acquisitions = (G.market.acquisitions || 0) + 1;
     G.reputation = Math.min(100, (G.reputation || 0) + 4);
 
+    // Поглощённая компания → в список «дочерних» (для лока ликвидации)
+    G.living = G.living || {};
+    G.living.subsidiaries = G.living.subsidiaries || [];
+    G.living.subsidiaries.push({
+      id: comp.id, name: comp.name, icon: comp.icon, archetype: comp.archetype, tier: comp.tier,
+      valuation: V, acquiredMonth: (G.month || 0), mode,
+    });
+
     let detail = '';
-    if (mode === 'liquidate') {
-      G.money     += y.cash;
-      const pf     = Math.max(1, Math.round(y.portfolio / 2));
-      G.portfolio  = (G.portfolio || 0) + pf;
-      detail = 'ликвидация: +' + _formatMoneyShort(y.cash) + ', +' + pf + ' портфолио';
-    } else if (mode === 'subbrand') {
+    if (mode === 'subbrand') {
       G.portfolio      = (G.portfolio || 0) + y.portfolio;
       G.caseScoutBonus = (G.caseScoutBonus || 0) + 1;
       detail = 'саббренд: +' + y.portfolio + ' портфолио, +1 к скаутингу';
@@ -1490,7 +1525,7 @@
     }
 
     if (typeof addLog === 'function')
-      addLog('🤝 Поглощение: ' + comp.name + ' за ' + _formatMoneyShort(cost) + ' — ' + detail, 'violet');
+      addLog('🤝 Поглощение: ' + comp.name + ' за ' + _formatMoneyShort(cost) + ' (−' + days + ' дн.) — ' + detail, 'violet');
     _pushTicker('🏆 вы поглотили «' + comp.name + '»', 'act');
     if (typeof notify === 'function')
       notify('Поглощён ' + comp.name + '! ' + (comp.icon || ''), 'success');
@@ -1501,12 +1536,35 @@
     return { ok: true, competitorId, cost, mode, acquisitions: G.market.acquisitions };
   }
 
+  // Ликвидация поглощённой компании — доступна через LIQUIDATION_LOCK мес после
+  // поглощения. Возвращает пожарную стоимость (убыток против вложенного).
+  function liquidateSubsidiary(subId) {
+    if (!G || !G.living || !Array.isArray(G.living.subsidiaries)) return { ok: false, reason: 'no_sub' };
+    const i = G.living.subsidiaries.findIndex(s => s.id === subId);
+    if (i === -1) return { ok: false, reason: 'no_sub' };
+    const sub = G.living.subsidiaries[i];
+    const monthsHeld = (G.month || 0) - (sub.acquiredMonth || 0);
+    if (monthsHeld < LIQUIDATION_LOCK) return { ok: false, reason: 'locked', monthsLeft: LIQUIDATION_LOCK - monthsHeld };
+    if ((G.actions || 0) < 3) return { ok: false, reason: 'no_days', days: 3 };
+    const cash = Math.max(0, Math.round((sub.valuation || 0) * 0.5 / 1000) * 1000);
+    G.actions -= 3;
+    G.money += cash;
+    G.portfolio = (G.portfolio || 0) + 2;
+    G.living.subsidiaries.splice(i, 1);
+    if (typeof addLog === 'function') addLog('💰 Ликвидирована «' + sub.name + '» — +' + _formatMoneyShort(cash) + ' (−3 дн.)', 'amber');
+    _pushTicker('💰 вы ликвидировали «' + sub.name + '»', 'act');
+    try { EventBus.emit('render'); } catch (_) {}
+    if (typeof autoSave === 'function') { try { autoSave(); } catch (_) {} }
+    return { ok: true, cash };
+  }
+
   // ── Слой A: доли / акции конкурентов ─────────────────────────────────
   // Оценка компании растёт вместе с её показателями; цена 1% = оценка/100.
   // Доли дают дивиденды (% от месячной выручки) и скидку при выкупе.
 
   const EQUITY_PAYOUT = 0.5;   // доля месячной выручки, идущая дивидендами
   const EQUITY_MINORITY_CAP = 25;  // потолок доли до стадии «Сеть» (миноритарный пакет)
+  const EQUITY_DAYS = 2;       // покупка/продажа долей тратит рабочие дни
 
   // Лента событий для бегущей строки (последние 20).
   function _pushTicker(msg, kind) {
@@ -1558,6 +1616,8 @@
     if (pct <= 0) return { ok: false, reason: 'minority_cap', cap };
     const cost = pct * equityPrice1pct(comp);
     if ((G.money || 0) < cost) return { ok: false, reason: 'insufficient_funds', cost };
+    if ((G.actions || 0) < EQUITY_DAYS) return { ok: false, reason: 'no_days', days: EQUITY_DAYS };
+    G.actions -= EQUITY_DAYS;
     G.money -= cost;
     G.market.holdings = G.market.holdings || {};
     G.market.holdings[competitorId] = owned + pct;
@@ -1578,6 +1638,8 @@
     pct = Math.max(1, Math.round(pct || 0));
     if (pct > owned) pct = owned;
     if (pct <= 0) return { ok: false, reason: 'no_holdings' };
+    if ((G.actions || 0) < EQUITY_DAYS) return { ok: false, reason: 'no_days', days: EQUITY_DAYS };
+    G.actions -= EQUITY_DAYS;
     const proceeds = Math.round(pct * equityPrice1pct(comp) * 0.95);   // 5% спред
     G.money += proceeds;
     const left = owned - pct;
@@ -1621,6 +1683,9 @@
 
   function _initMarket() {
     if (typeof G === 'undefined' || !G) return;
+    // Ф.8 ребаланс: список дочерних (поглощённых) компаний — для лока ликвидации
+    G.living = G.living || {};
+    if (!Array.isArray(G.living.subsidiaries)) G.living.subsidiaries = [];
     if (!G.market) {
       G.market = {
         competitors:   _createCompetitors(),
@@ -1635,8 +1700,10 @@
     } else {
       // back-compat: добиваем недостающие поля
       const old = G.market.competitors || [];
-      // Миграция Ф.8: старый ростер (5 шт. без поля tier) → новый именованный
-      if (!old.length || old.some(c => c.tier == null)) {
+      // Миграция Ф.8: старый ростер (5 шт. без поля tier) → новый именованный.
+      // ВАЖНО: пустой ростер НЕ регенерим — захват всего рынка это достижение,
+      // а не бесконечный конвейер новых конкурентов (эконом-фикс абуза 2026-06-21).
+      if (old.some(c => c.tier == null)) {
         G.market.competitors = _createCompetitors();
         G.market.holdings = {};
       }
@@ -2937,6 +3004,10 @@
     acquisitionCost,
     acquisitionYield,
     hasMAdept:             _hasMAdept,
+    // Ф.8 ребаланс — дочерние компании + ликвидация
+    liquidationValue,
+    liquidateSubsidiary,
+    getSubsidiaries:       () => ((G && G.living && G.living.subsidiaries) || []).slice(),
     // Ф.8 слой A — доли/акции
     competitorValuation,
     equityPrice1pct,

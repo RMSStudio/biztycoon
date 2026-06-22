@@ -363,8 +363,63 @@
       '<div style="display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1">' + rows + '</div>' +
       '<div style="font-size:10px;color:var(--muted);margin-top:10px;text-align:center;font-style:italic">Скоринг: выручка × 50/M + репутация × 0.3 + портфолио × 0.5</div>' +
       acqHint +
+      _renderSubsidiariesBlock() +
       '<button onclick="document.getElementById(\'cmp-market-modal\').style.display=\'none\'" style="margin-top:10px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;align-self:center">Закрыть</button>' +
     '</div>';
+  }
+
+  // ── Дочерние компании (Ф.8 ребаланс) — поглощённые активы + ликвидация ──
+  const LIQUIDATION_LOCK = 12;
+
+  function _renderSubsidiariesBlock() {
+    const lm   = _LM();
+    const subs = (lm && lm.getSubsidiaries) ? lm.getSubsidiaries()
+               : ((G && G.living && G.living.subsidiaries) || []);
+    if (!subs || !subs.length) return '';
+    const month = (G && G.month) || 0;
+    const days  = (G && G.actions) || 0;
+    const modeName = { integrate: 'интегр.', subbrand: 'саббренд' };
+    const cards = subs.map(s => {
+      const held    = month - (s.acquiredMonth || 0);
+      const locked  = held < LIQUIDATION_LOCK;
+      const left    = Math.max(0, LIQUIDATION_LOCK - held);
+      const cash    = Math.max(0, Math.round((s.valuation || 0) * 0.5 / 1000) * 1000);
+      const canDays = days >= 3;
+      const can     = !locked && canDays;
+      const sub     = locked
+        ? '🔒 распродажа через ' + left + ' мес'
+        : (canDays ? '💰 +' + _formatMoneyShort(cash) + ' · −3 дн.' : 'нужно ≥3 дн.');
+      const btn = '<button ' + (can ? 'onclick="Competitors.doLiquidate(\'' + s.id + '\')"' : 'disabled') +
+        ' style="padding:6px 10px;border-radius:7px;border:1px solid ' + (can ? 'rgba(251,191,36,.5)' : 'var(--border)') +
+        ';background:' + (can ? 'rgba(251,191,36,.10)' : 'rgba(255,255,255,.02)') + ';color:' + (can ? '#fbbf24' : 'var(--muted)') +
+        ';cursor:' + (can ? 'pointer' : 'not-allowed') + ';font-size:10px;font-weight:700;white-space:nowrap">' + sub + '</button>';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-left:3px solid #a78bfa;background:rgba(167,139,250,.05);border-radius:7px">' +
+        '<span style="font-size:18px">' + (s.icon || '🏢') + '</span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + s.name + '</div>' +
+          '<div style="font-size:10px;color:var(--sub)">' + (modeName[s.mode] || s.mode || '—') + ' · оценка ' + _formatMoneyShort(s.valuation || 0) + '</div>' +
+        '</div>' + btn +
+      '</div>';
+    }).join('');
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">' +
+        '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🏢 Дочерние компании · ' + subs.length + '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:5px">' + cards + '</div>' +
+        '<div style="font-size:9px;color:var(--muted);margin-top:6px;text-align:center;font-style:italic">Ликвидация даёт ~50% оценки (убыток против вложенного) и открыта через ' + LIQUIDATION_LOCK + ' мес после поглощения.</div>' +
+      '</div>';
+  }
+
+  function doLiquidate(id) {
+    const lm = _LM();
+    if (!lm || !lm.liquidateSubsidiary) return;
+    const res = lm.liquidateSubsidiary(id);
+    if (res && res.ok) {
+      try { _renderRankPill(); } catch (_) {}
+      if (document.getElementById('cmp-market-modal')) { try { showMarketModal(); } catch (_) {} }
+    } else if (res && res.reason === 'locked') {
+      if (typeof notify === 'function') notify('Ещё под локом — ' + (res.monthsLeft || 0) + ' мес', 'error');
+    } else if (res && res.reason === 'no_days') {
+      if (typeof notify === 'function') notify('Нужно ≥' + (res.days || 3) + ' рабочих дней', 'error');
+    }
   }
 
   // ── Поглощения (Ф.8) — диалог с карточки конкурента ──────────────────
@@ -398,7 +453,10 @@
     const y     = lm.acquisitionYield ? lm.acquisitionYield(comp) : { staffN: 0, portfolio: 0, leads: 0, cash: 0 };
     const perk  = lm.hasMAdept && lm.hasMAdept();
     const money = (G && G.money) || 0;
-    const afford = money >= cost;
+    const DAYS_ACQUIRE = 6;
+    const days  = (G && G.actions) || 0;
+    const affordDays = days >= DAYS_ACQUIRE;
+    const afford = money >= cost && affordDays;
     const stage  = (G && G.living && G.living.stage) || 0;
     const arch   = ARCHETYPES[comp.archetype];
     const pf     = (comp.portfolio != null) ? comp.portfolio : Math.max(0, Math.round((comp.deliveries || 0) / 6));
@@ -460,13 +518,13 @@
       (stage < 3
         ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;text-align:center;font-style:italic">Полный выкуп и присвоение активов откроются на стадии «Сеть». Сейчас — только доли.</div>'
         : '<div style="display:flex;align-items:baseline;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--border)">' +
-            '<span style="font-size:11px;color:var(--muted)">Цена выкупа' + (perk ? ' <span style="color:#86efac">(−32%)</span>' : '') + '</span>' +
+            '<span style="font-size:11px;color:var(--muted)">Цена выкупа контроля' + (perk ? ' <span style="color:#86efac">(−22%)</span>' : '') + ' · <b style="color:var(--text)">−' + DAYS_ACQUIRE + ' дн.</b></span>' +
             '<span style="font-size:16px;font-weight:800;color:' + (afford ? 'var(--text)' : '#fca5a5') + '">' + _formatMoneyShort(cost) + '</span>' +
           '</div>' +
-          (afford ? '' : '<div style="font-size:10px;color:#fca5a5;margin-top:6px;text-align:center">Недостаточно средств (есть ' + _formatMoneyShort(money) + ')</div>') +
-          modeBtn('integrate', '🧩', 'Интегрировать', 'Влить ~' + y.staffN + ' спец. (со сниж. лояльностью), +' + y.portfolio + ' портфолио, +' + y.leads + ' лид(ов)', afford) +
-          modeBtn('liquidate', '💰', 'Ликвидировать', 'Распродать: +' + _formatMoneyShort(y.cash) + ', +' + Math.max(1, Math.round(y.portfolio / 2)) + ' портфолио', afford) +
-          modeBtn('subbrand', '🏷', 'Сделать саббрендом', stage >= 4 ? ('+' + y.portfolio + ' портфолио, +1 к скаутингу') : 'Откроется на стадии «Холдинг»', afford && stage >= 4)) +
+          (money < cost ? '<div style="font-size:10px;color:#fca5a5;margin-top:6px;text-align:center">Недостаточно средств (есть ' + _formatMoneyShort(money) + ')</div>' : '') +
+          (money >= cost && !affordDays ? '<div style="font-size:10px;color:#fca5a5;margin-top:6px;text-align:center">Нужно ≥' + DAYS_ACQUIRE + ' рабочих дней (осталось ' + days + ')</div>' : '') +
+          modeBtn('__mna__', '🤝', 'Начать переговоры о поглощении', 'Подход → дью-дилидженс → условия сделки. Итоговая цена и режим (интеграция/саббренд) — в конце процесса.', afford) +
+          '<div style="font-size:9px;color:var(--muted);margin-top:8px;text-align:center;font-style:italic">Распродать поглощённую компанию можно позже — из раздела «Дочерние» (лок 12 мес).</div>') +
       '<button onclick="document.getElementById(\'cmp-acquire-modal\').style.display=\'none\'" style="margin-top:14px;width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">Закрыть</button>' +
     '</div>';
   }
@@ -484,19 +542,233 @@
     if (res && res.ok) { openAcquire(id); try { _renderRankPill(); } catch (_) {} }
   }
 
-  function doAcquire(id, mode) {
+  function doAcquire(id, mode, opts) {
+    if (mode === '__mna__') { startMnA(id); return; }   // запуск ветвистого процесса
     const lm = _LM();
     if (!lm || !lm.acquireCompetitor) return;
-    const res = lm.acquireCompetitor(id, mode);
+    const res = lm.acquireCompetitor(id, mode, opts);
     if (res && res.ok) {
       const am = document.getElementById('cmp-acquire-modal'); if (am) am.style.display = 'none';
       try { _renderRankPill(); } catch (_) {}
       if (document.getElementById('cmp-market-modal')) { try { showMarketModal(); } catch (_) {} }
     } else if (res && res.reason === 'insufficient_funds') {
       if (typeof notify === 'function') notify('Недостаточно средств для поглощения', 'error');
+    } else if (res && res.reason === 'no_days') {
+      if (typeof notify === 'function') notify('Нужно ≥' + (res.days || 6) + ' рабочих дней', 'error');
     } else if (res && res.reason === 'stage_required') {
       if (typeof notify === 'function') notify('Поглощения откроются на стадии «Сеть»', 'error');
     }
+  }
+
+  // ── Ф.8 ребаланс: ВЕТВИСТЫЙ ПРОЦЕСС ПОГЛОЩЕНИЯ ───────────────────────
+  // Подход → дью-дилидженс → находка (вилка) → условия сделки. Деньги/дни
+  // тратятся ТОЛЬКО на финале (выход на любом шаге — без затрат). Итог
+  // переговоров собирается в opts {costMult,yieldMult,extraDays} для acquireCompetitor.
+
+  let _mna = null;   // { id, step, costMult, yieldMult, extraDays, approachLabel, finding }
+
+  // Подходы к сделке: база цены/тон. «Через долю» дешевле и даёт бесплатную DD.
+  function _mnaApproaches(owned) {
+    const list = [
+      { key: 'partner', icon: '🤝', title: 'Партнёрский подход', desc: 'Открытый разговор, без давления. Сделка пройдёт гладко, но за комфорт доплатишь.', eff: 'цена ×1.05', costMult: 1.05 },
+      { key: 'hard',    icon: '⚔️', title: 'Жёсткий торг',        desc: 'Давишь по цене с позиции силы. Дешевле, но продавец прячет больше скелетов.', eff: 'цена ×0.90', costMult: 0.90 },
+    ];
+    if (owned >= 10)
+      list.push({ key: 'insider', icon: '🔍', title: 'Через свою долю', desc: 'Ты уже внутри как акционер — знаешь компанию. Дью-дилидженс бесплатна.', eff: 'цена ×0.92 · DD без дней', costMult: 0.92, freeDD: true });
+    return list;
+  }
+
+  // Находки дью-дилидженс — каждая с вилкой из двух реакций.
+  const _MNA_FINDINGS = [
+    { icon: '💎', title: 'Недооценённый бренд',
+      text: 'Реальная репутация компании выше, чем в отчётности — её просто не умели «продавать».',
+      opts: [
+        { t: 'Не торговаться, забрать как есть', e: 'портфель ×1.2', yieldMult: 1.2, costMult: 1.0 },
+        { t: 'Сбить цену, пока продавец не понял', e: 'цена ×0.93', yieldMult: 1.0, costMult: 0.93 },
+      ] },
+    { icon: '🕳', title: 'Скрытые долги',
+      text: 'В балансе всплыли невидимые обязательства перед подрядчиками.',
+      opts: [
+        { t: 'Заложить долги в цену сделки', e: 'цена ×1.15', yieldMult: 1.0, costMult: 1.15 },
+        { t: 'Потребовать дисконт, часть активов уйдёт кредиторам', e: 'цена ×0.95 · портфель ×0.85', yieldMult: 0.85, costMult: 0.95 },
+      ] },
+    { icon: '🚪', title: 'Команда на чемоданах',
+      text: 'Ключевые спецы готовы уйти сразу после смены собственника.',
+      opts: [
+        { t: 'Golden handcuffs — удержать бонусами', e: 'цена ×1.10', yieldMult: 1.0, costMult: 1.10 },
+        { t: 'Отпустить — взять бренд и кейсы', e: 'портфель ×0.6 · цена ×0.9', yieldMult: 0.6, costMult: 0.9 },
+      ] },
+    { icon: '📈', title: 'Тёплая клиентская база',
+      text: 'У компании сильные аккаунт-менеджеры с лояльными клиентами.',
+      opts: [
+        { t: 'Сохранить менеджеров и контракты', e: 'портфель ×1.25 · цена ×1.05', yieldMult: 1.25, costMult: 1.05 },
+        { t: 'Взять только бренд', e: 'портфель ×0.9 · цена ×0.95', yieldMult: 0.9, costMult: 0.95 },
+      ] },
+  ];
+
+  function _mnaModal() {
+    let m = document.getElementById('cmp-mna-modal');
+    if (!m) {
+      m = document.createElement('div');
+      m.id = 'cmp-mna-modal';
+      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.84);z-index:360;display:flex;align-items:center;justify-content:center';
+      m.onclick = e => { if (e.target === m) _mnaClose(); };
+      document.body.appendChild(m);
+    }
+    m.style.display = 'flex';
+    return m;
+  }
+  function _mnaClose() { const m = document.getElementById('cmp-mna-modal'); if (m) m.style.display = 'none'; _mna = null; }
+
+  function startMnA(id) {
+    const comp = (G.market && G.market.competitors || []).find(c => c.id === id);
+    if (!comp) return;
+    _mna = { id, step: 'approach', costMult: 1, yieldMult: 1, extraDays: 0, approachLabel: '', finding: null };
+    _renderMnA();
+  }
+
+  // Универсальная обёртка-шаг: art-шапка + тело + кнопки выбора (стиль как в lifecycle).
+  function _mnaShell({ comp, phase, title, atmosphere, body, choices }) {
+    const art = '<div style="margin:-22px -22px 16px;height:104px;border-radius:14px 14px 0 0;background:linear-gradient(135deg,#3b2f63,#1e293b);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;overflow:hidden">' +
+        '<div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 60%,rgba(255,255,255,.05),transparent 70%)"></div>' +
+        '<span style="font-size:34px;position:relative">' + (comp.icon || '🏢') + '</span>' +
+        (atmosphere ? '<span style="font-size:11px;color:rgba(255,255,255,.55);font-style:italic;position:relative">' + atmosphere + '</span>' : '') +
+      '</div>';
+    const btns = choices.map((ch, i) => {
+      const dis = !!ch.disabled;
+      const col = ch._danger ? 'rgba(239,68,68,.45)' : (ch.highlight ? 'rgba(45,212,191,.5)' : 'rgba(167,139,250,.45)');
+      const bg  = ch._danger ? 'rgba(239,68,68,.05)' : (ch.highlight ? 'rgba(45,212,191,.07)' : 'rgba(167,139,250,.08)');
+      return '<button ' + (dis ? 'disabled' : 'onclick="Competitors._mnaPick(' + i + ')"') +
+        ' style="display:block;width:100%;text-align:left;margin-top:8px;padding:11px 13px;border-radius:10px;border:1px solid ' +
+        (dis ? 'var(--border)' : col) + ';background:' + (dis ? 'rgba(255,255,255,.02)' : bg) + ';color:' + (dis ? 'var(--muted)' : 'var(--text)') +
+        ';cursor:' + (dis ? 'not-allowed' : 'pointer') + '">' +
+        '<div style="font-size:12px;font-weight:800">' + ch.icon + ' ' + ch.t + '</div>' +
+        (ch.d ? '<div style="font-size:10px;color:var(--sub);margin-top:3px;line-height:1.4">' + ch.d + '</div>' : '') +
+        (ch.e ? '<div style="font-size:10px;color:var(--muted);font-style:italic;margin-top:4px">' + ch.e + '</div>' : '') +
+      '</button>';
+    }).join('');
+    _mnaModal().innerHTML =
+      '<div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:440px;width:94vw;max-height:90vh;overflow-y:auto">' +
+        art +
+        '<div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase">' + phase + ' · ' + comp.name + '</div>' +
+        '<div style="font-size:16px;font-weight:800;color:var(--text);margin:3px 0 10px;line-height:1.15">' + title + '</div>' +
+        (body || '') + btns +
+        '<button onclick="Competitors._mnaExit()" style="margin-top:14px;width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--sub);padding:8px;border-radius:9px;cursor:pointer;font-size:11px;font-weight:700">Выйти из переговоров (без затрат)</button>' +
+      '</div>';
+  }
+
+  function _renderMnA() {
+    if (!_mna) return;
+    const lm = _LM();
+    const comp = (G.market && G.market.competitors || []).find(c => c.id === _mna.id);
+    if (!comp) { _mnaClose(); return; }
+    const owned = (lm && lm.equityOwned) ? lm.equityOwned(comp.id) : 0;
+
+    if (_mna.step === 'approach') {
+      const choices = _mnaApproaches(owned).map(a => ({ icon: a.icon, t: a.title, d: a.desc, e: a.eff, _key: a }));
+      _mnaShell({ comp, phase: 'Подход', title: 'Как заходим в сделку?',
+        atmosphere: 'первый контакт', choices });
+      return;
+    }
+    if (_mna.step === 'dd') {
+      const free = _mna._freeDD;
+      const choices = [
+        { icon: '📋', t: 'Поверхностная проверка', d: 'Беглый просмотр отчётности. Никаких сюрпризов, но и скрытых выгод не найти.', e: 'без доп. дней', highlight: false, _dd: 'shallow' },
+        { icon: '🔬', t: 'Глубокая дью-дилидженс', d: 'Поднять контракты, поговорить с командой, найти то, что прячут.', e: free ? 'бесплатно (ты акционер)' : '+2 рабочих дня', _dd: 'deep' },
+      ];
+      _mnaShell({ comp, phase: 'Дью-дилидженс', title: 'Насколько глубоко копаем?',
+        atmosphere: 'проверка активов', choices });
+      return;
+    }
+    if (_mna.step === 'finding') {
+      const f = _mna.finding;
+      const choices = f.opts.map(o => ({ icon: '▸', t: o.t, e: o.e, _opt: o }));
+      _mnaShell({ comp, phase: 'Находка', title: f.icon + ' ' + f.title,
+        atmosphere: 'на столе переговоров',
+        body: '<div style="font-size:12px;color:var(--sub);line-height:1.5;margin-bottom:6px;padding:10px;background:rgba(255,255,255,.03);border-radius:9px">' + f.text + '</div>',
+        choices });
+      return;
+    }
+    if (_mna.step === 'final') {
+      const baseCost = (lm && lm.acquisitionCost) ? lm.acquisitionCost(comp) : 0;
+      const cost  = Math.max(100000, Math.round(baseCost * _mna.costMult / 1000) * 1000);
+      const days  = 6 + _mna.extraDays;
+      const stage = (G && G.living && G.living.stage) || 0;
+      const money = (G && G.money) || 0;
+      const have  = (G && G.actions) || 0;
+      const afford = money >= cost && have >= days;
+      const y = (lm && lm.acquisitionYield) ? lm.acquisitionYield(comp) : { staffN: 0, portfolio: 0, leads: 0 };
+      const pf = Math.max(0, Math.round((y.portfolio || 0) * _mna.yieldMult));
+      const ld = Math.max(0, Math.round((y.leads || 0) * _mna.yieldMult));
+      const st = Math.max(0, Math.round((y.staffN || 0) * _mna.yieldMult));
+      const terms = '<div style="padding:12px;background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:10px;margin-bottom:4px">' +
+          '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--sub)">Подход</span><b style="color:var(--text)">' + _mna.approachLabel + '</b></div>' +
+          (_mna.finding ? '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--sub)">Находка</span><b style="color:var(--text)">' + _mna.finding.title + '</b></div>' : '') +
+          '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--sub)">Итоговая цена</span><b style="color:' + (money >= cost ? 'var(--text)' : '#fca5a5') + '">' + _formatMoneyShort(cost) + '</b></div>' +
+          '<div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--sub)">Срок</span><b style="color:' + (have >= days ? 'var(--text)' : '#fca5a5') + '">−' + days + ' дн.</b></div>' +
+        '</div>' +
+        (afford ? '' : '<div style="font-size:10px;color:#fca5a5;margin:6px 0;text-align:center">' + (money < cost ? 'Недостаточно средств' : 'Недостаточно рабочих дней (осталось ' + have + ')') + '</div>');
+      const choices = [
+        { icon: '🧩', t: 'Интегрировать', d: 'Влить ~' + st + ' спец. (со сниж. лояльностью), +' + pf + ' портфолио, +' + ld + ' лид(ов).', disabled: !afford, _mode: 'integrate' },
+        { icon: '🏷', t: 'Сделать саббрендом', d: stage >= 4 ? ('+' + pf + ' портфолио, +1 к скаутингу. Бренд живёт отдельно.') : 'Откроется на стадии «Холдинг»', disabled: !afford || stage < 4, _mode: 'subbrand' },
+      ];
+      _mnaShell({ comp, phase: 'Условия сделки', title: 'Закрываем сделку?',
+        atmosphere: 'подпись', body: terms, choices });
+      return;
+    }
+  }
+
+  // Обработка выбора на текущем шаге.
+  function _mnaPick(i) {
+    if (!_mna) return;
+    const lm = _LM();
+    const comp = (G.market && G.market.competitors || []).find(c => c.id === _mna.id);
+    if (!comp) { _mnaClose(); return; }
+    const owned = (lm && lm.equityOwned) ? lm.equityOwned(comp.id) : 0;
+
+    if (_mna.step === 'approach') {
+      const a = _mnaApproaches(owned)[i];
+      _mna.costMult     *= a.costMult;
+      _mna.approachLabel = a.title;
+      _mna._freeDD       = !!a.freeDD;
+      _mna.step          = 'dd';
+      _renderMnA();
+      return;
+    }
+    if (_mna.step === 'dd') {
+      const deep = i === 1;
+      if (deep) {
+        if (!_mna._freeDD) _mna.extraDays += 2;   // глубокая DD = +2 дня к сроку сделки
+        _mna.finding = _MNA_FINDINGS[Math.floor(Math.random() * _MNA_FINDINGS.length)];
+        _mna.step = 'finding';
+      } else {
+        _mna.step = 'final';
+      }
+      _renderMnA();
+      return;
+    }
+    if (_mna.step === 'finding') {
+      const o = _mna.finding.opts[i];
+      _mna.costMult  *= o.costMult;
+      _mna.yieldMult *= o.yieldMult;
+      _mna.step = 'final';
+      _renderMnA();
+      return;
+    }
+    if (_mna.step === 'final') {
+      const mode = (i === 0) ? 'integrate' : 'subbrand';
+      const opts = { costMult: _mna.costMult, yieldMult: _mna.yieldMult, extraDays: _mna.extraDays };
+      const id = _mna.id;
+      _mnaClose();
+      const am = document.getElementById('cmp-acquire-modal'); if (am) am.style.display = 'none';
+      doAcquire(id, mode, opts);
+      return;
+    }
+  }
+
+  function _mnaExit() {
+    if (typeof notify === 'function') notify('Переговоры прерваны — без затрат', 'info');
+    _mnaClose();
   }
 
   // ── Бегущая строка (вариант B) ───────────────────────────────────────
@@ -622,7 +894,8 @@
     const hint = '<div style="font-size:11px;color:' + (canAcq?'#a78bfa':'var(--muted)') + ';margin:4px 0 12px">' + (canAcq ? '🤝 Кликни карточку — доли и поглощение' : '🤝 Кликни карточку — доли уже доступны, поглощение с «Сети»') + '</div>';
 
     el.innerHTML = kpis + hint +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px">' + cards + '</div>';
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px">' + cards + '</div>' +
+      _renderSubsidiariesBlock();
   }
 
   // ── Обёртки startGame / advanceMonth ─────────────────────────────────
@@ -686,6 +959,10 @@
       showMarketModal,
       openAcquire,
       doAcquire,
+      doLiquidate,
+      startMnA,
+      _mnaPick,
+      _mnaExit,
       doBuyEquity,
       doSellEquity,
       renderMarketTab,
