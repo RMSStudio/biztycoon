@@ -249,6 +249,21 @@ function getProjectThroughput(c) {
   return 2 + assigned.reduce((sum, s) => sum + calcStaffWorkUnit(s), 0);
 }
 
+// Пассивный прирост качества проекта/мес от назначенной команды (+ Нейросеть).
+// Фидбэк 2026-06-21: качество не должно зависеть только от 1 действия/мес —
+// сильная команда сама доводит качество к высоким значениям по ходу работы.
+function getProjectQualityGain(c) {
+  const assigned = (G.staff || []).filter(s =>
+    s.status !== 'fired' &&
+    (c._assignedStaff || []).includes(s._iid || s.id)
+  );
+  let qSum = 0;
+  assigned.forEach(s => { qSum += (s.qStat != null ? s.qStat : (s.quality ? s.quality / 10 : 5)); });
+  const ai = (G.ai && G.ai.aiQBonus) ? G.ai.aiQBonus * 0.2 : 0;
+  // 1.5 (фаундер курирует) + 0.6 за каждую единицу qStat команды + пассив ИИ
+  return 1.5 + qSum * 0.6 + ai;
+}
+
 // Назначить сотрудника на проект (один сотрудник — один проект)
 function assignStaffToProject(staffId, projectId) {
   unassignStaff(staffId);
@@ -1557,6 +1572,11 @@ function advanceMonth() {
     const monthProg    = (100 / phaseDur) * efficiency * fatigueMult * speedMult;
     // Округляем до 2 знаков — устраняет накопление float-погрешности (баг П.13)
     c._progress = Math.min(100, Math.round(((c._progress||0) + monthProg) * 100) / 100);
+    // Пассивное накопление качества от команды (масштаб от эффективности проекта)
+    if (c._lcChain) {
+      const qGain = getProjectQualityGain(c) * Math.max(0.3, Math.min(1.2, efficiency));
+      c._lcQualityBonus = Math.min(100, (c._lcQualityBonus || 0) + qGain);
+    }
   });
 
   if (overloaded && G.activeClients.length > 0) {

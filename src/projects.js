@@ -1360,7 +1360,7 @@ const Projects = (() => {
 
     const outcome   = client._lcReviewOutcome || 'accepted';
     const mood      = client._lcClientMood || 60;
-    const quality   = client._lcQualityBonus || 0;
+    const quality   = Math.min(100, client._lcQualityBonus || 0);
     const risk      = client._lcRisk || 0;
     const revisions = client._lcRevisionCount || 0;
     const payout    = Math.round((client._totalBudget || 0) * (1 + (G.perkPayoutMult || 0)));
