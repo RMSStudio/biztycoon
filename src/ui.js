@@ -943,7 +943,11 @@ function renderGame() {
       if (!_wOrder.length) return '';
       const _wIdx   = Math.max(0, _wOrder.indexOf(c._lcPhase));
       const _prog   = c._progress || 0;
-      const _total  = Math.round((_wIdx * 100 + _prog) / _wOrder.length);
+      // Показываем 100% только когда последняя work-фаза реально закрыта (≥100),
+      // иначе округляем ВНИЗ и держим максимум 99% — чтобы не было «застрявших 100%»,
+      // которые ещё не дошли до перехода (переход при Math.round(_progress)≥100).
+      const _doneAll = (_wIdx === _wOrder.length - 1) && _prog >= 100;
+      const _total  = _doneAll ? 100 : Math.min(99, Math.floor((_wIdx * 100 + _prog) / _wOrder.length));
       const _col    = _total >= 66 ? 'var(--teal)' : _total >= 33 ? 'var(--amber)' : 'var(--sub)';
 
       const _segs = _wOrder.map((_, i) => {

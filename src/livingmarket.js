@@ -126,7 +126,7 @@
       name: 'Сеть',
       icon: '🌐',
       color: '#f59e0b',
-      sub: '25 сдач · штат 10 · топ-3 рейтинга рынка · 60M ₽',
+      sub: '25 сдач · штат 10 · топ-5 рейтинга рынка · 60M ₽',
       gate: (g) => {
         const dels   = _countDeliveries(g);
         const staff  = _countStaff(g);
@@ -137,7 +137,7 @@
           { label: 'сдач',                   cur: dels,                  max: 25 },
           { label: 'штат',                   cur: staff,                 max: 10 },
           { label: 'выручка',                cur: rev,                   max: 60_000_000, fmt: 'money' },
-          { label: 'топ-3 ИЛИ награда года', cur: (rank <= 3 || awards >= 1) ? 1 : 0, max: 1 },
+          { label: 'топ-5 ИЛИ награда года', cur: (rank <= 5 || awards >= 1) ? 1 : 0, max: 1 },
         ]);
       },
       unlocks: 'второй офис (+capacity), хантинг и поглощение конкурентов, T5-сделки',
