@@ -555,12 +555,24 @@ function doLetGoStaff(staffId) {
 
 function processStaffMonth() {
   const _loyaltyLeavers = [];
+
+  // Пассивное удержание (фидбэк 2026-06-21): мораль/лояльность дрейфуют от условий
+  // компании, чтобы не приходилось вручную раздавать премии каждый месяц.
+  //  • HR-специалист (по грейду) — пассивный +мораль/+лояльность;
+  //  • рост денег за месяц («выручка растёт») и высокая репутация — престиж-бонус.
+  const _hrLvl = G.staff.some(s => s.id === 'hr_sr') ? 3
+    : G.staff.some(s => s.id === 'hr') ? 2
+    : G.staff.some(s => s.id === 'hr_jr') ? 1 : 0;
+  const _lastMoney = (G.history && G.history.length) ? G.history[G.history.length - 1].money : G.money;
+  const _moraleBoost = ((G.money > _lastMoney) ? 1 : 0) + (((G.reputation || 0) >= 70) ? 1 : 0);
+  const _passive = _hrLvl + _moraleBoost;   // суммарный пассивный +мораль/+лояльность за мес
+
   (G.staff || []).forEach(s => {
     if (s.state !== 'hired') return;
     s.monthsWithAgency = (s.monthsWithAgency || 0) + 1;
 
-    // Base loyalty decay
-    s.loyalty = Math.max(0, (s.loyalty || 70) - 2);
+    // Лояльность: распад −2, компенсируется пассивным удержанием (HR/рост компании)
+    s.loyalty = Math.min(100, Math.max(0, (s.loyalty || 70) - 2 + _passive));
 
     // job_hopper: faster decay
     if (_hasTrait(s, 'job_hopper')) s.loyalty = Math.max(0, s.loyalty - 3);
@@ -575,7 +587,7 @@ function processStaffMonth() {
     // mood влияет на эффективность (moodMult в calcStaffWorkUnit) — игроку надо его поддерживать.
     const _fat = (typeof G !== 'undefined' && G.teamFatigue) || 0;
     const _moodDecay = 3 + (_fat >= 60 ? 2 : 0) + (_fat >= 85 ? 2 : 0);
-    s.mood = Math.min(100, Math.max(10, (s.mood ?? 80) - _moodDecay));
+    s.mood = Math.min(100, Math.max(10, (s.mood ?? 80) - _moodDecay + _passive));
 
     // Р.1: низкая лояльность → риск ухода к конкуренту (последствие падения лояльности).
     // Трейт «reliable» (никогда не уходит без предупреждения) — иммунитет.

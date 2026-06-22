@@ -301,9 +301,22 @@ function releaseProjectTeam(projectId) {
 // жадно добавляет пока throughput (2 + WU выбранных) не покроет load×1.15
 function autoAssignOptimal(project) {
   const pLoad  = getProjectLoad(project);
-  // Раньше 1.15× оставляло способных свободных людей на скамейке и проект полз.
-  // 1.8× — авто задействует больше доступной мощности (отдача убывающая, но темп выше).
-  const target = Math.max(pLoad * 1.8, 4);
+  if (pLoad <= 0) return [];
+
+  // Подбор под ОСТАТОК текущей work-фазы (фидбэк 2026-06-21): если проект уже на
+  // 49%, авто тянет ровно столько мощности, чтобы закрыть оставшийся ~51% (по
+  // возможности за месяц), а не на полные 100%.
+  const remaining    = Math.max(5, 100 - (project._progress || 0));
+  const workPhaseCnt = project._lcChain ? project._lcChain.filter(p => p.startsWith('work_')).length : 1;
+  const phaseDur     = (project._duration || 3) / Math.max(1, workPhaseCnt);
+  const speed        = (typeof getSpeed === 'function' ? getSpeed() : 1) *
+                       (typeof getFatigueMult === 'function' ? getFatigueMult() : 1);
+  // Нужная эффективность, чтобы закрыть остаток за 1 месяц, и обратная effFromRatio:
+  const effNeeded   = (remaining * phaseDur) / (100 * Math.max(0.1, speed));
+  const ratioNeeded = effNeeded <= 1 ? effNeeded : 1 + Math.pow((effNeeded - 1) / 0.5, 2);
+  // целевая мощность (+5% запас), с разумным потолком: отдача убывает выше 1.0,
+  // и не даём авто монополизировать всю команду на один проект (макс ~2.5× нагрузки)
+  const target = Math.max(4, Math.min(pLoad * 2.5, pLoad * ratioNeeded * 1.05));
 
   const free = (G.staff || []).filter(s => s.status !== 'fired' && !s._assignedProjectId);
   if (!free.length) return [];
@@ -324,14 +337,15 @@ function autoAssignOptimal(project) {
   }).sort((a, b) => b.score - a.score);
 
   const selected = [];
-  let thr = 2; // базовая мощность фаундера
+  // Стартуем от ТЕКУЩЕЙ мощности проекта (учитывает уже назначенных) — добираем остаток
+  let thr = (typeof getProjectThroughput === 'function') ? getProjectThroughput(project) : 2;
   for (const { s, wu } of scored) {
     if (thr >= target) break;
     selected.push(s);
     thr += wu;
   }
-  // Гарантируем хотя бы одного, если есть свободные
-  return selected.length ? selected : (scored[0] ? [scored[0].s] : []);
+  // Если уже укомплектован — ничего не добавляем; иначе гарантируем хотя бы одного
+  return selected.length ? selected : ((thr < target && scored[0]) ? [scored[0].s] : []);
 }
 
 // ── Ф.3: переговорщики (авто-подписание проектов) ──────

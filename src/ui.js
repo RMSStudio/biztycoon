@@ -1075,6 +1075,17 @@ function renderGame() {
             })()}
           </div>
           ${_isLCEvent ? _lcPhaseBadge : (_isLC ? _lcWorkBar : progressBar) + (_isLC ? _lcPhaseBadge : '')}
+          ${(_isLC && !_isLCEvent) ? (()=>{
+            const _m=Math.round(c._lcClientMood??60), _r=Math.round(c._lcRisk||0), _q=Math.round(Math.min(100,c._lcQualityBonus||0));
+            const _mc=_m>=70?'var(--green)':_m>=45?'var(--amber)':'var(--red)';
+            const _rc=_r>=60?'var(--red)':_r>=30?'var(--amber)':'var(--teal)';
+            const _qc=_q>=66?'var(--teal)':_q>=33?'var(--amber)':'var(--sub)';
+            return `<div style="display:flex;gap:12px;font-size:10px;margin:5px 0 2px;font-weight:600">
+              <span data-tip="Настроение клиента (${_m}/100): тянет оценку при сдаче вверх; низкое → риск ухода. Поднимается действиями влияния." style="color:${_mc};cursor:help">😊 ${_m}</span>
+              <span data-tip="Риск проекта (${_r}/100): высокий → шанс критических ошибок (−прогресс) и срыва. Снижается антикризисными действиями/юристом." style="color:${_rc};cursor:help">⚠ ${_r}</span>
+              <span data-tip="Качество (${_q}/100): копится от назначенной команды по ходу работы + действия качества. Даёт бонус к оплате и оценке клиента при сдаче." style="color:${_qc};cursor:help">✨ ${_q}</span>
+            </div>`;
+          })() : ''}
           ${staffAssignRow}
           ${_isLCEvent ? '' : resourceRow}
         </div>
@@ -1278,7 +1289,7 @@ function renderGame() {
       if (def.speedBonus) bonuses.push(`<span style="color:var(--green)">Speed +${Math.round(def.speedBonus*100)}%</span>`);
       if (role==='lawyer')    bonuses.push(`<span style="color:var(--amber);font-size:10px">риски −${def.grade==='sr'?70:def.grade==='jr'?30:50}%</span>`);
       if (role==='smm')       bonuses.push(`<span style="color:var(--teal);font-size:10px">+1 лид/скаут</span>`);
-      if (role==='hr')        bonuses.push(`<span style="color:var(--teal);font-size:10px">оценка клиента +${def.grade==='sr'?4:def.grade==='jr'?2:3}/мес · найм 1 дн</span>`);
+      if (role==='hr')        bonuses.push(`<span style="color:var(--teal);font-size:10px">оценка клиента +${def.grade==='sr'?4:def.grade==='jr'?2:3}/мес · +${def.grade==='sr'?3:def.grade==='jr'?1:2} мораль/лояльность/мес · найм 1 дн</span>`);
       if (role==='developer') bonuses.push(`<span style="color:var(--accent2);font-size:10px">тех-проекты</span>`);
 
       let lockHint = '';
