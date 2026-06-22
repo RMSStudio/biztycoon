@@ -172,6 +172,34 @@ _ok(Math.abs(paid - Math.round(base*0.9/1000)*1000) <= 1000, 'списана ц�
 _ok(a0 - G.actions === 8, 'списано 6+2 дня (extraDays): '+(a0-G.actions));
 `));
 
+// ── 8: DEV/тест-тумблер разблокирует рынок без стадии «Сеть» ──
+add(run('Тест 8: dev-тумблер открывает поглощения/доли до стадии «Сеть»', `
+initState(); selectSpec('smm'); startGame();
+LivingMarket._initMarket();
+G.living.stage = 0;            // гараж — рынок по правилам закрыт
+G.money = 200000000; G.actions = 30; G.month = 0;
+const comp = G.market.competitors[0];
+// без тумблера — поглощение заблокировано стадией, доля под потолком 25
+_eq(LivingMarket.equityCap(), 25, 'до «Сети» потолок долей = 25');
+const blocked = LivingMarket.acquireCompetitor(comp.id, 'integrate');
+_ok(!blocked.ok && blocked.reason === 'stage_required', 'поглощение заблокировано (stage_required)');
+// включаем тумблер
+LivingMarket.setMarketDevUnlocked(true);
+_ok(LivingMarket.isMarketDevUnlocked(), 'тумблер ВКЛ');
+_eq(LivingMarket.equityCap(), 100, 'с тумблером потолок долей = 100');
+const ok = LivingMarket.acquireCompetitor(comp.id, 'integrate');
+_ok(ok.ok, 'поглощение проходит с тумблером на стадии 0');
+// саббренд (требует «Холдинг» ≥4) тоже открыт
+const comp2 = G.market.competitors[0];
+G.actions = 30;
+const sb = LivingMarket.acquireCompetitor(comp2.id, 'subbrand');
+_ok(sb.ok && sb.mode === 'subbrand', 'саббренд доступен с тумблером (mode=subbrand)');
+// выключаем — снова закрыто, реальная стадия не тронута
+LivingMarket.setMarketDevUnlocked(false);
+_eq(G.living.stage, 0, 'реальная стадия осталась 0 (тумблер прогрессию не трогал)');
+_ok(!LivingMarket.acquireCompetitor(G.market.competitors[0].id, 'integrate').ok, 'после выкл — снова заблокировано');
+`));
+
 console.log('\n══════════════════════════════════════');
 console.log('ИТОГО: '+totals.pass+' ✅  /  '+totals.fail+' ❌');
 process.exit(totals.fail ? 1 : 0);

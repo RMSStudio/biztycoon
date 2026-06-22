@@ -1465,13 +1465,34 @@
   const DAYS_ACQUIRE = 6;        // поглощение тратит рабочие дни
   const LIQUIDATION_LOCK = 12;   // распродать поглощённую компанию можно через 12 мес
 
+  // ── DEV/тест-тумблер: разблокировать весь функционал рынка без стадии «Сеть» ──
+  // Флаг в localStorage (живёт между перезагрузками). Влияет ТОЛЬКО на гейты
+  // действий рынка (поглощения / доли / саббренды). Прогрессию стадий, журнал и
+  // баланс НЕ трогает — это чистый чит доступа для тестов механики.
+  const DEV_MARKET_KEY = 'bt_dev_market_v1';
+  function isMarketDevUnlocked() {
+    try { if (typeof G !== 'undefined' && G && G.devMarketUnlock) return true; } catch (_) {}
+    try { return (typeof localStorage !== 'undefined') && localStorage.getItem(DEV_MARKET_KEY) === '1'; } catch (_) { return false; }
+  }
+  function setMarketDevUnlocked(on) {
+    try { if (typeof localStorage !== 'undefined') { if (on) localStorage.setItem(DEV_MARKET_KEY, '1'); else localStorage.removeItem(DEV_MARKET_KEY); } } catch (_) {}
+    try { if (typeof G !== 'undefined' && G) G.devMarketUnlock = !!on; } catch (_) {}
+    return isMarketDevUnlocked();
+  }
+  // Эффективная стадия для ГЕЙТОВ рынка: в dev-режиме = max(stage, 4) — открывает
+  // поглощения (≥3), саббренды (≥4) и полный потолок долей. Реальную стадию НЕ меняет.
+  function _gateStage() {
+    const s = (typeof G !== 'undefined' && G && G.living && (G.living.stage || 0)) || 0;
+    return isMarketDevUnlocked() ? Math.max(s, 4) : s;
+  }
+
   // mode: 'integrate' (по умолч.) | 'subbrand'. Ликвидация — отдельным действием
   // позже (liquidateSubsidiary), не из окна поглощения (эконом-фикс абуза).
   // opts (необяз., из ветвистого процесса поглощения): { costMult, yieldMult, extraDays }
   //   — итог переговоров/дью-дилидженс. По умолчанию нейтральны (прямой вызов = как раньше).
   function acquireCompetitor(competitorId, mode, opts) {
     if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
-    const stage = (G.living && (G.living.stage || 0)) || 0;
+    const stage = _gateStage();   // dev-тумблер открывает поглощения без стадии «Сеть»
     if (stage < 3) return { ok: false, reason: 'stage_required', stageReq: 3 };
     const idx = (G.market.competitors || []).findIndex(c => c.id === competitorId);
     if (idx === -1) return { ok: false, reason: 'competitor_not_found' };
@@ -1600,7 +1621,7 @@
 
   // Потолок доли на текущей стадии: до «Сети» — только миноритарный пакет.
   function equityCap() {
-    const stage = (G && G.living && (G.living.stage || 0)) || 0;
+    const stage = _gateStage();   // dev-тумблер снимает миноритарный потолок
     return stage < 3 ? EQUITY_MINORITY_CAP : 100;
   }
 
@@ -3008,6 +3029,9 @@
     liquidationValue,
     liquidateSubsidiary,
     getSubsidiaries:       () => ((G && G.living && G.living.subsidiaries) || []).slice(),
+    // DEV/тест-тумблер — разблокировка рынка без стадии «Сеть»
+    isMarketDevUnlocked,
+    setMarketDevUnlocked,
     // Ф.8 слой A — доли/акции
     competitorValuation,
     equityPrice1pct,

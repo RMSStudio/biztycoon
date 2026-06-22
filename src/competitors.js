@@ -359,6 +359,7 @@
           '<div style="font-size:18px;font-weight:800;color:var(--text);line-height:1.1">M' + (G.month || 0) + ' · ' + ranking.length + ' агентств</div>' +
         '</div>' +
       '</div>' +
+      _devToggleHtml() +
       head +
       '<div style="display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1">' + rows + '</div>' +
       '<div style="font-size:10px;color:var(--muted);margin-top:10px;text-align:center;font-style:italic">Скоринг: выручка × 50/M + репутация × 0.3 + портфолио × 0.5</div>' +
@@ -426,15 +427,56 @@
 
   function _LM() { return (typeof window !== 'undefined') ? window.LivingMarket : null; }
 
-  // Доступны ли поглощения игроку (стадия «Сеть» = 3+)
-  function _canAcquire() {
-    return !!(typeof G !== 'undefined' && G && G.living && (G.living.stage || 0) >= 3);
+  // DEV/тест-тумблер активен?
+  function _devOn() { const lm = _LM(); return !!(lm && lm.isMarketDevUnlocked && lm.isMarketDevUnlocked()); }
+  // Эффективная стадия для UI-гейтов рынка (зеркало _gateStage из livingmarket).
+  function _mktStage() {
+    const s = (typeof G !== 'undefined' && G && G.living && (G.living.stage || 0)) || 0;
+    return _devOn() ? Math.max(s, 4) : s;
   }
 
+  // Доступны ли поглощения игроку (стадия «Сеть» = 3+, либо dev-тумблер)
+  function _canAcquire() {
+    return _mktStage() >= 3;
+  }
+
+  // DEV/тест-тумблер: компактный переключатель в шапке вкладки/модала рынка.
+  // Разблокирует поглощения/доли/саббренды без стадии «Сеть» — только для тестов.
+  function _devToggleHtml() {
+    const on = _devOn();
+    const knob = '<span style="position:absolute;top:2px;' + (on ? 'right:2px' : 'left:2px') + ';width:16px;height:16px;border-radius:50%;background:' + (on ? '#fff' : 'var(--sub)') + ';transition:all .12s"></span>';
+    const sw = '<span style="position:relative;display:inline-block;width:36px;height:20px;border-radius:11px;background:' + (on ? 'rgba(167,139,250,.9)' : 'rgba(255,255,255,.1)') + ';border:1px solid ' + (on ? 'rgba(167,139,250,.9)' : 'var(--border)') + ';flex:0 0 auto">' + knob + '</span>';
+    return '<div onclick="Competitors.toggleMarketDev()" title="Технический режим: доступ ко всему функционалу рынка без стадии «Сеть»" ' +
+      'style="display:flex;align-items:center;gap:9px;padding:8px 11px;margin-bottom:12px;border-radius:10px;cursor:pointer;' +
+      'border:1px dashed ' + (on ? 'rgba(167,139,250,.6)' : 'var(--border)') + ';background:' + (on ? 'rgba(167,139,250,.08)' : 'rgba(255,255,255,.02)') + '">' +
+      sw +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:11px;font-weight:800;color:' + (on ? '#c4b5fd' : 'var(--text)') + '">🔧 Тест-режим рынка' + (on ? ' · ВКЛ' : '') + '</div>' +
+        '<div style="font-size:9px;color:var(--muted)">' + (on ? 'поглощения, доли и саббренды открыты без стадии «Сеть»' : 'разблокировать весь функционал рынка для тестов') + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function toggleMarketDev() {
+    const lm = _LM();
+    if (!lm || !lm.setMarketDevUnlocked) return;
+    const now = lm.setMarketDevUnlocked(!_devOn());
+    if (typeof notify === 'function') notify('🔧 Тест-режим рынка: ' + (now ? 'ВКЛ' : 'выкл'), now ? 'success' : 'info');
+    try { _renderRankPill(); } catch (_) {}
+    // перерисовать активную поверхность рынка
+    if (document.getElementById('cmp-market-modal') && document.getElementById('cmp-market-modal').style.display !== 'none') { try { showMarketModal(); } catch (_) {} }
+    try { renderMarketTab(); } catch (_) {}
+    // если открыт диалог сделки — обновить его
+    const am = document.getElementById('cmp-acquire-modal');
+    if (am && am.style.display !== 'none' && _lastAcquireId) { try { openAcquire(_lastAcquireId); } catch (_) {} }
+  }
+
+  let _lastAcquireId = null;
   function openAcquire(id) {
     const lm   = _LM();
     const comp = (G.market && G.market.competitors || []).find(c => c.id === id);
     if (!comp || !lm) return;
+    _lastAcquireId = id;
     let m = document.getElementById('cmp-acquire-modal');
     if (!m) {
       m = document.createElement('div');
@@ -457,7 +499,7 @@
     const days  = (G && G.actions) || 0;
     const affordDays = days >= DAYS_ACQUIRE;
     const afford = money >= cost && affordDays;
-    const stage  = (G && G.living && G.living.stage) || 0;
+    const stage  = _mktStage();
     const arch   = ARCHETYPES[comp.archetype];
     const pf     = (comp.portfolio != null) ? comp.portfolio : Math.max(0, Math.round((comp.deliveries || 0) / 6));
 
@@ -693,7 +735,7 @@
       const baseCost = (lm && lm.acquisitionCost) ? lm.acquisitionCost(comp) : 0;
       const cost  = Math.max(100000, Math.round(baseCost * _mna.costMult / 1000) * 1000);
       const days  = 6 + _mna.extraDays;
-      const stage = (G && G.living && G.living.stage) || 0;
+      const stage = _mktStage();
       const money = (G && G.money) || 0;
       const have  = (G && G.actions) || 0;
       const afford = money >= cost && have >= days;
@@ -893,7 +935,7 @@
     const canAcq = _canAcquire();
     const hint = '<div style="font-size:11px;color:' + (canAcq?'#a78bfa':'var(--muted)') + ';margin:4px 0 12px">' + (canAcq ? '🤝 Кликни карточку — доли и поглощение' : '🤝 Кликни карточку — доли уже доступны, поглощение с «Сети»') + '</div>';
 
-    el.innerHTML = kpis + hint +
+    el.innerHTML = _devToggleHtml() + kpis + hint +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px">' + cards + '</div>' +
       _renderSubsidiariesBlock();
   }
@@ -960,6 +1002,7 @@
       openAcquire,
       doAcquire,
       doLiquidate,
+      toggleMarketDev,
       startMnA,
       _mnaPick,
       _mnaExit,
