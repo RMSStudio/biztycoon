@@ -371,17 +371,13 @@ const Projects = (() => {
       });
     }
 
+    // Ф.1/Ф.3: кнопка выхода — отдельный элемент (не в списке выборов, чтобы
+    // не попадать в пул «решений» бота-симулятора и читаться как «закрыть»)
+    const exitEl = document.getElementById('lc-modal-exit');
+    if (exitEl) exitEl.style.display = exitable ? 'block' : 'none';
+
     const choicesEl = document.getElementById('lc-modal-choices');
     choicesEl.innerHTML = '';
-    if (exitable) {
-      const ex = document.createElement('button');
-      ex.className = 'modal-choice';
-      ex.style.cssText = 'border-color:rgba(148,163,184,.25);background:rgba(255,255,255,.02);color:var(--sub);margin-bottom:6px';
-      ex.innerHTML = '<div class="choice-title">↩ Выйти (вернуться к этому шагу позже)</div>'
-        + '<div class="choice-desc" style="margin-top:3px;line-height:1.4">Прогресс переговоров сохранится — продолжите с текущего вопроса.</div>';
-      ex.onclick = () => _exitLCFlow();
-      choicesEl.appendChild(ex);
-    }
     _allChoices.forEach(ch => {
       const btn = document.createElement('button');
       btn.className = 'modal-choice';
@@ -1125,150 +1121,80 @@ const Projects = (() => {
 
   // п.17 (Ф.1): интерактивный выбор команды с кнопкой «⚡ Авто»
   function _showPlanning(client) {
-    const allStaff  = (G.staff || []).filter(s => s.status !== 'fired');
-    const hasStaff  = allStaff.length > 0;
+    // Ф.3 фидбэк: ручной выбор конкретных людей убран — команда собирается
+    // автоматически (точечное перераспределение — потом на карточке проекта).
+    _consumeResume(client, 'planning');
+    _lcState = { client, step: 0 };
+
+    const hasStaff  = (G.staff || []).some(s => s.status !== 'fired');
     const shownTeam = hasTag(client, 'real_team_shown');
+    const pLoad     = getProjectLoad(client);
+    const optimal   = (typeof autoAssignOptimal === 'function') ? autoAssignOptimal(client) : [];
+    const autoThr   = 2 + optimal.reduce((t, s) => t + calcStaffWorkUnit(s), 0);
+    const thrColor  = autoThr >= pLoad ? 'var(--teal)' : autoThr >= pLoad * 0.7 ? 'var(--amber)' : 'var(--red)';
 
-    // Начальный выбор — все свободные (или уже назначенные на этот проект)
-    const sel = new Set(
-      allStaff
-        .filter(s => !s._assignedProjectId || s._assignedProjectId === client.id)
-        .map(s => s._iid || s.id)
-    );
+    const teamList = optimal.length
+      ? optimal.map(s => `${s.icon || '👤'} ${s.name} <span style="opacity:.55">(WU&nbsp;${calcStaffWorkUnit(s)})</span>`).join(', ')
+      : '<span style="color:var(--muted)">свободных специалистов нет</span>';
 
-    function _cleanup() {
-      delete window.__lcPlanSel;
-      delete window.__lcPlanAuto;
-    }
+    const body = hasStaff
+      ? `<div>
+          <div style="color:var(--sub);font-size:12px;margin-bottom:6px">Команда подбирается автоматически из свободных под нагрузку проекта. Точечно перераспределить можно потом на карточке проекта.</div>
+          <div style="padding:8px 10px;border-radius:6px;background:rgba(45,212,191,.06);border:1px solid rgba(45,212,191,.2);font-size:12px;line-height:1.5">${teamList}</div>
+          <div style="margin-top:8px;display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px">
+            <span style="color:var(--muted)">Мощность авто-состава:</span>
+            <span style="color:${thrColor};font-weight:700">${autoThr}</span>
+            <span style="color:var(--muted)">/ нагрузка</span>
+            <span style="font-weight:600">${pLoad}</span>
+            ${autoThr < pLoad
+              ? `<span style="color:var(--red);font-size:10px">⚠ может не хватить — доберёшь на карточке</span>`
+              : `<span style="color:var(--teal);font-size:10px">✓ покрыто</span>`}
+          </div>
+          ${shownTeam ? `<div style="margin-top:6px;padding:5px 8px;border-radius:5px;background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.25);font-size:10px;color:var(--amber);font-weight:600">⚠️ В КП была показана реальная команда — лучше выйти на проект с людьми</div>` : ''}
+        </div>`
+      : `<div style="color:var(--muted);font-size:11px">— нет нанятых сотрудников —</div>`;
 
-    function _refresh() {
-      const selArr  = allStaff.filter(s => sel.has(s._iid || s.id));
-      const pLoad   = getProjectLoad(client);
-      const projThr = 2 + selArr.reduce((t, s) => t + calcStaffWorkUnit(s), 0);
-      const thrColor = projThr >= pLoad
-        ? 'var(--teal)'
-        : projThr >= pLoad * 0.7 ? 'var(--amber)' : 'var(--red)';
-
-      // Чипы сотрудников — кликабельные тоглы
-      const staffChips = allStaff.map(s => {
-        const key        = s._iid || s.id;
-        const isSelected = sel.has(key);
-        const wu         = calcStaffWorkUnit(s);
-        const busy       = s._assignedProjectId && s._assignedProjectId !== client.id;
-        return `<span onclick="${busy ? '' : `window.__lcPlanSel('${key}')`}"
-          style="display:inline-flex;align-items:center;gap:3px;margin:2px 3px;padding:3px 9px;
-            border-radius:5px;font-size:11px;user-select:none;
-            ${busy ? 'opacity:.4;cursor:not-allowed' : 'cursor:pointer'};
-            background:${isSelected && !busy ? 'rgba(45,212,191,.12)' : 'rgba(148,163,184,.06)'};
-            border:1px solid ${isSelected && !busy ? 'rgba(45,212,191,.35)' : 'rgba(148,163,184,.15)'};
-            color:${isSelected && !busy ? 'var(--fg)' : 'var(--muted)'}">
-          ${s.icon || '👤'} ${s.name}
-          <span style="font-size:9px;opacity:.65">(WU&nbsp;${wu})</span>
-          ${busy ? '<span style="font-size:9px">·&nbsp;занят</span>' : ''}
-        </span>`;
-      }).join('');
-
-      // Индикатор мощности vs нагрузки
-      const thrBar = `
-        <div style="margin-top:8px;display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px">
-          <span style="color:var(--muted)">Мощность выбранных:</span>
-          <span style="color:${thrColor};font-weight:700">${projThr}</span>
-          <span style="color:var(--muted)">/ нагрузка</span>
-          <span style="font-weight:600">${pLoad}</span>
-          ${projThr < pLoad
-            ? `<span style="color:var(--red);font-size:10px">⚠ мощности может не хватить</span>`
-            : `<span style="color:var(--teal);font-size:10px">✓ покрыто</span>`}
-        </div>`;
-
-      const teamWarning = shownTeam
-        ? `<div style="margin-top:6px;padding:5px 8px;border-radius:5px;background:rgba(210,153,34,.08);
-                border:1px solid rgba(210,153,34,.25);font-size:10px;color:var(--amber);font-weight:600">
-             ⚠️ В КП была показана реальная команда — назначьте тех же людей
-           </div>`
-        : '';
-
-      const body = hasStaff
-        ? `<div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <span style="color:var(--sub);font-size:12px">Выберите состав команды:</span>
-              <button onclick="window.__lcPlanAuto()"
-                style="font-size:10px;padding:2px 10px;border-radius:4px;
-                  background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);
-                  color:rgba(168,85,247,.9);cursor:pointer;font-weight:600">⚡ Авто</button>
-            </div>
-            <div>${staffChips}</div>
-            ${thrBar}
-            ${teamWarning}
-          </div>`
-        : `<div style="color:var(--muted);font-size:11px">— нет нанятых сотрудников —</div>`;
-
-      // Параметры кнопки подтверждения зависят от выбора
-      const selArrFinal = allStaff.filter(s => sel.has(s._iid || s.id));
-      const hasSelection = selArrFinal.length > 0;
-      const qBonus = shownTeam && selArrFinal.length === allStaff.length ? 10 : hasSelection ? 5 : 0;
-
-      const confirmText = hasSelection
-        ? `Подтвердить команду (${selArrFinal.length} чел.)`
-        : (shownTeam ? 'Работать без команды (нарушаем КП)' : 'Работать самостоятельно');
-      const confirmDesc = hasSelection
-        ? selArrFinal.map(s => `${s.icon || '👤'} ${s.name}`).join(', ')
-        : (shownTeam ? 'Обещание нарушено — клиент узнает на ревью.' : 'Без команды — скорость ниже, риск выше.');
-      const confirmEffect = hasSelection
-        ? `+${qBonus}% к качеству${shownTeam && selArrFinal.length === allStaff.length ? ' — команда совпадает с КП' : ''}`
-        : (shownTeam ? '+10 риска · −10 настроения (нарушение КП)' : '+10 риска');
-
-      _showLCModal({
-        client,
-        icon: '📌', title: 'Сборка команды на проект',
-        phaseLabel: `${client.icon} ${client.name}  ·  Планирование`,
-        body,
-        choices: [{
-          text:      confirmText,
-          desc:      confirmDesc,
-          effect:    confirmEffect,
-          highlight: hasSelection,
+    _showLCModal({
+      client,
+      icon: '📌', title: 'Сборка команды на проект',
+      phaseLabel: `${client.icon} ${client.name}  ·  Планирование`,
+      exitable: true,
+      body,
+      choices: [
+        {
+          text:      optimal.length ? `🤖 Собрать команду автоматически (${optimal.length} чел.)` : 'Собрать некого — свободных нет',
+          desc:      optimal.length ? teamList : 'Все специалисты заняты на других проектах. Можно стартовать соло или выйти и вернуться позже.',
+          effect:    optimal.length ? '+5% к качеству' : '',
+          highlight: optimal.length > 0,
+          disabled:  optimal.length === 0,
           fn: () => {
-            _cleanup();
-            const finalSel = allStaff.filter(s => sel.has(s._iid || s.id));
-            if (finalSel.length > 0) {
-              const bonus = shownTeam && finalSel.length === allStaff.length ? 10 : 5;
-              client._lcQualityBonus = (client._lcQualityBonus || 0) + bonus;
-              finalSel.forEach(s => assignStaffToProject(s._iid || s.id, client.id));
-              applyTag(client, 'team_assigned');
-              logDecision(client, 'planning', `team: ${finalSel.length}/${allStaff.length}`, `+${bonus}% качество`);
-              _closeLCModal();
-              addLog(`📌 ${client.name}: команда назначена (${finalSel.length} чел.) — стартуем работу`, 'teal');
-            } else {
-              riskDelta(client, +10);
-              if (shownTeam) {
-                moodDelta(client, -10);
-                applyTag(client, 'team_broken_promise');
-                addLog(`⚠️ ${client.name}: обещанная команда не назначена`, 'amber');
-              }
-              logDecision(client, 'planning', 'team: none', '+10 риска');
-              _closeLCModal();
-            }
+            optimal.forEach(s => assignStaffToProject(s._iid || s.id, client.id));
+            client._lcQualityBonus = (client._lcQualityBonus || 0) + 5;
+            applyTag(client, 'team_assigned');
+            logDecision(client, 'planning', `team-auto: ${optimal.length}`, '+5% качество');
+            _closeLCModal();
+            addLog(`📌 ${client.name}: команда собрана автоматически (${optimal.length} чел.) — стартуем работу`, 'teal');
             advancePhase(client);
           },
-        }],
-      });
-    }
-
-    // Эфемерные глобальные хэндлеры для onclick в innerHTML
-    window.__lcPlanSel = (key) => {
-      if (sel.has(key)) sel.delete(key); else sel.add(key);
-      _refresh();
-    };
-    window.__lcPlanAuto = () => {
-      if (typeof autoAssignOptimal === 'function') {
-        const optimal = autoAssignOptimal(client);
-        sel.clear();
-        optimal.forEach(s => sel.add(s._iid || s.id));
-        _refresh();
-      }
-    };
-
-    _refresh();
+        },
+        {
+          text:   'Работать самостоятельно',
+          desc:   shownTeam ? 'Обещание команды из КП нарушено — клиент узнает на ревью.' : 'Без команды — скорость ниже, риск выше.',
+          effect: shownTeam ? '+10 риска · −10 настроения (нарушение КП)' : '+10 риска',
+          fn: () => {
+            riskDelta(client, +10);
+            if (shownTeam) {
+              moodDelta(client, -10);
+              applyTag(client, 'team_broken_promise');
+              addLog(`⚠️ ${client.name}: обещанная команда не назначена`, 'amber');
+            }
+            logDecision(client, 'planning', 'team: none', '+10 риска');
+            _closeLCModal();
+            advancePhase(client);
+          },
+        },
+      ],
+    });
   }
 
   // ══════════════════════════════════════════════════════
@@ -2235,6 +2161,7 @@ const Projects = (() => {
     initLCState,
     advancePhase,
     autoResolveNegotiation,
+    exitLCFlow:        _exitLCFlow,
     showPhasePopup,
     renderPhaseBadge,
     triggerWorkEvent,

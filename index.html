@@ -372,6 +372,11 @@
     <div class="modal-body" id="lc-modal-body" style="margin-bottom:12px"></div>
     <!-- Варианты -->
     <div class="modal-choices" id="lc-modal-choices"></div>
+    <!-- Ф.1/Ф.3: выход из переговоров с возвратом на шаг (вне списка выборов) -->
+    <button id="lc-modal-exit" onclick="if(typeof Projects!=='undefined'&&Projects.exitLCFlow)Projects.exitLCFlow()"
+      style="display:none;width:100%;margin-top:10px;padding:8px;border-radius:8px;border:1px solid rgba(148,163,184,.25);background:rgba(255,255,255,.02);color:var(--sub);cursor:pointer;font-size:11px;font-weight:600">
+      ↩ Выйти — прогресс сохранится, вернётесь на этот шаг с карточки проекта
+    </button>
   </div>
 </div>
 
