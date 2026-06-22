@@ -405,6 +405,152 @@ function fireStaffById(id) {
   }
 }
 
+// ── Удержание сотрудника (центр-модал с действиями) ────
+// Фидбэк 2026-06-21: уход/переход спеца должен быть заметным поп-апом по центру
+// (как смена стадии), и в нём — действия удержания с вероятностями от факторов.
+
+function offerStaffRetention(staff, reason, fromName) {
+  if (!staff) return false;
+  // Headless (sim/node — нет DOM): модал невозможен → уводим сразу, как раньше
+  if (typeof document === 'undefined') {
+    if (typeof unassignStaff === 'function') unassignStaff(staff._iid || staff.id);
+    G.staff = (G.staff || []).filter(x => (x._iid || x.id) !== (staff._iid || staff.id));
+    if (typeof EventBus !== 'undefined') EventBus.emit('staff_quit', { staff: { ...staff }, reason: reason || 'loyalty' });
+    if (typeof checkCapacityExceeded === 'function') checkCapacityExceeded(staff.name);
+    return true;
+  }
+  G._retentionQueue = G._retentionQueue || [];
+  G._retentionQueue.push({ iid: staff._iid || staff.id, reason: reason || 'loyalty', fromName: fromName || null });
+  const m = document.getElementById('retention-modal');
+  if (!m || !m.classList.contains('active')) _showNextRetention();
+  return true;
+}
+
+function _retentionChance(staff, mode) {
+  let p = mode === 'raise' ? 0.78 : mode === 'bonus' ? 0.55 : 0.32;
+  p += (staff.loyalty || 0) / 250;            // выше лояльность — легче удержать (до +0.4)
+  p += ((staff.mood ?? 80) - 60) / 400;        // довольный — легче
+  if (_hasTrait(staff, 'job_hopper')) p -= 0.15;
+  if (_hasTrait(staff, 'reliable'))   p += 0.10;
+  return Math.max(0.10, Math.min(0.95, p));
+}
+
+function _retentionCost(staff, mode) {
+  const sal = staff.cost || staff.salary || 0;
+  if (mode === 'raise') return { type: 'salary', label: `+30% к окладу · +${_fs(Math.round(sal * 0.3))}/мес` };
+  if (mode === 'bonus') return { type: 'cash', amount: Math.round(sal), label: `разовая премия ${_fs(Math.round(sal))}` };
+  return { type: 'free', label: 'бесплатно' };
+}
+
+function _removeRetentionStaff(staff, item) {
+  if (typeof unassignStaff === 'function') unassignStaff(staff._iid || staff.id);
+  G.staff = (G.staff || []).filter(x => (x._iid || x.id) !== (staff._iid || staff.id));
+  if (typeof EventBus !== 'undefined') EventBus.emit('staff_quit', { staff: { ...staff }, reason: item.reason });
+  if (typeof addLog === 'function') addLog(`🚪 ${staff.name} ушёл${item.fromName ? ` в ${item.fromName}` : ''} — удержать не удалось`, 'red');
+  if (typeof checkCapacityExceeded === 'function') checkCapacityExceeded(staff.name);
+}
+
+function _showNextRetention() {
+  const q = G._retentionQueue || [];
+  let staff = null;
+  while (q.length) {
+    const it = q[0];
+    staff = (G.staff || []).find(s => (s._iid || s.id) === it.iid);
+    if (staff) break;
+    q.shift();
+  }
+  if (!q.length || !staff) { _closeRetentionModal(); return; }
+  _renderRetentionModal(staff, q[0]);
+}
+
+function _renderRetentionModal(staff, item) {
+  let m = document.getElementById('retention-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'retention-modal';
+    m.className = 'modal-overlay';
+    document.body.appendChild(m);
+  }
+  const role = staff.roleLabel || staff.role || '';
+  const grade = staff.gradeLabel || staff.grade || '';
+  const loy = Math.round(staff.loyalty || 0), mood = Math.round(staff.mood ?? 80);
+  const reasonTxt = item.reason === 'poach'
+    ? `Конкурент ${item.fromName ? '«' + item.fromName + '»' : ''} переманивает специалиста`
+    : 'Специалист недоволен и собирается уйти';
+  const opt = (mode, icon, title) => {
+    const ch = Math.round(_retentionChance(staff, mode) * 100);
+    const cost = _retentionCost(staff, mode);
+    const noMoney = cost.type === 'cash' && (G.money || 0) < cost.amount;
+    return `<button ${noMoney ? 'disabled' : `onclick="doRetainStaff('${staff._iid || staff.id}','${mode}')"`}
+      style="display:block;width:100%;text-align:left;margin-top:8px;padding:11px 13px;border-radius:9px;
+        border:1px solid ${noMoney ? 'var(--border)' : 'rgba(45,212,191,.4)'};
+        background:${noMoney ? 'rgba(255,255,255,.02)' : 'rgba(45,212,191,.08)'};
+        color:${noMoney ? 'var(--muted)' : 'var(--text)'};cursor:${noMoney ? 'not-allowed' : 'pointer'}">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700">
+        <span>${icon} ${title}</span><span style="color:${ch >= 60 ? 'var(--green)' : ch >= 35 ? 'var(--amber)' : 'var(--red)'}">шанс ${ch}%</span>
+      </div>
+      <div style="font-size:10px;color:var(--sub);margin-top:2px">${cost.label}${noMoney ? ' · недостаточно средств' : ''}</div>
+    </button>`;
+  };
+  m.innerHTML =
+    `<div class="modal" style="max-width:440px;width:100%">
+      <div style="text-align:center;margin-bottom:6px"><span style="font-size:40px">⚠️</span></div>
+      <div style="text-align:center;font-size:17px;font-weight:800;color:var(--text)">${staff.icon || '👤'} ${staff.name} уходит из команды</div>
+      <div style="text-align:center;font-size:11px;color:var(--sub);margin-top:2px">${role}${grade ? ' · ' + grade : ''} — ${reasonTxt}</div>
+      <div style="display:flex;gap:8px;margin:14px 0;padding:10px;background:rgba(255,255,255,.03);border-radius:9px">
+        <div style="flex:1;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Лояльность</div><div style="font-size:14px;font-weight:700;color:${loy < 25 ? 'var(--red)' : 'var(--amber)'}">${loy}%</div></div>
+        <div style="flex:1;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Настроение</div><div style="font-size:14px;font-weight:700">${mood}%</div></div>
+        <div style="flex:1;text-align:center"><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Оклад</div><div style="font-size:14px;font-weight:700">${_fs(staff.cost || staff.salary || 0)}</div></div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Попробовать удержать</div>
+      ${opt('raise', '💰', 'Контр-оффер (поднять оклад)')}
+      ${opt('bonus', '🎁', 'Премия + опционы')}
+      ${opt('talk', '🗣', 'Поговорить по душам')}
+      <button onclick="doLetGoStaff('${staff._iid || staff.id}')" style="display:block;width:100%;margin-top:10px;padding:9px;border-radius:8px;border:1px solid rgba(248,81,73,.3);background:rgba(248,81,73,.06);color:var(--red);cursor:pointer;font-size:12px;font-weight:700">🚪 Отпустить</button>
+    </div>`;
+  m.classList.add('active');
+}
+
+function _closeRetentionModal() {
+  document.getElementById('retention-modal')?.classList.remove('active');
+}
+
+function doRetainStaff(staffId, mode) {
+  const q = G._retentionQueue || [];
+  const staff = (G.staff || []).find(s => (s._iid || s.id) === staffId);
+  if (!staff) { if (q.length) q.shift(); _showNextRetention(); return; }
+  const item = q[0] || { reason: 'loyalty' };
+  const cost = _retentionCost(staff, mode);
+  if (cost.type === 'cash') {
+    if ((G.money || 0) < cost.amount) { if (typeof notify === 'function') notify('Недостаточно средств на премию', 'error'); return; }
+    G.money -= cost.amount;
+  }
+  const success = Math.random() < _retentionChance(staff, mode);
+  if (success) {
+    if (cost.type === 'salary') { const sal = staff.cost || staff.salary || 0; staff.cost = Math.round(sal * 1.3); staff.salary = staff.cost; }
+    staff.loyalty = Math.max(55, (staff.loyalty || 0) + 35);
+    staff.mood = Math.min(100, (staff.mood ?? 80) + 10);
+    if (typeof addLog === 'function') addLog(`🤝 ${staff.name} остаётся в команде — удержали`, 'green');
+    if (typeof notify === 'function') notify(`${staff.name} остаётся! 🤝`, 'success');
+  } else {
+    _removeRetentionStaff(staff, item);
+    if (typeof notify === 'function') notify(`${staff.name} всё же ушёл`, 'error');
+  }
+  if (q.length) q.shift();
+  if (typeof EventBus !== 'undefined') EventBus.emit('render');
+  _showNextRetention();
+}
+
+function doLetGoStaff(staffId) {
+  const q = G._retentionQueue || [];
+  const staff = (G.staff || []).find(s => (s._iid || s.id) === staffId);
+  const item = q[0] || { reason: 'loyalty' };
+  if (staff) _removeRetentionStaff(staff, item);
+  if (q.length) q.shift();
+  if (typeof EventBus !== 'undefined') EventBus.emit('render');
+  _showNextRetention();
+}
+
 // ── Monthly Processing ─────────────────────────────────
 
 function processStaffMonth() {
@@ -439,13 +585,8 @@ function processStaffMonth() {
     }
   });
 
-  // Р.1: обработка уходов по лояльности (инфраструктура — как у fatigue-quit)
-  _loyaltyLeavers.forEach(s => {
-    if (typeof EventBus !== 'undefined') EventBus.emit('staff_quit', { staff: { ...s }, reason: 'loyalty' });
-    G.staff = G.staff.filter(x => x._iid !== s._iid);
-    if (typeof addLog === 'function') addLog(`🚪 ${s.name} ушёл к конкуренту — низкая лояльность`, 'red');
-    if (typeof checkCapacityExceeded === 'function') checkCapacityExceeded(s.name);
-  });
+  // Р.1: низкая лояльность → не удаляем молча, а предлагаем удержание (центр-модал)
+  _loyaltyLeavers.forEach(s => offerStaffRetention(s, 'loyalty'));
 
   // Remove candidates that "went to competitors" (30% per month if pool > 2)
   if ((G.candidatePool || []).length > 2) {

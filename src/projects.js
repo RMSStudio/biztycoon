@@ -1390,11 +1390,16 @@ const Projects = (() => {
       if (qRep > 0) G.reputation = Math.min(100, (G.reputation || 50) + qRep);
     }
 
-    // NPS: база 50, настроение ±, качество +, риск −, правки −
+    // Оценка клиента при завершении: база 50, настроение ±, качество +,
+    // вклад назначенной команды (их npsBonus, до +15), риск −, правки −.
+    const teamNps = Math.min(15, (G.staff || [])
+      .filter(s => (client._assignedStaff || []).includes(s._iid || s.id))
+      .reduce((t, s) => t + (s.npsBonus || 0), 0));
     const finalNPS = Math.min(100, Math.max(0, Math.round(
       50
       + (mood - 60) * 0.5
       + quality * 0.3
+      + teamNps
       - risk * 0.2
       - revisions * 5
     )));
@@ -1750,7 +1755,7 @@ const Projects = (() => {
       effectLabel: '+10 😊',
       available: c => (c._lcClientMood || 60) < 90,
       naLabel: 'настроение макс.',
-      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет прогресса для показа',
+      whenLocked: c => (c._workStartMonth != null || (c._progress || 0) > 0) ? null : 'нет прогресса для показа',
       apply: c => {
         if ((G.money || 0) < 8000) { notify('Недостаточно средств для показа','error'); return false; }
         G.money -= 8000;
@@ -1781,7 +1786,7 @@ const Projects = (() => {
       costLabel: '−20К',
       effectLabel: '+10% качество',
       available: () => true,
-      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет работы для аудита',
+      whenLocked: c => (c._workStartMonth != null || (c._progress || 0) > 0) ? null : 'нет работы для аудита',
       apply: c => {
         if ((G.money || 0) < 20000) { notify('Недостаточно средств для аудита','error'); return false; }
         G.money -= 20000;
@@ -1836,7 +1841,7 @@ const Projects = (() => {
       cooldownMonths: 1,
       bypassPhaseCheck: true,
       available: c => !((c._actionCooldowns || {}).bonus_demo > 0),
-      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет прогресса для показа',
+      whenLocked: c => (c._workStartMonth != null || (c._progress || 0) > 0) ? null : 'нет прогресса для показа',
       apply: c => {
         if ((G.money || 0) < 12000) { notify('Недостаточно средств для демо', 'error'); return false; }
         G.money -= 12000;
@@ -1891,7 +1896,7 @@ const Projects = (() => {
       costLabel: '−14К',
       effectLabel: '+8% качество',
       available: () => true,
-      whenLocked: c => (c._progress || 0) > 0 ? null : 'нет работы для теста',
+      whenLocked: c => (c._workStartMonth != null || (c._progress || 0) > 0) ? null : 'нет работы для теста',
       apply: c => {
         if ((G.money || 0) < 14000) { notify('Недостаточно средств', 'error'); return false; }
         G.money -= 14000;

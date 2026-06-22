@@ -1812,12 +1812,17 @@
     }
     if (!target) return;
 
-    G.staff = staff.filter(s => s !== target);
-    const msg = `🚪 ${target.icon || '👤'} ${target.name} перешёл в ${networker.icon} ${networker.name}`;
-    if (typeof addLog  === 'function') addLog(msg, 'red');
-    if (typeof notify  === 'function') notify(msg, 'error');
-    if (typeof EventBus !== 'undefined' && EventBus && typeof EventBus.emit === 'function') {
-      EventBus.emit('staff_poached', { staffId: target._iid || target.id, competitorId: networker.id });
+    // Фидбэк 2026-06-21: не удаляем молча — предлагаем удержание (центр-модал с действиями)
+    if (typeof offerStaffRetention === 'function') {
+      offerStaffRetention(target, 'poach', networker.name);
+    } else {
+      G.staff = staff.filter(s => s !== target);
+      const msg = `🚪 ${target.icon || '👤'} ${target.name} перешёл в ${networker.icon} ${networker.name}`;
+      if (typeof addLog  === 'function') addLog(msg, 'red');
+      if (typeof notify  === 'function') notify(msg, 'error');
+      if (typeof EventBus !== 'undefined' && EventBus && typeof EventBus.emit === 'function') {
+        EventBus.emit('staff_poached', { staffId: target._iid || target.id, competitorId: networker.id });
+      }
     }
   }
 

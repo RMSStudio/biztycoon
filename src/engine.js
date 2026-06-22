@@ -301,7 +301,9 @@ function releaseProjectTeam(projectId) {
 // жадно добавляет пока throughput (2 + WU выбранных) не покроет load×1.15
 function autoAssignOptimal(project) {
   const pLoad  = getProjectLoad(project);
-  const target = Math.max(pLoad * 1.15, 4); // с запасом 15%, минимум 4
+  // Раньше 1.15× оставляло способных свободных людей на скамейке и проект полз.
+  // 1.8× — авто задействует больше доступной мощности (отдача убывающая, но темп выше).
+  const target = Math.max(pLoad * 1.8, 4);
 
   const free = (G.staff || []).filter(s => s.status !== 'fired' && !s._assignedProjectId);
   if (!free.length) return [];
