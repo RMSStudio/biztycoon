@@ -162,6 +162,7 @@ function startGame() {
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
   G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.calendarEvents=[]; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0; G.secondSpec=null; G._pendingNegAudit=null; G.perks={}; G._negUsedThisMonth=0;
   G.seasons={}; G._lastSeasonKey=null;   // Ф.6: сезоны (порядок тем по годам)
+  G.director={ comfort:0, streak:0, pressure:0, lastCrisisMonth:-99, crises:0, overheadSpikePct:0, overheadSpikeUntil:-1, demandCrashUntil:-1 };  // Р.4
   // ИИ-нейросеть
   G.ai = {
     purchased:         false,   // куплен доступ
@@ -693,6 +694,182 @@ function _maybeFireSeasonEvent() {
   return false;
 }
 
+// ══════════════════════════════════════════════════════
+//  Р.4 — ДИНАМИЧЕСКАЯ СЛОЖНОСТЬ: «ДИРЕКТОР ДАВЛЕНИЯ»
+//  Каждый месяц оценивает «комфорт» игрока (runway/баланс/репутация/слоты).
+//  Долгий комфорт → растёт давление → директор бросает кризисы (мелкие авто +
+//  крупные вилки) и незаметно подкручивает рынок. Пороги зависят от сложности.
+//  🌫 Глухой сезон (Ф.6) усиливает давление. Самоподстраивается (rubber-band).
+// ══════════════════════════════════════════════════════
+const DIRECTOR_COMFORT_CAP = { easy: 85, normal: 70, hard: 58, nightmare: 45 };
+const DIRECTOR_CRISIS_CD   = { easy: 6,  normal: 5,  hard: 4,  nightmare: 3  };  // база месяцев между кризисами
+const DIRECTOR_SEVERITY    = { easy: 0.7, normal: 1.0, hard: 1.25, nightmare: 1.5 };
+
+function _directorDifficulty() {
+  try { if (typeof ScenarioLoader !== 'undefined' && ScenarioLoader.getDifficultyId) return ScenarioLoader.getDifficultyId() || 'normal'; } catch (_) {}
+  return 'normal';
+}
+function _directorState(g = G) {
+  g.director = g.director || { comfort: 0, streak: 0, pressure: 0, lastCrisisMonth: -99, crises: 0,
+    overheadSpikePct: 0, overheadSpikeUntil: -1, demandCrashUntil: -1 };
+  return g.director;
+}
+
+// Индекс комфорта 0..100: чем выше — тем «жирнее» живёт игрок.
+function computeComfort(g = G) {
+  if (!g) return 0;
+  const burn = Math.max(1, -getCashflow(g));
+  const runway = (g.money > 0) ? g.money / burn : 0;
+  const sRun  = clamp(runway / 10, 0, 1);                 // 10+ мес runway = максимум
+  const sBal  = clamp((g.money || 0) / (burn * 6), 0, 1); // подушка 6 мес
+  const sRep  = clamp(((g.reputation || 0) - 40) / 55, 0, 1);
+  const cap   = getCapacity(g);
+  const used  = (g.activeClients || []).filter(c => !c.oneTime).length;
+  const sSlack = cap > 0 ? clamp(1 - used / cap, 0, 1) : 0; // простаивающая мощность = комфорт
+  return Math.round(100 * (0.40 * sRun + 0.25 * sBal + 0.20 * sRep + 0.15 * sSlack));
+}
+
+// Доп. overhead от кризиса (читается в шаге расходов advanceMonth).
+function getDirectorOverhead(g = G) {
+  const d = g.director;
+  if (!d || (d.overheadSpikeUntil || -1) < (g.month || 0)) return 0;
+  return Math.round(OVERHEAD * (d.overheadSpikePct || 0));
+}
+
+// «Невидимая рука»: в комфорте директор подрезает офферы. Возвращает {tierCut, budgetMult}.
+function _directorOfferPenalty(g = G) {
+  const d = g.director;
+  if (!d) return { tierCut: 0, budgetMult: 1 };
+  const cap = DIRECTOR_COMFORT_CAP[_directorDifficulty()] ?? 70;
+  if ((d.comfort || 0) <= cap) return { tierCut: 0, budgetMult: 1 };
+  const p = Math.min(3, d.pressure || 0);
+  // чем выше давление в комфорте — тем вероятнее срез тира и сильнее усушка бюджета
+  const tierCut = (p >= 1 && Math.random() < 0.25 * p) ? 1 : 0;
+  const budgetMult = 1 - Math.min(0.10, 0.03 * p);
+  return { tierCut, budgetMult };
+}
+
+// Крупнейший активный (не разовый) клиент — частая цель кризисов.
+function _biggestClient(g = G) {
+  const list = (g.activeClients || []).filter(c => !c.oneTime);
+  if (!list.length) return null;
+  return [...list].sort((a, b) => (b._totalBudget || 0) - (a._totalBudget || 0))[0];
+}
+
+// ── Мелкие кризисы (авто, без выбора) ───────────────────────────────
+function _crisisMinor(g, p, sev) {
+  const d = _directorState(g);
+  const pool = [];
+  pool.push(() => { // скачок overhead
+    d.overheadSpikePct = Math.min(0.5, (d.overheadSpikePct || 0) + 0.06 * p * sev);
+    d.overheadSpikeUntil = (g.month || 0) + 2;
+    addLog(`📈 Скачок издержек: overhead +${Math.round(d.overheadSpikePct * 100)}% на 2 мес`, 'red');
+    notify('📈 Выросли операционные издержки', 'warning');
+  });
+  pool.push(() => { // репутационный укол
+    const dr = Math.round((1 + p) * sev);
+    g.reputation = clamp((g.reputation || 0) - dr, 0, 100);
+    addLog(`📰 Неудачный кейс попал в прессу: −${dr} репутации`, 'amber');
+  });
+  const big = _biggestClient(g);
+  if (big) pool.push(() => { // подрезка бюджета сделки
+    const pct = Math.round((5 + 5 * p) * sev);
+    const delta = Math.round((big._totalBudget || 0) * pct / 100);
+    big._totalBudget = Math.max(0, (big._totalBudget || 0) - delta);
+    addLog(`✂️ «${big.name}» урезал бюджет на ${pct}% (−${fmtK(delta)})`, 'amber');
+    notify('✂️ Клиент сократил бюджет', 'warning');
+  });
+  if ((g.activeClients || []).filter(c => !c.oneTime).length) pool.push(() => { // удар по лояльности случайного
+    const live = g.activeClients.filter(c => !c.oneTime);
+    const c = live[Math.floor(Math.random() * live.length)];
+    const dr = Math.round((3 + 2 * p) * sev);
+    if (typeof nudgeClientRating === 'function') nudgeClientRating(c, -dr, g);
+    addLog(`😕 «${c.name}» недоволен: оценка клиента −${dr}`, 'amber');
+  });
+  pool[Math.floor(Math.random() * pool.length)]();
+}
+
+// ── Крупные кризисы (вилка с выбором) ───────────────────────────────
+function _crisisMajor(g, p, sev) {
+  const evs = [];
+  const big = _biggestClient(g);
+  const staff = (g.staff || []).filter(s => s.status !== 'fired');
+
+  if (big) evs.push(() => { // секвестр бюджета
+    const pct = Math.round((20 + 5 * p) * sev);
+    const delta = Math.round((big._totalBudget || 0) * pct / 100);
+    _emitShowEvent({ icon: '✂️', title: 'Секвестр бюджета', body: `«${big.name}» режет бюджет проекта на ${pct}% (−${fmtK(delta)}). Как поступишь?`,
+      choices: [
+        { text: 'Принять удар', desc: `−${fmtK(delta)} к доходу сделки.`, fn: gg => { const c = _biggestClient(gg); if (c) { c._totalBudget = Math.max(0, (c._totalBudget || 0) - delta); addLog(`✂️ Секвестр «${c.name}»: −${fmtK(delta)}`, 'red'); } } },
+        { text: 'Сесть за стол переговоров', desc: '−2 рабочих дня, 50%: вернуть половину среза.', fn: gg => { gg.actions = Math.max(0, (gg.actions || 0) - 2); const c = _biggestClient(gg); if (!c) return; if (Math.random() < 0.5) { const back = Math.round(delta / 2); addLog(`🤝 Переговоры удались: спасено ${fmtK(back)} (срез −${fmtK(delta - back)})`, 'teal'); c._totalBudget = Math.max(0, (c._totalBudget || 0) - (delta - back)); } else { addLog(`🤝 Переговоры провалились: секвестр −${fmtK(delta)} в силе`, 'red'); c._totalBudget = Math.max(0, (c._totalBudget || 0) - delta); } } },
+      ] });
+  });
+
+  if (staff.length) evs.push(() => { // хантинг ключевого спеца
+    const star = [...staff].sort((a, b) => (b.cost || 0) - (a.cost || 0))[0];
+    const keep = Math.round((star.cost || 50000) * 3 * sev);
+    _emitShowEvent({ icon: '🎯', title: 'Хантинг ключевого спеца', body: `Конкурент переманивает «${star.name || star.role}» (${star.role}). Удержишь?`,
+      choices: [
+        { text: 'Контр-оффер', desc: `−${fmtK(keep)} (премия+опционы), специалист остаётся.`, fn: gg => { gg.money -= keep; const s = (gg.staff || []).find(x => x === star) || star; if (s) { s.loyalty = clamp((s.loyalty || 50) + 20, 0, 100); s.mood = clamp((s.mood || 50) + 10, 0, 100); } addLog(`🎯 Удержан «${star.name || star.role}»: −${fmtK(keep)}`, 'amber'); } },
+        { text: 'Отпустить', desc: '−мощность, мораль команды −8.', fn: gg => { gg.staff = (gg.staff || []).filter(x => x !== star); (gg.staff || []).forEach(s => { s.mood = clamp((s.mood || 50) - 8, 0, 100); }); addLog(`🚪 «${star.name || star.role}» ушёл к конкуренту — мораль команды просела`, 'red'); if (typeof checkCapacityExceeded === 'function') checkCapacityExceeded(star.name || star.role); } },
+      ] });
+  });
+
+  evs.push(() => { // антипиар
+    const repHit = Math.round((4 + 2 * p) * sev);
+    const prCost = Math.round((-getCashflow(g)) * 0.8 * sev);
+    _emitShowEvent({ icon: '📰', title: 'Антипиар', body: 'В отраслевом канале вышел разгромный пост о вашем агентстве. Реакция?',
+      choices: [
+        { text: 'Запустить PR-кампанию', desc: `−${fmtK(prCost)}, репутация спасена.`, fn: gg => { gg.money -= prCost; addLog(`📣 PR-кампания против антипиара: −${fmtK(prCost)}`, 'amber'); } },
+        { text: 'Проигнорировать', desc: `−${repHit} репутации, лояльность клиентов −3.`, fn: gg => { gg.reputation = clamp((gg.reputation || 0) - repHit, 0, 100); if (typeof nudgeAllNPS === 'function') nudgeAllNPS(gg, -3); addLog(`📰 Антипиар без ответа: −${repHit} реп.`, 'red'); } },
+      ] });
+  });
+
+  evs.push(() => { // обвал спроса
+    const mkt = Math.round((-getCashflow(g)) * 1.0 * sev);
+    _emitShowEvent({ icon: '📉', title: 'Обвал спроса', body: 'Рынок резко просел — заявок почти нет ближайшие 2 месяца.',
+      choices: [
+        { text: 'Демпинг-маркетинг', desc: `−${fmtK(mkt)}, поток заявок восстановлен.`, fn: gg => { gg.money -= mkt; const d = _directorState(gg); d.demandCrashUntil = -1; addLog(`📣 Антикризисный маркетинг: −${fmtK(mkt)}, спрос удержан`, 'amber'); } },
+        { text: 'Переждать', desc: '−1..2 оффера на 2 месяца.', fn: gg => { const d = _directorState(gg); d.demandCrashUntil = (gg.month || 0) + 2; addLog('📉 Пережидаем обвал спроса (−офферы 2 мес)', 'red'); } },
+      ] });
+  });
+
+  evs[Math.floor(Math.random() * evs.length)]();
+}
+
+// Бросок кризиса: мелкий (авто) или крупный (вилка), вероятность крупного растёт с давлением.
+function _rollCrisis(g, pressure, diff) {
+  const sev = DIRECTOR_SEVERITY[diff] ?? 1.0;
+  const majorChance = [0, 0.30, 0.55, 0.80][Math.min(3, pressure)] || 0.3;
+  _directorState(g).crises++;
+  if (Math.random() < majorChance) _crisisMajor(g, pressure, sev);
+  else _crisisMinor(g, pressure, sev);
+}
+
+// Месячный тик директора. Вызывается из advanceMonth после расходов.
+function _directorTick(g = G) {
+  if (!g) return;
+  const d = _directorState(g);
+  const diff = _directorDifficulty();
+  const cap = DIRECTOR_COMFORT_CAP[diff] ?? 70;
+  d.comfort = computeComfort(g);
+  if (d.comfort > cap) d.streak = (d.streak || 0) + 1;
+  else d.streak = Math.max(0, (d.streak || 0) - 2);   // дискомфорт быстро снимает давление
+  d.pressure = Math.min(3, Math.floor((d.streak || 0) / 3));
+
+  // 🌫 Глухой сезон (Ф.6) усиливает давление директора
+  const slump = (typeof getActiveSeason === 'function') && getActiveSeason(g).id === 'slump';
+  const effPressure = Math.min(3, (d.pressure || 0) + (slump ? 1 : 0));
+  if (effPressure <= 0) return;
+
+  const baseCd = DIRECTOR_CRISIS_CD[diff] ?? 5;
+  const cd = Math.max(2, baseCd - (effPressure - 1));
+  if (((g.month || 0) - (d.lastCrisisMonth || -99)) >= cd) {
+    _rollCrisis(g, effPressure, diff);
+    d.lastCrisisMonth = (g.month || 0);
+  }
+}
+
 function _generateOffers() {
   const roll=Math.random()*100;
   const repBonus=(G.reputation-50)*0.2;
@@ -712,13 +889,18 @@ function _generateOffers() {
   if (G.secondSpec && SPECS[G.secondSpec]?.passive === 'scout_offers') offerCount=Math.min(5, offerCount+(SPECS[G.secondSpec].passiveVal||0));
   // п.21 (Ф.6): сезонный бонус/штраф к количеству офферов
   { const sea = getSeasonMod(); offerCount = Math.max(0, Math.min(5, offerCount + sea.offerBonus)); }
+  // Р.4: обвал спроса (кризис «Переждать») режет число офферов
+  if (G.director && (G.director.demandCrashUntil || -1) >= (G.month || 0)) offerCount = Math.max(0, offerCount - 2);
 
   // Гейты тиров T1–T7 (v3.0): репутация + портфолио для эндгейма
   const _rep = G.reputation, _pf = G.portfolio || 0;
-  const maxTier = (_rep>=95 && _pf>=80) ? 7
+  let maxTier = (_rep>=95 && _pf>=80) ? 7
                 : (_rep>=90 && _pf>=50) ? 6
                 : (_rep>=85 && _pf>=30) ? 5
                 : _rep>=80 ? 4 : _rep>=70 ? 3 : _rep>=40 ? 2 : 1;
+  // Р.4: «невидимая рука» — в комфорте директор иногда срезает верхний тир офферов
+  const _dpen = (typeof _directorOfferPenalty === 'function') ? _directorOfferPenalty(G) : { tierCut: 0, budgetMult: 1 };
+  maxTier = Math.max(1, maxTier - (_dpen.tierCut || 0));
 
   // Rarity: legendary при rep≥90, epic при rep≥80, rare при rep≥60
   const rarityOk = r => {
@@ -740,7 +922,8 @@ function _generateOffers() {
   // отрицательным — «Глухой сезон»). Плюс тематический НАПЛЫВ: в сезон ~60%
   // офферов из проектов с season-тегом темы, обычный пул на период ужимается.
   const _sea       = getSeasonMod();
-  const _seaBoost  = _sea.budgetBoost;     // доля, +/- (signProject множит 1+_seasonBoost)
+  // Сезонный бюджет × «невидимая рука» директора (усушка в комфорте) → итоговая доля
+  const _seaBoost  = (1 + _sea.budgetBoost) * (_dpen.budgetMult || 1) - 1;
   const _seaTag    = _sea.pool;            // тег темы (или null)
   const _decorate  = p => ({ ...p, ...(_seaBoost !== 0 ? { _seasonBoost: _seaBoost } : {}), ...(_seaTag && p.season === _seaTag ? { _seasonHot: true } : {}) });
 
@@ -1895,14 +2078,15 @@ function advanceMonth() {
     }
   });
 
-  // ⑥ Ежемесячные расходы
+  // ⑥ Ежемесячные расходы (+ Р.4: временный скачок overhead от кризиса)
   const staffCost = getTotalStaffCost();
-  const net       = -(staffCost + OVERHEAD);
+  const dirOver   = (typeof getDirectorOverhead === 'function') ? getDirectorOverhead(G) : 0;
+  const net       = -(staffCost + OVERHEAD + dirOver);
   G.money += net;
   G.monthsPlayed++;
   G.tempDiscount = 0;
 
-  addLog(`расходы −${fmt(staffCost+OVERHEAD)} → баланс ${fmt(G.money)}`, 'red');
+  addLog(`расходы −${fmt(staffCost+OVERHEAD+dirOver)}${dirOver>0?` (вкл. кризис +${fmtK(dirOver)})`:''} → баланс ${fmt(G.money)}`, 'red');
 
   // ⑦ (v3.0) Завершение разовых перенесено в lifecycle-флоу:
   // instant-цепочка → work_0 → delivery → finishDelivery платит бюджет
@@ -1941,6 +2125,9 @@ function advanceMonth() {
 
   // Ф.6: смена сезона (квартала) — анонс + событие-вилка
   _maybeFireSeasonEvent();
+
+  // Р.4: тик «директора давления» — оценка комфорта + возможный кризис
+  _directorTick(G);
 
   // ⑪-а Календарь: применяем наступившие отложенные события
   (G.calendarEvents || []).forEach(ev => {
