@@ -161,6 +161,7 @@ function startGame() {
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
   G.completedProjects=[]; G.cases=[]; G.caseQBonus=0; G.calendarEvents=[]; G.perkFatigueMult=1; G.perkRecoveryBonus=0; G.perkPrepayBonus=0; G.perkPayoutMult=0; G.perkPenaltyShield=false; G.caseRepBonus=0; G.caseScoutBonus=0; G.caseRepPenalty=0; G.scoutPool=null; G.loan=null; G.teamFatigue=0; G.fatigueActionCooldowns={}; G.oneTimeCooldown=0; G.speedUpgrades=0; G.secondSpec=null; G._pendingNegAudit=null; G.perks={}; G._negUsedThisMonth=0;
+  G.seasons={}; G._lastSeasonKey=null;   // Ф.6: сезоны (порядок тем по годам)
   // ИИ-нейросеть
   G.ai = {
     purchased:         false,   // куплен доступ
@@ -202,7 +203,9 @@ function getSpeed(g=G) {
   const specBonus   = SPECS[g.spec]?.passive === 'speed' ? (SPECS[g.spec].passiveVal || 0) : 0;
   // п.13: пассив второй специализации
   const spec2Bonus  = g.secondSpec && SPECS[g.secondSpec]?.passive === 'speed' ? (SPECS[g.secondSpec].passiveVal || 0) : 0;
-  return 1.0 + staffBonus + (g.speedUpgrades||0) + loanDebuff + specBonus + spec2Bonus;
+  // Ф.6: сезонный модификатор скорости (напр. «Сезон спорта» −5%)
+  const seasonMod   = (typeof getActiveSeason === 'function' && g) ? (getActiveSeason(g).speedMod || 0) : 0;
+  return Math.max(0.2, 1.0 + staffBonus + (g.speedUpgrades||0) + loanDebuff + specBonus + spec2Bonus + seasonMod);
 }
 // +0.4% выручки за каждый балл портфолио, cap +20% при 50 баллах
 function getPortfolioMultiplier(g=G){ return 1+Math.min((g.portfolio||0)*0.004, 0.20); }
@@ -552,14 +555,142 @@ function investInClient(cid) {
 // ══════════════════════════════════════════════════════
 //  SCOUTING
 // ══════════════════════════════════════════════════════
-// п.21 (Ф.6): Сезонный модификатор (0=Янв … 11=Дек)
-// Q4 (ноябрь–декабрь) — пик спроса; Q1 (янв–фев) — затишье; Лето (июн–июл) — спад
+// ══════════════════════════════════════════════════════
+//  Ф.6 — СЕЗОННОСТЬ (стиль HoMM3 «тематических недель»)
+//  Каждый игровой год 4 темы вытягиваются из пула и раскладываются по кварталам
+//  в случайном порядке (тасуются год к году). У темы три слоя: глобальный эффект,
+//  тематический наплыв проектов (season-тег), уникальное событие-вилка.
+// ══════════════════════════════════════════════════════
+//  Поля темы:
+//   speedMod   — добавка к getSpeed (доля, напр. -0.05 = «−5 к скорости»)
+//   budgetMult — множитель бюджета офферов (1.15 = +15%, 0.9 = −10%)
+//   offerBonus — +/- к числу офферов в скаутинге
+//   npsNudge   — ежемесячный сдвиг лояльности активных клиентов
+//   riskMod    — добавка к ежемесячному риску проектов (доля)
+//   pool       — season-тег, проекты которого «заливают» рынок в этот сезон
+const SEASON_THEMES = [
+  { id: 'sport',   label: 'Сезон большого спорта', icon: '🏟', color: '#34d399',
+    atmosphere: 'все смотрят трансляции, а не работают',
+    speedMod: -0.05, budgetMult: 1.10, offerBonus: 0, npsNudge: 0, riskMod: 0, pool: 'event',
+    desc: 'Спонсорские и ивент-заказы. Бюджеты +10%, но скорость −5% (команда отвлекается).' },
+  { id: 'sale',    label: 'Сезон распродаж', icon: '🛍', color: '#f59e0b',
+    atmosphere: 'Black Friday на носу, всем нужно «ещё вчера»',
+    speedMod: 0, budgetMult: 1.20, offerBonus: 1, npsNudge: -1, riskMod: 0.04, pool: 'ecom',
+    desc: 'Performance/e-comm заказы. Бюджеты +20%, +1 оффер, но риск и нервы клиентов выше.' },
+  { id: 'report',  label: 'Сезон отчётности', icon: '📊', color: '#60a5fa',
+    atmosphere: 'годовые отчёты, аналитика, «покажите цифры»',
+    speedMod: 0, budgetMult: 1.0, offerBonus: 0, npsNudge: 0, riskMod: 0, pool: 'report',
+    desc: 'Аналитика и брендинг. Лояльность клиентов держится, но рынок ровный.' },
+  { id: 'startup', label: 'Стартап-лихорадка', icon: '🚀', color: '#a78bfa',
+    atmosphere: 'инвест-волна, новые студии плодятся каждую неделю',
+    speedMod: 0, budgetMult: 0.90, offerBonus: 2, npsNudge: 0, riskMod: 0.05, pool: 'startup',
+    desc: 'Много мелких рисковых заказов: +2 оффера, но бюджеты −10% и риск выше.' },
+  { id: 'rebrand', label: 'Сезон ребрендингов', icon: '🎨', color: '#f472b6',
+    atmosphere: 'все хотят «освежить айдентику»',
+    speedMod: 0, budgetMult: 1.15, offerBonus: 0, npsNudge: 1, riskMod: 0, pool: 'brand',
+    desc: 'Брендинг и дизайн-проекты. Бюджеты +15%, клиенты довольнее.' },
+  { id: 'slump',   label: 'Глухой сезон', icon: '🌫', color: '#94a3b8',
+    atmosphere: 'рынок замер, бюджеты режут',
+    speedMod: 0, budgetMult: 0.90, offerBonus: -1, npsNudge: -2, riskMod: 0, pool: null,
+    desc: 'Затишье: −1 оффер, бюджеты −10%, клиенты нервничают. Пережить и не уйти в минус.' },
+];
+
+function _seasonYear(g = G) { return Math.floor(((g && g.month) || 0) / 12); }
+function _seasonQuarter(g = G) { return Math.floor((((g && g.month) || 0) % 12) / 3); }  // 0..3
+
+// Жеребьёвка порядка тем на год: 4 из пула, по возможности не повторяя
+// прошлогоднюю границу (Q4→Q1) для ощущения смены.
+function _drawSeasonOrder(prevOrder) {
+  const ids = SEASON_THEMES.map(t => t.id);
+  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  const order = ids.slice(0, 4);
+  // мягко избегаем мгновенного повтора темы на стыке годов
+  if (prevOrder && prevOrder.length && order[0] === prevOrder[prevOrder.length - 1] && SEASON_THEMES.length > 4) {
+    const alt = ids.slice(4).find(x => x !== order[0]);
+    if (alt) order[0] = alt;
+  }
+  return order;
+}
+
+function _ensureSeasonOrder(g = G) {
+  if (!g) return SEASON_THEMES.slice(0, 4).map(t => t.id);
+  g.seasons = g.seasons || {};
+  const y = _seasonYear(g);
+  if (!Array.isArray(g.seasons[y])) g.seasons[y] = _drawSeasonOrder(g.seasons[y - 1]);
+  return g.seasons[y];
+}
+
+// Активная тема сезона (текущий квартал текущего года).
+function getActiveSeason(g = G) {
+  const order = _ensureSeasonOrder(g);
+  const id = order[_seasonQuarter(g)] || order[0];
+  return SEASON_THEMES.find(t => t.id === id) || SEASON_THEMES[0];
+}
+
+// Сколько месяцев до следующего сезона + какая тема будет.
+function getNextSeason(g = G) {
+  const m = ((g && g.month) || 0);
+  const monthsLeft = 3 - (m % 3);
+  const nextMonth = m + monthsLeft;
+  const order = _ensureSeasonOrder({ ...(g || {}), month: nextMonth, seasons: (g && g.seasons) || {} });
+  const id = order[Math.floor((nextMonth % 12) / 3)] || order[0];
+  return { monthsLeft, theme: SEASON_THEMES.find(t => t.id === id) || SEASON_THEMES[0] };
+}
+
+// Back-compat обёртка: прежние потребители ждут {offerBonus,budgetBoost,npsNudge,label,icon,color}.
+// budgetBoost = доля (budgetMult-1), чтобы signProject (1+_seasonBoost) работал как раньше.
 function getSeasonMod() {
-  const m = G.month % 12;
-  if (m === 10 || m === 11) return { offerBonus:  1, budgetBoost: 0.15, npsNudge:  0, label: 'Q4 — пик спроса', icon: '📈', color: 'var(--teal)'  };
-  if (m === 0  || m === 1 ) return { offerBonus: -1, budgetBoost: 0,    npsNudge: -3, label: 'Q1 — затишье',    icon: '❄️',  color: '#7fa8d8'       };
-  if (m === 5  || m === 6 ) return { offerBonus:  0, budgetBoost: 0,    npsNudge: -2, label: 'Лето',            icon: '☀️',  color: 'var(--amber)'  };
-  return { offerBonus: 0, budgetBoost: 0, npsNudge: 0, label: null, icon: null, color: null };
+  if (typeof G === 'undefined' || !G) return { offerBonus: 0, budgetBoost: 0, npsNudge: 0, speedMod: 0, riskMod: 0, pool: null, label: null, icon: null, color: null };
+  const s = getActiveSeason();
+  return {
+    id: s.id, label: s.label, icon: s.icon, color: s.color, atmosphere: s.atmosphere, desc: s.desc,
+    offerBonus: s.offerBonus || 0, budgetBoost: (s.budgetMult || 1) - 1, budgetMult: s.budgetMult || 1,
+    npsNudge: s.npsNudge || 0, speedMod: s.speedMod || 0, riskMod: s.riskMod || 0, pool: s.pool || null,
+  };
+}
+
+// Ф.6: сезонные события-вилки (по 1 на тему). Срабатывают при смене квартала.
+// Каждое — {icon,title,body,choices:[{text,desc,fn(G)}]}; fn мутирует G.
+const _seasNoop = { text: 'Пройти мимо', desc: 'Без последствий.', fn: () => {} };
+const SEASON_EVENTS = {
+  sport: () => ({ icon: '🏟', title: 'Амбассадор лиги', body: 'Звезда спортлиги предлагает стать её амбассадором — громкий охват, но небесплатно.',
+    choices: [
+      { text: 'Заключить спонсорство', desc: '−180К, +6 репутации.', fn: g => { g.money -= 180000; g.reputation = clamp(g.reputation + 6, 0, 100); addLog('🏟 Спонсорство лиги: −180К, +6 реп.', 'amber'); } },
+      _seasNoop ] }),
+  sale: () => ({ icon: '🛍', title: 'Слот на маркетплейсе', body: 'Маркетплейс открывает платный промо-слот под распродажу — выкупишь, поднимешь поток заявок.',
+    choices: [
+      { text: 'Выкупить промо-слот', desc: '−120К, +1 к скаутингу.', fn: g => { g.money -= 120000; g.caseScoutBonus = (g.caseScoutBonus || 0) + 1; addLog('🛍 Промо-слот: −120К, +1 к скаутингу', 'amber'); } },
+      _seasNoop ] }),
+  report: () => ({ icon: '📊', title: 'Срочный годовой отчёт', body: 'Крупный клиент просит сверстать годовой отчёт «на вчера». Возьмёшь авралом?',
+    choices: [
+      { text: 'Взять авралом', desc: '+220К, но +15 усталости команды.', fn: g => { g.money += 220000; g.teamFatigue = clamp((g.teamFatigue || 0) + 15, 0, 100); addLog('📊 Аврал по отчёту: +220К, +15 усталости', 'teal'); } },
+      { text: 'Вежливо отказать', desc: '−2 репутации.', fn: g => { g.reputation = clamp(g.reputation - 2, 0, 100); } } ] }),
+  startup: () => ({ icon: '🚀', title: 'Инвест-волна', body: 'Поднялась инвест-волна — десятки стартапов ищут подрядчика прямо сейчас.',
+    choices: [
+      { text: 'Набрать пачку лидов', desc: '+2 к скаутингу, +10 усталости.', fn: g => { g.caseScoutBonus = (g.caseScoutBonus || 0) + 2; g.teamFatigue = clamp((g.teamFatigue || 0) + 10, 0, 100); addLog('🚀 Инвест-волна: +2 к скаутингу, +10 усталости', 'teal'); } },
+      { text: 'Держать фокус на текущих', desc: 'Без последствий.', fn: () => {} } ] }),
+  rebrand: () => ({ icon: '🎨', title: 'Конкурс на ребрендинг', body: 'Объявлен тендер на ребрендинг известной сети. Участие отнимает силы, но громкая победа поднимет имя.',
+    choices: [
+      { text: 'Участвовать', desc: '60%: +8 репутации, иначе −2 рабочих дня.', fn: g => { if (Math.random() < 0.6) { g.reputation = clamp(g.reputation + 8, 0, 100); addLog('🎨 Победа в тендере на ребрендинг: +8 реп.', 'green'); } else { g.actions = Math.max(0, (g.actions || 0) - 2); addLog('🎨 Тендер проигран — потеряно 2 дня', 'muted'); } } },
+      _seasNoop ] }),
+  slump: () => ({ icon: '🌫', title: 'Клиент давит на скидку', body: 'В затишье ключевой клиент намекает: либо скидка, либо уходит к конкуренту.',
+    choices: [
+      { text: 'Дать скидку, удержать', desc: '−90К, +4 лояльности всем клиентам.', fn: g => { g.money -= 90000; if (typeof nudgeAllNPS === 'function') nudgeAllNPS(g, 4); addLog('🌫 Скидка ради удержания: −90К, +4 лояльности', 'amber'); } },
+      { text: 'Держать цену', desc: 'Риск: −3 лояльности.', fn: g => { if (typeof nudgeAllNPS === 'function') nudgeAllNPS(g, -3); } } ] }),
+};
+
+// Срабатывает при смене квартала (нового сезона). Возвращает true, если событие показано.
+function _maybeFireSeasonEvent() {
+  if (typeof G === 'undefined' || !G) return false;
+  const key = _seasonYear() * 4 + _seasonQuarter();
+  if (G._lastSeasonKey == null) { G._lastSeasonKey = key; return false; }   // инициализация без события
+  if (key === G._lastSeasonKey) return false;
+  G._lastSeasonKey = key;
+  const s = getActiveSeason();
+  addLog(`${s.icon} Новый сезон: ${s.label} — ${s.desc}`, 'purple');
+  const mk = SEASON_EVENTS[s.id];
+  if (mk) { _emitShowEvent(mk()); return true; }
+  return false;
 }
 
 function _generateOffers() {
@@ -604,25 +735,39 @@ function _generateOffers() {
     (!p.minPortfolio || (G.portfolio||0)>=p.minPortfolio)
   );
 
-  // Взвешенный выбор: вероятность из поля prob; epic/rare имеют меньший prob
-  // п.21 (Ф.6): Q4 — добавляем _seasonBoost к офферам для бюджетного буста при подписании
-  const _seaBoost = getSeasonMod().budgetBoost;
+  // Взвешенный выбор: вероятность из поля prob; epic/rare имеют меньший prob.
+  // Ф.6: сезонный бюджет-множитель применяется ко ВСЕМ офферам (может быть и
+  // отрицательным — «Глухой сезон»). Плюс тематический НАПЛЫВ: в сезон ~60%
+  // офферов из проектов с season-тегом темы, обычный пул на период ужимается.
+  const _sea       = getSeasonMod();
+  const _seaBoost  = _sea.budgetBoost;     // доля, +/- (signProject множит 1+_seasonBoost)
+  const _seaTag    = _sea.pool;            // тег темы (или null)
+  const _decorate  = p => ({ ...p, ...(_seaBoost !== 0 ? { _seasonBoost: _seaBoost } : {}), ...(_seaTag && p.season === _seaTag ? { _seasonHot: true } : {}) });
+
   const offers=[];
   const available = pool.filter(p => !G.activeClients.find(c=>c.id.startsWith(p.id)));
-  const shuffled  = [...available].sort(()=>Math.random()-0.5);
-  for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
-    const p=shuffled[i];
-    if (Math.random() < (p.prob||0.5))
-      offers.push({ ...p, ...(_seaBoost > 0 ? { _seasonBoost: _seaBoost } : {}) });
-  }
-  // Если не набрали нужное количество — берём без prob-фильтра
-  if (offers.length < offerCount) {
-    for (let i=0; i<shuffled.length && offers.length<offerCount; i++){
-      const p=shuffled[i];
-      if (!offers.find(o=>o.id===p.id))
-        offers.push({ ...p, ...(_seaBoost > 0 ? { _seasonBoost: _seaBoost } : {}) });
+  const _shuf = arr => [...arr].sort(()=>Math.random()-0.5);
+  const themed  = _seaTag ? available.filter(p => p.season === _seaTag) : [];
+  const regular = available.filter(p => !_seaTag || p.season !== _seaTag);
+  const shTheme = _shuf(themed), shReg = _shuf(regular);
+
+  // Сколько слотов отдаём тематическим (наплыв) — ~60%, минимум 1, если они есть
+  const wantThemed = (themed.length > 0) ? Math.min(themed.length, Math.max(1, Math.round(offerCount * 0.6))) : 0;
+
+  const _pick = (src, limit, useProb) => {
+    for (let i=0; i<src.length && offers.length<limit; i++){
+      const p = src[i];
+      if (offers.find(o=>o.id===p.id)) continue;
+      if (!useProb || Math.random() < (p.prob||0.5)) offers.push(_decorate(p));
     }
-  }
+  };
+  // 1) тематический наплыв до квоты (с prob, затем гарантированный добор без prob),
+  // 2) обычный пул до общего числа, 3) финальный добор без prob.
+  const themedQuota = Math.min(offerCount, wantThemed);
+  _pick(shTheme, themedQuota, true);
+  if (offers.length < themedQuota) _pick(shTheme, themedQuota, false);   // гарантируем наплыв
+  _pick(shReg, offerCount, true);
+  if (offers.length < offerCount) { _pick(shTheme, offerCount, false); _pick(shReg, offerCount, false); }
   return offers;
 }
 
@@ -1520,12 +1665,18 @@ function advanceMonth() {
       });
     }
   });
-  // п.21 (Ф.6): сезонный NPS-нaтиск — Q1/лето давят на лояльность клиентов
-  { const _seaNps = getSeasonMod().npsNudge;
-    if (_seaNps !== 0 && G.activeClients.filter(c=>!c.oneTime).length > 0) {
-      nudgeAllNPS(G, _seaNps);
-      const _seaM = getSeasonMod();
-      addLog(`${_seaM.icon} Сезон (${_seaM.label}): лояльность ${_seaNps > 0 ? '+' : ''}${_seaNps}`, 'muted');
+  // Ф.6: сезонный натиск — лояльность (npsNudge) + риск активных проектов (riskMod)
+  { const _seaM = getSeasonMod();
+    const _liveClients = G.activeClients.filter(c=>!c.oneTime);
+    if (_seaM.npsNudge !== 0 && _liveClients.length > 0) {
+      nudgeAllNPS(G, _seaM.npsNudge);
+      addLog(`${_seaM.icon} Сезон (${_seaM.label}): лояльность ${_seaM.npsNudge > 0 ? '+' : ''}${_seaM.npsNudge}`, 'muted');
+    }
+    if (_seaM.riskMod > 0) {
+      const _dr = Math.round(_seaM.riskMod * 100);   // напр. 0.04 → +4 риска/мес
+      G.activeClients.forEach(c => {
+        if (c._lcPhase && c._lcPhase.startsWith('work_')) c._lcRisk = Math.min(100, (c._lcRisk || 0) + _dr);
+      });
     } }
 
   // ② Прогресс проектов (не-разовые) — от назначенной команды (WU-система)
@@ -1787,6 +1938,9 @@ function advanceMonth() {
   if (typeof processStaffMonth === 'function') processStaffMonth();
 
   G.month++;
+
+  // Ф.6: смена сезона (квартала) — анонс + событие-вилка
+  _maybeFireSeasonEvent();
 
   // ⑪-а Календарь: применяем наступившие отложенные события
   (G.calendarEvents || []).forEach(ev => {
