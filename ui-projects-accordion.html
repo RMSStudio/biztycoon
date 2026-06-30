@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BizTycoon · тест — проекты-аккордеон v2 (Newturn-стиль)</title>
+<style>
+  :root{
+    --bg:#0c0d14; --col:#13151f; --col-h:#191c28; --line:rgba(255,255,255,.06);
+    --t:#dde3f0; --tm:#7a88a3; --td:#3a4260;
+    --acc:#e1456a; --acc-d:#c5395b; --acc2:#5b5ff5; --green:#27c06b; --amber:#f5a524; --red:#e85252; --teal:#13b8a6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--t);font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;height:100vh;overflow:hidden}
+  .num{font-family:'Archivo Black','Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.03em}
+
+  #wrap{display:flex;flex-direction:column;height:100vh}
+  #top{display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:1px solid var(--line)}
+  #top .logo{font-weight:800;font-size:15px} #top .logo b{color:var(--acc)}
+  #top .hint{margin-left:auto;font-size:11px;color:var(--tm)}
+
+  /* ── горизонтальный аккордеон ── */
+  #scroller{display:flex;flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;gap:0;background:#08090e}
+  #scroller::-webkit-scrollbar{height:6px} #scroller::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px}
+
+  .pcol{
+    position:relative;flex:0 0 210px;min-width:210px;height:100%;
+    background:var(--col);border:none;border-radius:0;
+    box-shadow:inset -1px 0 0 var(--line);
+    cursor:pointer;overflow:hidden;display:flex;flex-direction:column;
+    transition:flex-basis .42s cubic-bezier(.4,0,.15,1), min-width .42s cubic-bezier(.4,0,.15,1), background .3s;
+  }
+  .pcol:hover{background:var(--col-h)}
+  .pcol:not(.open){box-shadow:inset 0 3px 0 var(--pa,var(--acc)), inset -1px 0 0 var(--line)}
+  .pcol.open{flex:1 1 auto;min-width:640px;cursor:default;box-shadow:none}
+  .pcol.open{background:var(--pa,var(--acc))}
+
+  /* ── свёрнутая колонка ── */
+  .pc-pay{margin:20px 20px 0;line-height:.92}
+  .pc-pay .v{font-size:38px}
+  .pc-pay .l{font-size:9px;color:var(--tm);text-transform:uppercase;letter-spacing:.12em;margin-top:6px;font-weight:700}
+  .pc-tick{width:30px;height:3px;background:var(--pa,var(--acc));margin:18px 20px 10px;border-radius:0}
+  .pc-name{font-size:17px;font-weight:800;margin:0 20px;line-height:1.12}
+  .pc-sub{font-size:10px;color:var(--tm);margin:7px 20px 0;letter-spacing:.05em;text-transform:uppercase;font-weight:700}
+  .pc-phase{font-size:11px;margin:8px 20px 0;font-weight:800}
+  .pc-spacer{flex:1}
+  .pc-foot{margin:0 20px 18px}
+  .pc-foot .pct{display:flex;justify-content:space-between;font-size:10px;color:var(--tm);margin-bottom:5px;font-weight:700}
+  .pc-vbar{height:5px;background:rgba(255,255,255,.08);border-radius:0;overflow:hidden}
+  .pc-vbar>i{display:block;height:100%}
+
+  /* ── раскрытое тело (ОДНА колонка, всё друг под другом) ── */
+  .pc-full{display:none;flex:1;min-height:0;overflow-y:auto}
+  .pcol.open .pc-collapsed{display:none !important}
+  .pcol.open .pc-full{display:flex;flex-direction:column;gap:12px;padding:16px 32px 20px;overflow:hidden}
+  .pcol.det .pc-full{display:none}
+  .colL,.colR{display:contents}
+  /* графический фрейм — ТОЛЬКО в свёрнутой колонке (как фото в референсе) */
+  .pc-art{flex:1;margin:14px 18px 12px;border-radius:14px;overflow:hidden;
+    background:rgba(255,255,255,.035);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;min-height:60px}
+  .pc-art .ico{font-size:58px;opacity:.5}
+  .pcol.open .pc-art{display:none}
+  /* ── панель ДЕТАЛИ внутри карточки (смена контента с анимацией) ── */
+  .pc-details{display:none;flex-direction:column;flex:1;min-height:0;padding:18px 32px 20px;overflow:hidden}
+  .pcol.det .pc-details{display:flex;animation:swapIn .3s ease}
+  .pcol.open .pc-full{animation:swapIn .3s ease}
+  @keyframes swapIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+  .det-back{align-self:flex-start;font-size:12px;font-weight:700;border-radius:8px;padding:7px 13px;cursor:pointer;border:1px solid transparent;margin-bottom:14px}
+  .det-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+  .det-cell{border-radius:12px;padding:13px 14px}
+  .det-cell .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;opacity:.55;font-weight:800}
+  .det-cell .v{font-size:20px;font-weight:800;margin-top:5px}
+  .det-log{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
+  .det-row{display:flex;justify-content:space-between;gap:14px;font-size:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .det-row .ph{font-weight:700;opacity:.7} .det-row .ch{font-weight:600}
+  .pcol.open .det-back{background:rgba(255,255,255,.16);color:#fff}
+  .pcol.open .det-cell{background:rgba(255,255,255,.1)}
+  .pcol.open .det-row{border-bottom-color:rgba(255,255,255,.18)}
+  /* блок «Выплаты» — графический таймлайн долей */
+  .det-pay{margin-top:4px}
+  .dp-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:11px}
+  .dp-sum{font-size:18px;font-weight:900} .dp-sum i{font-size:11px;font-weight:600;opacity:.55;font-style:normal}
+  .dp-track{display:flex;gap:4px;height:62px}
+  .dp-seg{position:relative;border-radius:9px;padding:9px 11px;display:flex;flex-direction:column;justify-content:space-between;
+    background:rgba(255,255,255,.07);border:1px solid var(--line);overflow:hidden;min-width:0}
+  .dp-seg b{font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dp-seg span{font-size:10px;opacity:.55;font-weight:700}
+  .dp-seg em{font-size:14px;font-weight:900;font-style:normal;letter-spacing:-.01em}
+  .pcol.open .dp-seg{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16)}
+  .dp-seg.done{background:rgba(39,192,107,.16);border-color:rgba(39,192,107,.4)}
+  .pcol.open .dp-seg.done{background:rgba(255,255,255,.92);color:var(--pa-d,var(--acc-d));border-color:transparent}
+  .dp-seg.next{background:rgba(245,165,36,.14);border-color:rgba(245,165,36,.45)}
+  .pcol.open .dp-seg.next{background:rgba(255,255,255,.34);border-color:rgba(255,255,255,.5)}
+  .dp-seg.done::after{content:'✓';position:absolute;top:7px;right:9px;font-size:11px;font-weight:900;opacity:.7}
+  .dp-legend{display:flex;gap:16px;margin-top:9px;font-size:10px;opacity:.6;font-weight:700}
+  .dp-legend span{display:flex;align-items:center;gap:5px}
+  .dp-legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .dp-legend i.d{background:#27c06b} .dp-legend i.n{background:#f5a524} .dp-legend i.w{background:rgba(255,255,255,.22)}
+  .pcol.open .dp-legend i.d{background:#fff}
+  /* футер «Оценка клиента» — на всю ширину раскрытой карточки */
+  .nps-foot{padding-top:16px;border-top:1px solid var(--line)}
+  .pcol.open .nps-foot{border-top-color:rgba(255,255,255,.25)}
+  .nps-foot .lbl{margin-bottom:11px}
+  .nps-foot .frow{display:flex;align-items:center;gap:16px}
+  .nps-foot .bar{flex:1;height:12px;overflow:hidden;background:rgba(255,255,255,.12)}
+  .nps-foot .bar>i{display:block;height:100%;background:var(--green)}
+  .nps-foot .val{font-size:30px;font-weight:900}
+  .nps-foot button{font-size:14px;font-weight:700;border-radius:10px;padding:13px 20px;cursor:pointer;border:1px solid transparent}
+  .pcol.open .nps-foot .bar>i{background:#fff}
+  .pcol.open .nps-foot .val{color:#fff}
+  .pcol.open .nps-foot button{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.22)}
+  .pcol.open .pc-pay{display:none}
+  .pc-head-open{padding:26px 30px 0}
+  .pcol:not(.open) .pc-head-open{display:none}
+  .pc-head-open{padding:20px 32px 0}
+  .pc-head-open .pay{font-size:38px;line-height:.9}
+  .pc-head-open .pay small{font-size:12px;font-weight:600;opacity:.7;margin-left:9px;letter-spacing:.06em}
+  .pc-head-open .nm{font-size:25px;font-weight:800;margin-top:10px;line-height:1.05}
+  .pc-head-open .sb{font-size:11px;margin-top:6px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;opacity:.7}
+
+  .pcol:not(.open) .pc-head-open,.pcol:not(.open) .pc-tick-open{display:none}
+  .colL,.colR{display:flex;flex-direction:column;min-height:0}
+  .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;opacity:.6;margin-bottom:9px}
+
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .badge{font-size:12px;padding:5px 11px;border-radius:7px;font-weight:700}
+  .seg{display:flex;gap:4px;margin-bottom:6px}
+  .seg>i{flex:1;height:8px;border-radius:0;overflow:hidden;background:rgba(255,255,255,.1)}
+  .seg>i>b{display:block;height:100%}
+  .seg-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:18px}
+  .pill{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    border-radius:11px;padding:12px 16px;font-weight:800;font-size:14px}
+  .pill .go{border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:800;cursor:pointer}
+  .nps-big{margin-top:auto}
+  .nps-big .lbl{margin-bottom:8px}
+  .nps-big .barwrap{display:flex;align-items:center;gap:12px}
+  .nps-big .bar{flex:1;height:10px;border-radius:0;overflow:hidden;background:rgba(255,255,255,.12)}
+  .nps-big .bar>i{display:block;height:100%}
+  .nps-big .val{font-size:26px;font-weight:900}
+  .acts{display:flex;gap:8px;margin-top:14px}
+  .acts button{flex:1;font-size:13px;font-weight:700;border-radius:9px;padding:11px;cursor:pointer;border:1px solid transparent}
+
+  .mrq{display:flex;gap:18px;font-size:16px;font-weight:800;margin-bottom:10px}
+  .teamhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .teamhead .t{font-size:13px;font-weight:700}
+  .teamhead .b{display:flex;gap:8px}
+  .teamhead .b button{font-size:12px;font-weight:700;border-radius:8px;padding:7px 13px;cursor:pointer;border:1px solid transparent}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{font-size:12px;padding:7px 12px;border-radius:9px;cursor:pointer}
+  .warn{font-size:12px;font-weight:700;margin-bottom:10px}
+  .pace{font-size:12px;opacity:.7}
+
+  .pc-close{position:absolute;top:18px;right:20px;font-size:12px;border-radius:8px;padding:6px 13px;cursor:pointer;z-index:3;font-weight:700;border:1px solid rgba(255,255,255,.22);box-shadow:none;-webkit-appearance:none;appearance:none}
+  .pcol:not(.open) .pc-close{display:none}
+
+  /* ── ИНВЕРСИЯ контента на залитой активной карточке ── */
+  .pcol.open{color:#fff}
+  .pcol.open .pc-head-open .pay{color:#fff}
+  .pcol.open .pc-tick-open{background:#fff}
+  .pcol.open .badge{background:rgba(255,255,255,.16);color:#fff}
+  .pcol.open .seg>i>b{background:#fff}
+  .pcol.open .seg-row,.pcol.open .mrq span{color:#fff}
+  .pcol.open .pill{background:rgba(255,255,255,.14);color:#fff}
+  .pcol.open .pill .go{background:#fff;color:var(--pa-d,var(--acc-d))}
+  .pcol.open .nps-big .bar>i{background:#fff}
+  .pcol.open .nps-big .val{color:#fff}
+  .pcol.open .acts button,.pcol.open .teamhead .b button{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.2)}
+  .pcol.open .chip{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18)}
+  .pcol.open .chip.on{background:#fff;color:var(--pa-d,var(--acc-d));font-weight:800}
+  .pcol.open .warn{color:#fff}
+  .pcol.open .pc-close{background:rgba(255,255,255,.16);color:#fff}
+  .pcol.open .nps-big .barwrap .lbl,.pcol.open .teamhead .t{color:#fff}
+  /* тонкий штрих наверху раскрытой (вместо tick) */
+  .pc-tick-open{width:36px;height:4px;background:#fff;margin-bottom:0}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="top">
+    <span class="logo">Biz<b>Tycoon</b> · тест: проекты-аккордеон v2</span>
+    <span class="hint">Клик — раскрытие на ширину · gap 0 · активная залита цветом · сверху выплата</span>
+  </div>
+
+  <div id="scroller" onclick="if(event.target.id==='scroller')collapseAll()">
+
+    <!-- 1 -->
+    <div class="pcol" style="--pa:#13b8a6;--pa-d:#0c7c70" onclick="openCol(this)">
+      <div class="pc-collapsed" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="pc-pay"><div class="v num" style="color:var(--green)">756K</div><div class="l">₽ при сдаче</div></div>
+        <div class="pc-tick"></div>
+        <div class="pc-name">Лендинг для кафе</div>
+        <div class="pc-sub">LC · Работа</div>
+        <div class="pc-phase" style="color:var(--teal)">▶ в работе</div>
+        <div class="pc-art"><span class="ico">🗂</span></div>
+        <div class="pc-foot"><div class="pct"><span>Работа 1/1</span><span>55%</span></div><div class="pc-vbar"><i style="width:55%;background:var(--teal)"></i></div></div>
+      </div>
+      <button class="pc-close" onclick="event.stopPropagation();collapseAll()">свернуть ✕</button>
+      <div class="pc-head-open"><div class="pc-tick-open"></div><div class="pay num" style="color:var(--green);margin-top:14px">756K ₽<small>при сдаче</small></div><div class="nm">Лендинг для кафе</div><div class="sb">LC · Работа · T1</div></div>
+      <div class="pc-full">
+        <div class="colL">
+          <div class="lbl">Прогресс</div>
+          <div class="seg"><i><b style="width:55%;background:var(--teal)"></b></i></div>
+          <div class="seg-row"><span style="opacity:.6">Работа 1 из 1</span><span style="color:var(--teal)">55%</span></div>
+          <div class="pill act" style="background:rgba(232,82,82,.12);border:1px solid rgba(232,82,82,.4);color:var(--red)">▶ Работа · требует решения <button class="go" style="background:var(--acc2);color:#fff">⚡ Решить</button></div>
+          <div class="nps-big"><div class="lbl">Оценка клиента</div><div class="barwrap"><div class="bar"><i style="width:78%;background:var(--green)"></i></div><span class="val" style="color:var(--green)">78</span></div>
+            <div class="acts"><button style="background:rgba(160,118,240,.12);color:#b9a0f5;border-color:rgba(160,118,240,.3)">📋 Детали</button><button style="background:rgba(232,82,82,.1);color:var(--red);border-color:rgba(232,82,82,.25);flex:0 0 56px">✕</button></div></div>
+        </div>
+        <div class="colR">
+          <div class="lbl">Команда · риск · качество</div>
+          <div class="mrq"><span style="color:var(--green)">😊 72</span><span style="color:var(--teal)">⚠ 18</span><span style="color:var(--tm)">✨ 0</span></div>
+          <div class="teamhead"><span class="t">👥 4 / 4 мощн · 100%</span><span class="b"><button style="background:rgba(19,184,166,.12);color:var(--teal);border-color:rgba(19,184,166,.3)">⚡ Авто</button></span></div>
+          <div class="chips"><span class="chip" style="background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--tm)">Ты +2</span><span class="chip on" style="background:rgba(19,184,166,.1);border:1px solid rgba(19,184,166,.35);color:var(--teal)">Полина +2 ✕</span></div>
+          <div class="pace" style="color:var(--tm)">+19%/мес ×1.15 · этап ~3 мес</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 (accent, open) -->
+    <div class="pcol open" style="--pa:#e1456a;--pa-d:#a8324d" onclick="openCol(this)">
+      <div class="pc-collapsed" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="pc-pay"><div class="v num" style="color:var(--green)">13.8M</div><div class="l">₽ при сдаче</div></div>
+        <div class="pc-tick"></div>
+        <div class="pc-name">Ритейл-сеть «Полка»</div>
+        <div class="pc-sub">LC · Работа · T5</div>
+        <div class="pc-phase" style="color:var(--red)">⚡ требует решения</div>
+        <div class="pc-art"><span class="ico">🗂</span></div>
+        <div class="pc-foot"><div class="pct"><span>Работа 1/3</span><span>33%</span></div><div class="pc-vbar"><i style="width:33%;background:var(--amber)"></i></div></div>
+      </div>
+      <button class="pc-close" onclick="event.stopPropagation();collapseAll()">свернуть ✕</button>
+      <div class="pc-head-open"><div class="pc-tick-open"></div><div class="pay num" style="margin-top:14px">13.8M ₽<small>при сдаче</small></div><div class="nm">Ритейл-сеть «Полка»</div><div class="sb">LC · Работа · T5</div></div>
+      <div class="pc-full">
+        <div class="badges"><span class="badge">+4% бюджета/мес</span><span class="badge">+20% портфолио → 16.6M</span></div>
+        <div>
+          <div class="lbl">Прогресс · работа 1 из 3</div>
+          <div class="seg"><i><b style="width:100%"></b></i><i><b style="width:0"></b></i><i><b style="width:0"></b></i></div>
+          <div class="seg-row"><span style="opacity:.7">этап 1</span><span>33%</span></div>
+        </div>
+        <div class="pill act">▶ Работа I · требует решения <button class="go">⚡ Решить</button></div>
+        <div>
+          <div class="lbl">Команда · риск · качество</div>
+          <div class="mrq"><span>😊 99</span><span>⚠ 84</span><span>✨ 53</span></div>
+          <div class="teamhead"><span class="t">👥 Команда · 10 / 24 мощн · 42%</span><span class="b"><button>⚡ Авто</button><button>Подробнее</button></span></div>
+          <div class="chips"><span class="chip">Ты +2</span><span class="chip on">Кирилл +8 ✕</span><span class="chip">＋ ещё 10</span></div>
+          <div class="warn">⚠ не хватает 14 ед — кликни по свободным чипам</div>
+          <div class="pace">+39%/мес ×2.80 · этап ~0 мес · проект ~6 мес</div>
+        </div>
+        <div style="flex:1"></div>
+        <div class="nps-foot">
+          <div class="lbl">Оценка клиента</div>
+          <div class="frow"><div class="bar"><i style="width:99%"></i></div><span class="val">99</span>
+            <button onclick="event.stopPropagation();this.closest('.pcol').classList.add('det')">📋 Детали проекта</button><button style="flex:0 0 56px">✕</button></div>
+        </div>
+      </div>
+      <!-- ВИД «ДЕТАЛИ» (смена контента внутри карточки) -->
+      <div class="pc-details">
+        <button class="det-back" onclick="event.stopPropagation();this.closest('.pcol').classList.remove('det')">← К проекту</button>
+        <div class="lbl" style="margin-bottom:12px">Детали · Ритейл-сеть «Полка»</div>
+        <div class="det-grid">
+          <div class="det-cell"><div class="k">Бюджет</div><div class="v">21.3M</div></div>
+          <div class="det-cell"><div class="k">При сдаче</div><div class="v">13.8M</div></div>
+          <div class="det-cell"><div class="k">Дедлайн</div><div class="v">М11</div></div>
+          <div class="det-cell"><div class="k">Оценка</div><div class="v">99</div></div>
+        </div>
+        <div class="lbl" style="margin-bottom:10px">История решений</div>
+        <div class="det-log">
+          <div class="det-row"><span class="ph">КП · позиционирование</span><span class="ch">Давим на экспертизу</span></div>
+          <div class="det-row"><span class="ph">КП · сроки</span><span class="ch">Реалистичные ×1.0</span></div>
+          <div class="det-row"><span class="ph">Бриф</span><span class="ch">Глубокое погружение</span></div>
+          <div class="det-row"><span class="ph">Планирование</span><span class="ch">🤖 авто-сбор команды</span></div>
+          <div class="det-row"><span class="ph">Работа I</span><span class="ch">Промежуточный показ (+качество)</span></div>
+        </div>
+        <div style="flex:1"></div>
+        <div class="det-pay">
+          <div class="dp-head"><span class="lbl" style="margin:0">Выплаты</span><span class="dp-sum">11.7M <i>/ 21.3M получено</i></span></div>
+          <div class="dp-track">
+            <div class="dp-seg done" style="flex:30"><b>Аванс</b><span>30%</span><em>6.4M</em></div>
+            <div class="dp-seg done" style="flex:23.3"><b>Этап I</b><span>25%</span><em>5.3M</em></div>
+            <div class="dp-seg next" style="flex:23.3"><b>Этап II</b><span>25%</span><em>5.3M</em></div>
+            <div class="dp-seg" style="flex:23.3"><b>Сдача</b><span>20%</span><em>4.3M</em></div>
+          </div>
+          <div class="dp-legend"><span><i class="d"></i>получено</span><span><i class="n"></i>следующая выплата</span><span><i class="w"></i>ожидается</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="pcol" style="--pa:#a076f0;--pa-d:#6f4bbf" onclick="openCol(this)">
+      <div class="pc-collapsed" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="pc-pay"><div class="v num" style="color:var(--green)">3.9M</div><div class="l">₽ при сдаче</div></div>
+        <div class="pc-tick"></div>
+        <div class="pc-name">Ребрендинг «ТехноСтарт»</div>
+        <div class="pc-sub">LC · КП</div>
+        <div class="pc-phase" style="color:var(--amber)">📝 ждёт решения</div>
+        <div class="pc-art"><span class="ico">🗂</span></div>
+        <div class="pc-foot"><div class="pct"><span>КП</span><span>—</span></div><div class="pc-vbar"><i style="width:10%;background:var(--amber)"></i></div></div>
+      </div>
+      <button class="pc-close" onclick="event.stopPropagation();collapseAll()">свернуть ✕</button>
+      <div class="pc-head-open"><div class="pc-tick-open"></div><div class="pay num" style="color:var(--green);margin-top:14px">3.9M ₽<small>при сдаче</small></div><div class="nm">Ребрендинг «ТехноСтарт»</div><div class="sb">LC · КП</div></div>
+      <div class="pc-full">
+        <div class="colL">
+          <div class="badges"><span class="badge" style="background:rgba(39,192,107,.12);color:var(--green)">оценка — старт +5</span></div>
+          <div class="pill" style="background:rgba(232,165,36,.1);border:1px solid rgba(232,165,36,.3);color:var(--amber)">📝 КП · ждёт решения <button class="go" style="background:var(--acc2);color:#fff">Открыть →</button></div>
+          <div class="nps-big"><div class="lbl" style="opacity:.6;color:var(--tm)">Оценка клиента</div><div class="barwrap"><div class="bar"><i style="width:77%;background:var(--green)"></i></div><span class="val" style="color:var(--green)">77</span></div>
+            <div class="acts"><button style="background:rgba(160,118,240,.12);color:#b9a0f5;border-color:rgba(160,118,240,.3)">📋 Детали</button><button style="background:rgba(232,82,82,.1);color:var(--red);border-color:rgba(232,82,82,.25);flex:0 0 56px">✕</button></div></div>
+        </div>
+        <div class="colR"><div class="lbl" style="color:var(--tm)">Команда</div><div class="pace" style="color:var(--tm)">Назначается после согласования КП.</div></div>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="pcol" style="--pa:#e8843a;--pa-d:#b35f23" onclick="openCol(this)">
+      <div class="pc-collapsed" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="pc-pay"><div class="v num" style="color:var(--green)">1.8M</div><div class="l">₽ при сдаче</div></div>
+        <div class="pc-tick"></div>
+        <div class="pc-name">E-commerce «Каприз»</div>
+        <div class="pc-sub">LC · Работа</div>
+        <div class="pc-phase" style="color:var(--red)">⚠ риск 41</div>
+        <div class="pc-art"><span class="ico">🗂</span></div>
+        <div class="pc-foot"><div class="pct"><span>Работа</span><span>38%</span></div><div class="pc-vbar"><i style="width:38%;background:var(--amber)"></i></div></div>
+      </div>
+      <button class="pc-close" onclick="event.stopPropagation();collapseAll()">свернуть ✕</button>
+      <div class="pc-head-open"><div class="pc-tick-open"></div><div class="pay num" style="color:var(--green);margin-top:14px">1.8M ₽<small>при сдаче</small></div><div class="nm">E-commerce «Каприз»</div><div class="sb">LC · Работа</div></div>
+      <div class="pc-full"><div class="colL"><div class="pill act" style="background:rgba(232,82,82,.12);border:1px solid rgba(232,82,82,.4);color:var(--red)">▶ Работа · риск высокий <button class="go" style="background:var(--acc2);color:#fff">Открыть →</button></div></div><div class="colR"></div></div>
+    </div>
+
+    <!-- 5 -->
+    <div class="pcol" style="--pa:#5b8bf5;--pa-d:#3a5ec0" onclick="openCol(this)">
+      <div class="pc-collapsed" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="pc-pay"><div class="v num" style="color:var(--green)">2.3M</div><div class="l">₽ при сдаче</div></div>
+        <div class="pc-tick"></div>
+        <div class="pc-name">Долгосрочный ретейнер</div>
+        <div class="pc-sub">LC · Ревью</div>
+        <div class="pc-phase" style="color:var(--green)">🔍 готов</div>
+        <div class="pc-art"><span class="ico">🗂</span></div>
+        <div class="pc-foot"><div class="pct"><span>Ревью</span><span>100%</span></div><div class="pc-vbar"><i style="width:100%;background:var(--green)"></i></div></div>
+      </div>
+      <button class="pc-close" onclick="event.stopPropagation();collapseAll()">свернуть ✕</button>
+      <div class="pc-head-open"><div class="pc-tick-open"></div><div class="pay num" style="color:var(--green);margin-top:14px">2.3M ₽<small>при сдаче</small></div><div class="nm">Долгосрочный ретейнер</div><div class="sb">LC · Ревью</div></div>
+      <div class="pc-full"><div class="colL"><div class="pill" style="background:rgba(39,192,107,.1);border:1px solid rgba(39,192,107,.3);color:var(--green)">🔍 Ревью · ждёт решения <button class="go" style="background:var(--acc2);color:#fff">Открыть →</button></div></div><div class="colR"></div></div>
+    </div>
+
+    <!-- 6 -->
+    <div class="pcol" style="--pa:#d96a8a;--pa-d:#a8425f" onclick="openCol(this)">
+      <div class="pc-collapsed" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="pc-pay"><div class="v num" style="color:var(--green)">1.4M</div><div class="l">₽ при сдаче</div></div>
+        <div class="pc-tick"></div>
+        <div class="pc-name">Медицинский центр</div>
+        <div class="pc-sub">LC · Работа</div>
+        <div class="pc-phase" style="color:var(--teal)">▶ в работе</div>
+        <div class="pc-art"><span class="ico">🗂</span></div>
+        <div class="pc-foot"><div class="pct"><span>Работа 1/2</span><span>50%</span></div><div class="pc-vbar"><i style="width:50%;background:var(--teal)"></i></div></div>
+      </div>
+      <button class="pc-close" onclick="event.stopPropagation();collapseAll()">свернуть ✕</button>
+      <div class="pc-head-open"><div class="pc-tick-open"></div><div class="pay num" style="color:var(--green);margin-top:14px">1.4M ₽<small>при сдаче</small></div><div class="nm">Медицинский центр</div><div class="sb">LC · Работа</div></div>
+      <div class="pc-full"><div class="colL"><div class="pill" style="background:rgba(19,184,166,.1);border:1px solid rgba(19,184,166,.3);color:var(--teal)">▶ Работа · в процессе <button class="go" style="background:var(--acc2);color:#fff">Открыть →</button></div></div><div class="colR"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function collapseAll(){ document.querySelectorAll('.pcol.open').forEach(c=>c.classList.remove('open','det')); }
+  function openCol(el){ if(el.classList.contains('open'))return; collapseAll(); el.classList.add('open'); el.classList.remove('det'); el.scrollIntoView({behavior:'smooth',inline:'start',block:'nearest'}); }
+</script>
+</body>
+</html>

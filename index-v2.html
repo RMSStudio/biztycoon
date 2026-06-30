@@ -1,0 +1,2113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- no-cache: чтобы обычная перезагрузка всегда брала свежий билд, а не старую версию из кеша браузера -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>BizTycoon — Digital Agency</title>
+<link rel="stylesheet" href="styles/game.css">
+
+<!-- ===== Ф.5 v2 layout styles (from ui-prototype) ===== -->
+<style>
+:root {
+  --bg:       #0c0d14;
+  --bg-s:     #11131d;
+  --bg-c:     #181a28;
+  --bg-ch:    #1e2036;
+  --bg-hov:   #222540;
+  --bd:       rgba(255,255,255,0.07);
+  --bd-a:     rgba(255,255,255,0.13);
+  --t:        #dde3f0;
+  --tm:       #6b7a99;
+  --td:       #3a4260;
+  --acc:      #5b5ff5;
+  --acc-g:    rgba(91,95,245,0.14);
+  --acc-b:    rgba(91,95,245,0.3);
+  --green:    #27c06b;
+  --green-g:  rgba(39,192,107,0.12);
+  --amber:    #f5a524;
+  --red:      #e85252;
+  --purple:   #a076f0;
+  --teal:     #13b8a6;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 13px;
+  line-height: 1.45;
+  font-family: -apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--t);
+}
+
+body {
+  width: 1440px;
+  height: 820px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ─── MOBILE STUB ──────────────────────────────────── */
+@media (max-width: 1280px) {
+  body { overflow: auto; }
+  #app { display: none !important; }
+  #mobile-stub { display: flex !important; }
+}
+
+#mobile-stub {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--bg);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--tm);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+}
+#mobile-stub .icon { font-size: 40px; margin-bottom: 8px; }
+
+/* ─── APP SHELL ────────────────────────────────────── */
+#app {
+  display: flex;
+  flex-direction: column;
+  width: 1440px;
+  height: 820px;
+  position: relative;
+}
+
+/* ─── STATUS BAR ───────────────────────────────────── */
+#statusbar {
+  height: 36px;
+  background: var(--bg-s);
+  border-bottom: 0.5px solid var(--bd);
+  display: flex;
+  align-items: center;
+  padding: 0 16px 0 20px;
+  gap: 0;
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.sb-logo {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--t);
+  opacity: .55;
+  margin-right: 20px;
+  user-select: none;
+}
+
+.sb-sep {
+  width: 0.5px;
+  height: 14px;
+  background: var(--bd-a);
+  margin: 0 16px;
+  flex-shrink: 0;
+}
+
+.sb-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sb-stat .ico { opacity: .5; font-size: 12px; }
+.sb-stat .lbl { color: var(--tm); }
+.sb-stat .val { font-weight: 500; }
+.sb-stat .val.pos { color: var(--green); }
+.sb-stat .val.warn { color: var(--amber); }
+
+.sb-stage {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stage-pill {
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--acc-g);
+  border: 0.5px solid var(--acc-b);
+  color: #a0a4fa;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.stage-next {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--tm);
+}
+
+.pb-wrap {
+  width: 72px;
+  height: 3px;
+  background: var(--bg-ch);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.pb-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--acc);
+  transition: width .5s ease;
+}
+
+.sb-btns { display: flex; gap: 5px; margin-left: 14px; }
+
+.sb-btn {
+  height: 22px;
+  padding: 0 9px;
+  background: transparent;
+  border: 0.5px solid var(--bd-a);
+  border-radius: 4px;
+  color: var(--tm);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.sb-btn:hover { background: var(--bg-ch); color: var(--t); border-color: var(--bd-a); }
+
+/* ─── MAIN ─────────────────────────────────────────── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ─── HUD PANELS ───────────────────────────────────── */
+.hud {
+  width: 210px;
+  background: var(--bg-s);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width .3s cubic-bezier(.4,0,.2,1);
+  position: relative;
+  z-index: 10;
+}
+#hud-left  { border-right: 0.5px solid var(--bd); }
+#hud-right { border-left:  0.5px solid var(--bd); }
+.hud.collapsed { width: 48px; }
+
+.hud-head {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px 0 14px;
+  border-bottom: 0.5px solid var(--bd);
+  flex-shrink: 0;
+  gap: 8px;
+}
+.hud-title {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tm);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  white-space: nowrap;
+  flex: 1;
+  transition: opacity .2s;
+}
+.hud.collapsed .hud-title { opacity: 0; pointer-events: none; }
+
+.hud-tog {
+  width: 20px; height: 20px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 0.5px solid var(--bd);
+  border-radius: 4px;
+  color: var(--tm);
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+  line-height: 1;
+}
+.hud-tog:hover { background: var(--bg-hov); color: var(--t); }
+
+.arr { transition: transform .3s; display: inline-block; }
+#hud-left.collapsed  .arr-l { transform: rotate(180deg); }
+#hud-right.collapsed .arr-r { transform: rotate(180deg); }
+
+/* HUD expanded body */
+.hud-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.hud-body::-webkit-scrollbar { width: 2px; }
+.hud-body::-webkit-scrollbar-thumb { background: var(--bd-a); border-radius: 1px; }
+
+.hud.collapsed .hud-body    { display: none; }
+.hud.collapsed .hud-foot    { display: none; }
+.hud.collapsed .coll-icons  { display: flex; }
+
+/* collapsed icon strip */
+.coll-icons {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 6px;
+}
+.ci {
+  width: 30px; height: 30px;
+  border-radius: 7px;
+  background: var(--bg-ch);
+  border: 0.5px solid var(--bd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all .15s;
+  color: var(--tm);
+  position: relative;
+}
+.ci:hover { background: var(--acc-g); border-color: var(--acc-b); }
+
+/* staff list */
+.staff-list { padding: 8px 10px; }
+
+.staff-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s;
+  white-space: nowrap;
+}
+.staff-row:hover { background: var(--bg-hov); }
+
+.staff-av {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.staff-inf { flex: 1; min-width: 0; overflow: hidden; }
+.staff-name { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.staff-role { font-size: 10px; color: var(--tm); }
+.staff-q { font-size: 10px; color: var(--teal); font-weight: 600; flex-shrink: 0; }
+
+.hud-divider { height: 0.5px; background: var(--bd); margin: 5px 10px; }
+
+/* HUD footer (fatigue + FoT) */
+.hud-foot {
+  padding: 8px 12px;
+  border-top: 0.5px solid var(--bd);
+  flex-shrink: 0;
+}
+.fatigue-hd {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+.fatigue-lbl { color: var(--tm); }
+.fatigue-val { color: var(--amber); font-weight: 600; }
+.fat-bar { height: 3px; background: var(--bg-hov); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
+.fat-fill { height: 100%; border-radius: 2px; background: var(--amber); }
+.fot-row { display: flex; justify-content: space-between; font-size: 10px; }
+.fot-lbl { color: var(--tm); }
+.fot-val { color: var(--red); font-weight: 500; }
+
+/* right hud */
+.rhud-section-lbl {
+  padding: 8px 14px 3px;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--td);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 14px;
+  border-bottom: 0.5px solid var(--bd);
+}
+.m-lbl { font-size: 11px; color: var(--tm); }
+.m-val { font-size: 11px; font-weight: 500; }
+.m-green { color: var(--green); }
+.m-red   { color: var(--red);   }
+.m-amber { color: var(--amber); }
+.m-blue  { color: #a0a4fa; }
+
+.rank-badge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(245,165,36,.1);
+  border: 0.5px solid rgba(245,165,36,.25);
+  color: var(--amber);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.log-item {
+  padding: 5px 14px;
+  font-size: 10px;
+  color: var(--tm);
+  border-bottom: 0.5px solid var(--bd);
+  line-height: 1.5;
+}
+
+/* ─── CENTER ────────────────────────────────────────── */
+#center {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* center view switching — animated */
+.cview {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  bottom: 76px; /* clear floating bar */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity .25s ease, transform .25s ease;
+}
+.cview.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* zone headers */
+.zone-hd {
+  display: flex;
+  align-items: center;
+  padding: 9px 20px 7px;
+  flex-shrink: 0;
+  gap: 10px;
+}
+.zone-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--tm);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.zone-title .cnt { color: var(--td); font-weight: 400; margin-left: 5px; }
+.zone-acts { margin-left: auto; display: flex; gap: 6px; }
+
+.btn-sm {
+  height: 25px;
+  padding: 0 11px;
+  background: transparent;
+  border: 0.5px solid var(--bd-a);
+  border-radius: 5px;
+  color: var(--tm);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-sm:hover { background: var(--bg-hov); color: var(--t); }
+.btn-sm.pri {
+  background: var(--acc-g);
+  border-color: var(--acc-b);
+  color: #a0a4fa;
+}
+.btn-sm.pri:hover { background: rgba(91,95,245,.22); color: #c0c4fc; }
+
+/* ─── PROJECTS ZONE ─────────────────────────────────── */
+#projects-zone {
+  flex: 0 0 57%;
+  min-height: 0;
+  border-bottom: 0.5px solid var(--bd);
+  display: flex;
+  flex-direction: column;
+}
+
+.proj-grid {
+  display: flex;
+  gap: 12px;
+  padding: 0 20px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+}
+.proj-grid::-webkit-scrollbar { height: 3px; }
+.proj-grid::-webkit-scrollbar-thumb { background: var(--bd-a); border-radius: 2px; }
+
+/* Project card */
+.pc {
+  width: 296px;
+  min-width: 296px;
+  background: var(--bg-c);
+  border: 0.5px solid var(--bd);
+  border-radius: 9px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+}
+.pc:hover {
+  border-color: var(--bd-a);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.pc.expanded {
+  border-color: rgba(91,95,245,.35);
+  box-shadow: 0 0 0 1px rgba(91,95,245,.12);
+}
+
+.pc-tbar { height: 3px; flex-shrink: 0; }
+.tbar-t1 { background: var(--green); }
+.tbar-t2 { background: var(--acc); }
+.tbar-t3 { background: var(--purple); }
+
+.pc-head {
+  padding: 9px 12px 7px;
+  border-bottom: 0.5px solid var(--bd);
+}
+.pc-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 3px;
+}
+.pc-name { font-size: 13px; font-weight: 500; flex: 1; line-height: 1.3; }
+.pc-tier {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.tier-t1 { background: rgba(39,192,107,.1);  color: var(--green);  border: 0.5px solid rgba(39,192,107,.22); }
+.tier-t2 { background: var(--acc-g);          color: #a0a4fa;       border: 0.5px solid var(--acc-b); }
+.tier-t3 { background: rgba(160,118,240,.1); color: #c0a8fc;       border: 0.5px solid rgba(160,118,240,.22); }
+
+.pc-client { font-size: 10px; color: var(--tm); }
+
+.pc-meta {
+  display: flex;
+  gap: 0;
+  padding: 7px 12px 6px;
+}
+.pc-mi { flex: 1; }
+.pc-mi-lbl { font-size: 9px; color: var(--td); margin-bottom: 1px; }
+.pc-mi-val { font-size: 12px; font-weight: 500; }
+
+/* phases bar */
+.pc-phases {
+  display: flex;
+  gap: 3px;
+  padding: 0 12px 7px;
+}
+.ph {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-hov);
+  overflow: hidden;
+  position: relative;
+}
+.ph.done { background: var(--green); }
+.ph.active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--acc);
+  width: 58%;
+  border-radius: 2px;
+  animation: phAnim 2s ease-in-out infinite alternate;
+}
+@keyframes phAnim { from { width: 42%; } to { width: 72%; } }
+
+/* team chips */
+.pc-team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 12px 9px;
+}
+.tchip {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-hov);
+  border: 0.5px solid var(--bd);
+  color: var(--tm);
+  cursor: pointer;
+  transition: all .12s;
+}
+.tchip:hover { background: var(--acc-g); border-color: var(--acc-b); color: var(--t); }
+
+/* expanded drawer */
+.pc-drawer {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .35s cubic-bezier(.4,0,.2,1), border-color .2s;
+  border-top: 0px solid var(--bd);
+}
+.pc.expanded .pc-drawer {
+  max-height: 220px;
+  border-top-width: 0.5px;
+}
+
+.pc-actions { padding: 9px 12px; display: flex; flex-direction: column; gap: 5px; }
+
+.pa-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--bg-hov);
+  border: 0.5px solid var(--bd);
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--t);
+  transition: all .12s;
+}
+.pa-btn:hover { background: var(--acc-g); border-color: var(--acc-b); }
+.pa-ico { font-size: 13px; width: 18px; text-align: center; }
+.pa-name { flex: 1; }
+.pa-cost { font-size: 10px; color: var(--tm); flex-shrink: 0; }
+.pa-btn.danger:hover { background: rgba(232,82,82,.1); border-color: rgba(232,82,82,.3); }
+
+/* ─── SCOUT ZONE ─────────────────────────────────────── */
+#scout-zone {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.scout-grid {
+  display: flex;
+  gap: 10px;
+  padding: 0 20px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+}
+.scout-grid::-webkit-scrollbar { height: 3px; }
+.scout-grid::-webkit-scrollbar-thumb { background: var(--bd-a); border-radius: 2px; }
+
+/* Scout card */
+.sc {
+  min-width: 218px;
+  background: var(--bg-c);
+  border: 0.5px solid var(--bd);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+}
+.sc:hover {
+  border-color: var(--bd-a);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+.sc-tbar { height: 2px; flex-shrink: 0; }
+.sc-body { padding: 9px 11px 8px; flex: 1; }
+.sc-name { font-size: 12px; font-weight: 500; margin-bottom: 2px; line-height: 1.35; }
+.sc-client { font-size: 10px; color: var(--tm); margin-bottom: 8px; }
+.sc-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.sc-stat { font-size: 10px; color: var(--tm); }
+.sc-stat b { color: var(--t); font-weight: 500; }
+
+.sc-foot {
+  padding: 6px 11px;
+  border-top: 0.5px solid var(--bd);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.prepay {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(39,192,107,.08);
+  border: 0.5px solid rgba(39,192,107,.2);
+  color: var(--green);
+  flex: 1;
+}
+.btn-take {
+  height: 22px;
+  padding: 0 10px;
+  background: var(--acc-g);
+  border: 0.5px solid var(--acc-b);
+  border-radius: 4px;
+  color: #a0a4fa;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.btn-take:hover { background: rgba(91,95,245,.22); color: #c0c4fc; }
+
+/* ─── PLACEHOLDER VIEWS ──────────────────────────────── */
+.view-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+}
+.ph-box {
+  width: 360px;
+  text-align: center;
+  padding: 36px 32px;
+  border: 0.5px dashed var(--bd-a);
+  border-radius: 14px;
+}
+.ph-ico { font-size: 44px; opacity: .3; margin-bottom: 12px; }
+.ph-title { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+.ph-desc { font-size: 11px; color: var(--tm); line-height: 1.6; }
+
+/* ─── FLOATING ACTION BAR ────────────────────────────── */
+#fab {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 7px;
+  z-index: 50;
+}
+
+.fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  background: rgba(17,19,29,0.88);
+  border: 0.5px solid rgba(255,255,255,0.09);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: all .2s ease;
+  user-select: none;
+  position: relative;
+}
+.fab:hover {
+  background: rgba(91,95,245,0.16);
+  border-color: rgba(91,95,245,0.32);
+  transform: translateY(-3px);
+}
+.fab.active {
+  background: rgba(91,95,245,0.18);
+  border-color: rgba(91,95,245,0.42);
+}
+.fab.go {
+  width: 60px;
+  background: rgba(27,192,107,0.12);
+  border-color: rgba(39,192,107,0.28);
+}
+.fab.go:hover {
+  background: rgba(39,192,107,0.22);
+  border-color: rgba(39,192,107,0.5);
+  transform: translateY(-3px);
+}
+.fab.go.pulsing { animation: fabPulse 2s ease-in-out infinite; }
+@keyframes fabPulse {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 4px rgba(39,192,107,0.15); }
+}
+
+.fab-ico { font-size: 18px; line-height: 1; pointer-events: none; }
+.fab-lbl {
+  font-size: 9px;
+  color: var(--tm);
+  letter-spacing: .01em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.fab:hover .fab-lbl { color: var(--t); }
+.fab.go .fab-lbl { color: rgba(39,192,107,0.65); }
+.fab.go:hover .fab-lbl { color: var(--green); }
+.fab.active .fab-lbl { color: #a0a4fa; }
+
+/* ─── TURN FLASH ──────────────────────────────────────── */
+#turn-flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(39,192,107,.06);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 100;
+  transition: opacity .15s;
+}
+#turn-flash.on { opacity: 1; }
+
+/* ─── SCROLLBAR RESET ─────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bd-a); border-radius: 2px; }
+</style>
+
+<!-- ===== Ф.5 v2: скин легаси-модалок под HUD Shell (только index-v2.html) ===== -->
+<style id="v2-modal-skin">
+  .modal-overlay { background: rgba(6,8,14,.74) !important; }
+  .modal, .modal-card, .modal-content {
+    background: var(--bg-c) !important; border: 1px solid var(--bd-a) !important;
+    border-radius: 16px !important; box-shadow: 0 26px 64px rgba(0,0,0,.55) !important; color: var(--t) !important;
+  }
+  .modal-title { color: var(--t) !important; font-weight: 800 !important; }
+  .modal-body  { color: var(--tm) !important; }
+  .modal-choice {
+    background: var(--bg-ch) !important; border: 1px solid var(--bd) !important;
+    border-radius: 12px !important; transition: border-color .15s, background .15s !important;
+  }
+  .modal-choice:hover { border-color: var(--acc-b) !important; background: var(--acc-g) !important; }
+  .choice-title { color: var(--t) !important; }
+  .btn { border-radius: 10px !important; }
+  .btn-primary, .btn-take, .btn.pri, .btn-sm.pri {
+    background: linear-gradient(180deg,#6d70ff,var(--acc)) !important; border: none !important; color: #fff !important;
+  }
+  .btn-ghost { background: var(--bg-c) !important; border: 1px solid var(--bd) !important; color: var(--tm) !important; }
+  .btn-teal  { background: linear-gradient(180deg,#19d3bf,var(--teal)) !important; border: none !important; color: #06241f !important; }
+  /* фикс коллизии: .scout-grid из прототипа (flex-ряд) ломал легаси скаут-модал —
+     возвращаем аккуратную сетку, карточки помещаются и не обрезаются */
+  #scout-modal .scout-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 12px !important; align-content: start !important;
+    overflow-x: hidden !important; overflow-y: auto !important;
+  }
+  #scout-modal .modal-wide { max-width: 940px !important; width: 92vw !important; }
+  /* инлайн-стилевые модалки (рынок/доли/поглощение) читают легаси-переменные —
+     гармонизируем под палитру HUD Shell (легаси-экран скрыт, побочек нет) */
+  :root {
+    --panel:  #181a28; --bg2: #11131d; --bg3: #1e2036;
+    --border: rgba(255,255,255,.10); --text: #dde3f0; --sub: #9aa7c2; --muted: #6b7a99;
+  }
+  /* ── проектная зона: легаси-карточки (#g-clients-list) в адаптивную сетку + прокрутка ── */
+  #projects-zone { flex: 1 1 auto !important; }
+  #scout-zone { flex: 0 0 auto !important; border-top: 1px solid var(--bd); }
+  .v2-clients {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 14px;
+    padding: 4px 20px 16px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    align-content: start;
+  }
+  .v2-clients > * { margin: 0 !important; min-width: 0; max-width: none; }
+  /* баннеры (перегруз/мощность) и прочие не-карточки — во всю ширину */
+  .v2-clients > *:not(.client-card) { grid-column: 1 / -1; }
+  /* древо перков (переселённый #g-upgrades-list) */
+  #view-tree .zone-hd { display: flex; justify-content: space-between; align-items: center; }
+  .v2-tree { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding: 6px 20px 18px; }
+  /* единый компактный формат: детальные секции скрыты, пока карточка не раскрыта */
+  .client-card { position: relative; }
+  .client-card:not(.v2-open) .cc-collapsible { display: none !important; }
+  /* полоса-раскрытие внизу карточки (ставит ui2.js) */
+  .v2-expand-bar {
+    margin-top: 9px; padding: 5px 8px; border-radius: 7px; cursor: pointer;
+    text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .03em;
+    background: rgba(255,255,255,.03); border: 1px solid var(--bd); color: var(--tm);
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .v2-expand-bar:hover { color: var(--t); border-color: var(--bd-a); background: rgba(255,255,255,.05); }
+  .client-card.v2-open .v2-expand-bar { color: var(--acc); border-color: var(--acc-b); }
+  /* ── ре-скин карточек проектов под HUD Shell ── */
+  .v2-clients .client-card {
+    background: var(--bg-c) !important; border: 1px solid var(--bd) !important;
+    border-radius: 14px !important; padding: 14px 15px !important;
+    transition: border-color .15s, box-shadow .15s !important;
+  }
+  .v2-clients .client-card:hover { border-color: var(--bd-a) !important; box-shadow: 0 8px 22px rgba(0,0,0,.28) !important; }
+  .v2-clients .client-card.critical { border-color: rgba(232,82,82,.55) !important; }
+  .v2-clients .client-card.at-risk  { border-color: rgba(245,165,36,.45) !important; }
+  .v2-clients .client-name { font-size: 14px !important; color: var(--t) !important; }
+  .v2-clients .client-icon { font-size: 22px !important; }
+  .v2-clients .nps-row { border-top: 1px solid var(--bd) !important; margin-top: 11px !important; padding-top: 11px !important; }
+  .v2-clients .nps-label { color: var(--tm) !important; }
+  /* компактный вид: прячем бейджи бюджета/мощности (это деталь) */
+  .v2-clients .client-card:not(.v2-open) .client-desc { display: none !important; }
+  /* раскрытая карточка занимает всю ширину — деталям есть где дышать (нет обрезки) */
+  .v2-clients .client-card.v2-open { grid-column: 1 / -1; }
+  .v2-clients .client-card.v2-open .client-info { max-width: 760px; }
+</style>
+
+</head>
+
+<body>
+<!-- ===== Ф.5 v2 shell (overlays legacy screen; painted by src/ui2.js) ===== -->
+<div id="v2-shell" style="display:none;position:fixed;inset:0;z-index:40;overflow:hidden">
+
+<div id="mobile-stub">
+  <div class="icon">🖥</div>
+  <strong>Разрешение не поддерживается</strong>
+  <span>Откройте на десктопе — минимальная ширина 1280px</span>
+</div>
+
+<div id="app">
+
+  <!-- ─── STATUS BAR ──────────────────────────────────── -->
+  <div id="statusbar">
+    <span class="sb-logo">BizTycoon</span>
+
+    <div class="sb-stat">
+      <span class="ico">💰</span>
+      <span class="val" id="sb-money">1 245 000</span>
+      <span class="lbl">₽</span>
+    </div>
+
+    <div class="sb-sep"></div>
+
+    <div class="sb-stat">
+      <span class="ico">📅</span>
+      <span class="lbl">Месяц</span>
+      <span class="val" id="sb-month">8</span>
+    </div>
+
+    <div class="sb-sep"></div>
+
+    <div class="sb-stat">
+      <span class="ico">⭐</span>
+      <span class="lbl">Реп.</span>
+      <span class="val" id="sb-rep">72</span>
+    </div>
+
+    <div class="sb-sep"></div>
+
+    <div class="sb-stat">
+      <span class="ico">📈</span>
+      <span class="val pos">+380 000 ₽/мес</span>
+    </div>
+
+    <div class="sb-stage">
+      <div class="stage-pill">🏢 Агентство</div>
+      <div class="stage-next">
+        <span>→ Сеть</span>
+        <div class="pb-wrap"><div class="pb-fill" id="sb-prog" style="width:67%"></div></div>
+        <span id="sb-prog-pct">67%</span>
+      </div>
+      <div class="sb-btns">
+        <button class="sb-btn">💾 Сохранить</button>
+        <button class="sb-btn">⚙ Меню</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── MAIN ────────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- ─── LEFT HUD ─────────────────────────────────── -->
+    <div class="hud" id="hud-left">
+      <div class="hud-head">
+        <span class="hud-title">Команда</span>
+        <button class="hud-tog" onclick="toggleHud('left')" title="Свернуть">
+          <span class="arr arr-l">◀</span>
+        </button>
+      </div>
+
+      <div class="hud-body">
+        <div class="staff-list">
+
+          <div class="staff-row">
+            <div class="staff-av" style="background:rgba(39,192,107,.12);color:var(--green)">🎨</div>
+            <div class="staff-inf">
+              <div class="staff-name">Алина К.</div>
+              <div class="staff-role">Дизайнер · Sr</div>
+            </div>
+            <span class="staff-q">Q 14</span>
+          </div>
+
+          <div class="staff-row">
+            <div class="staff-av" style="background:rgba(91,95,245,.12);color:#a0a4fa">📋</div>
+            <div class="staff-inf">
+              <div class="staff-name">Денис М.</div>
+              <div class="staff-role">ПМ · Md</div>
+            </div>
+            <span class="staff-q">Q 9</span>
+          </div>
+
+          <div class="staff-row">
+            <div class="staff-av" style="background:rgba(19,184,166,.12);color:var(--teal)">💻</div>
+            <div class="staff-inf">
+              <div class="staff-name">Игорь С.</div>
+              <div class="staff-role">Разраб. · Md</div>
+            </div>
+            <span class="staff-q">Q 11</span>
+          </div>
+
+          <div class="staff-row">
+            <div class="staff-av" style="background:rgba(245,165,36,.12);color:var(--amber)">✍️</div>
+            <div class="staff-inf">
+              <div class="staff-name">Маша Р.</div>
+              <div class="staff-role">Копирайтер · Jr</div>
+            </div>
+            <span class="staff-q">Q 6</span>
+          </div>
+
+          <div class="staff-row">
+            <div class="staff-av" style="background:rgba(232,82,82,.12);color:var(--red)">⚖️</div>
+            <div class="staff-inf">
+              <div class="staff-name">Олег Н.</div>
+              <div class="staff-role">Юрист · Jr</div>
+            </div>
+            <span class="staff-q">Q 5</span>
+          </div>
+
+          <div class="hud-divider"></div>
+
+          <div class="staff-row">
+            <div class="staff-av" style="background:rgba(160,118,240,.12);color:var(--purple)">📣</div>
+            <div class="staff-inf">
+              <div class="staff-name">Вера Т.</div>
+              <div class="staff-role">SMM · Jr</div>
+            </div>
+            <span class="staff-q">Q 5</span>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="hud-foot">
+        <div class="fatigue-hd">
+          <span class="fatigue-lbl">Усталость команды</span>
+          <span class="fatigue-val">34%</span>
+        </div>
+        <div class="fat-bar"><div class="fat-fill" style="width:34%"></div></div>
+        <div class="fot-row">
+          <span class="fot-lbl">ФОТ</span>
+          <span class="fot-val">−185 000 ₽/мес</span>
+        </div>
+      </div>
+
+      <div class="coll-icons">
+        <div class="ci" title="Команда">👥</div>
+        <div class="ci" title="Усталость 34%">⚡</div>
+        <div class="ci" title="Развернуть" onclick="toggleHud('left')" style="margin-top:4px;font-size:10px;color:var(--tm)">▶</div>
+      </div>
+    </div>
+
+    <!-- ─── CENTER ──────────────────────────────────────── -->
+    <div id="center">
+
+      <!-- GAME VIEW (default) -->
+      <div class="cview active" id="view-game">
+
+        <!-- Projects zone -->
+        <div id="projects-zone">
+          <div class="zone-hd">
+            <span class="zone-title">Активные проекты <span class="cnt">(3)</span></span>
+            <div class="zone-acts">
+              <button class="btn-sm">Все проекты</button>
+              <button class="btn-sm pri">+ Новый проект</button>
+            </div>
+          </div>
+
+          <div class="proj-grid">
+
+            <!-- Card 1 – T2 -->
+            <div class="pc" id="pc1" onclick="toggleCard('pc1')">
+              <div class="pc-tbar tbar-t2"></div>
+              <div class="pc-head">
+                <div class="pc-title-row">
+                  <div class="pc-name">Редизайн корпоративного сайта</div>
+                  <span class="pc-tier tier-t2">T2</span>
+                </div>
+                <div class="pc-client">ООО «МеталлГрупп»</div>
+              </div>
+              <div class="pc-meta">
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">Бюджет</div>
+                  <div class="pc-mi-val" style="color:#a0a4fa">650 000 ₽</div>
+                </div>
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">Дедлайн</div>
+                  <div class="pc-mi-val" style="color:var(--amber)">Мес. 11</div>
+                </div>
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">NPS клиента</div>
+                  <div class="pc-mi-val" style="color:var(--green)">78</div>
+                </div>
+              </div>
+              <div class="pc-phases">
+                <div class="ph done"></div>
+                <div class="ph active"></div>
+                <div class="ph"></div>
+              </div>
+              <div class="pc-team">
+                <span class="tchip">🎨 Алина</span>
+                <span class="tchip">📋 Денис</span>
+                <span class="tchip">💻 Игорь</span>
+              </div>
+              <div class="pc-drawer">
+                <div class="pc-actions">
+                  <div class="pa-btn">
+                    <span class="pa-ico">🔍</span>
+                    <span class="pa-name">Внешний аудит</span>
+                    <span class="pa-cost">50 000 ₽</span>
+                  </div>
+                  <div class="pa-btn">
+                    <span class="pa-ico">📊</span>
+                    <span class="pa-name">Промежуточный показ</span>
+                    <span class="pa-cost">+12 NPS</span>
+                  </div>
+                  <div class="pa-btn">
+                    <span class="pa-ico">✅</span>
+                    <span class="pa-name">Завершить фазу</span>
+                    <span class="pa-cost" style="color:var(--green)">→ Фаза 3</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2 – T3 urgent -->
+            <div class="pc" id="pc2" onclick="toggleCard('pc2')">
+              <div class="pc-tbar tbar-t3"></div>
+              <div class="pc-head">
+                <div class="pc-title-row">
+                  <div class="pc-name">Мобильное приложение для ритейла</div>
+                  <span class="pc-tier tier-t3">T3</span>
+                </div>
+                <div class="pc-client">ООО «РетейлСтарт»</div>
+              </div>
+              <div class="pc-meta">
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">Бюджет</div>
+                  <div class="pc-mi-val" style="color:#c0a8fc">1 200 000 ₽</div>
+                </div>
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">Дедлайн</div>
+                  <div class="pc-mi-val" style="color:var(--red)">Мес. 9 ⚠</div>
+                </div>
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">NPS клиента</div>
+                  <div class="pc-mi-val" style="color:var(--amber)">54</div>
+                </div>
+              </div>
+              <div class="pc-phases">
+                <div class="ph done"></div>
+                <div class="ph done"></div>
+                <div class="ph active"></div>
+                <div class="ph"></div>
+                <div class="ph"></div>
+              </div>
+              <div class="pc-team">
+                <span class="tchip">💻 Игорь</span>
+                <span class="tchip">📋 Денис</span>
+              </div>
+              <div class="pc-drawer">
+                <div class="pc-actions">
+                  <div class="pa-btn">
+                    <span class="pa-ico">🔍</span>
+                    <span class="pa-name">Внешний аудит</span>
+                    <span class="pa-cost">50 000 ₽</span>
+                  </div>
+                  <div class="pa-btn">
+                    <span class="pa-ico">📊</span>
+                    <span class="pa-name">Промежуточный показ</span>
+                    <span class="pa-cost">+12 NPS</span>
+                  </div>
+                  <div class="pa-btn danger">
+                    <span class="pa-ico">⚠️</span>
+                    <span class="pa-name">Запросить отсрочку</span>
+                    <span class="pa-cost" style="color:var(--red)">−5 реп</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3 – T1 -->
+            <div class="pc" id="pc3" onclick="toggleCard('pc3')">
+              <div class="pc-tbar tbar-t1"></div>
+              <div class="pc-head">
+                <div class="pc-title-row">
+                  <div class="pc-name">SMM-стратегия для кофейни</div>
+                  <span class="pc-tier tier-t1">T1</span>
+                </div>
+                <div class="pc-client">ИП Лазарева А.В.</div>
+              </div>
+              <div class="pc-meta">
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">Бюджет</div>
+                  <div class="pc-mi-val" style="color:var(--green)">180 000 ₽</div>
+                </div>
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">Дедлайн</div>
+                  <div class="pc-mi-val">Мес. 12</div>
+                </div>
+                <div class="pc-mi">
+                  <div class="pc-mi-lbl">NPS клиента</div>
+                  <div class="pc-mi-val" style="color:var(--green)">91</div>
+                </div>
+              </div>
+              <div class="pc-phases">
+                <div class="ph active"></div>
+                <div class="ph"></div>
+              </div>
+              <div class="pc-team">
+                <span class="tchip">✍️ Маша</span>
+                <span class="tchip">📣 Вера</span>
+              </div>
+              <div class="pc-drawer">
+                <div class="pc-actions">
+                  <div class="pa-btn">
+                    <span class="pa-ico">📊</span>
+                    <span class="pa-name">Промежуточный показ</span>
+                    <span class="pa-cost">+8 NPS</span>
+                  </div>
+                  <div class="pa-btn">
+                    <span class="pa-ico">✅</span>
+                    <span class="pa-name">Завершить фазу</span>
+                    <span class="pa-cost" style="color:var(--green)">→ Фаза 2</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Scout zone -->
+        <div id="scout-zone">
+          <div class="zone-hd">
+            <span class="zone-title">Биржа проектов <span class="cnt">(4 предложения)</span></span>
+            <div class="zone-acts">
+              <button class="btn-sm">🔄 Обновить пул</button>
+            </div>
+          </div>
+          <div class="scout-grid">
+
+            <div class="sc">
+              <div class="sc-tbar tbar-t2"></div>
+              <div class="sc-body">
+                <div class="sc-name">Брендинг финтех-стартапа</div>
+                <div class="sc-client">ООО «FinFlow»</div>
+                <div class="sc-stats">
+                  <div class="sc-stat"><b>820 000 ₽</b></div>
+                  <div class="sc-stat">4 мес</div>
+                  <div class="sc-stat">Q треб: <b>8</b></div>
+                </div>
+              </div>
+              <div class="sc-foot">
+                <span class="prepay">Предоплата 30%</span>
+                <button class="btn-take">Взять →</button>
+              </div>
+            </div>
+
+            <div class="sc">
+              <div class="sc-tbar tbar-t3"></div>
+              <div class="sc-body">
+                <div class="sc-name">Корпоративный портал для банка</div>
+                <div class="sc-client">ПАО «КредитБанк»</div>
+                <div class="sc-stats">
+                  <div class="sc-stat"><b>1 800 000 ₽</b></div>
+                  <div class="sc-stat">5 мес</div>
+                  <div class="sc-stat">Q треб: <b>14</b></div>
+                </div>
+              </div>
+              <div class="sc-foot">
+                <span class="prepay" style="visibility:hidden">—</span>
+                <button class="btn-take">Взять →</button>
+              </div>
+            </div>
+
+            <div class="sc">
+              <div class="sc-tbar tbar-t1"></div>
+              <div class="sc-body">
+                <div class="sc-name">Лендинг для конференции</div>
+                <div class="sc-client">Агентство «ЭвентПро»</div>
+                <div class="sc-stats">
+                  <div class="sc-stat"><b>120 000 ₽</b></div>
+                  <div class="sc-stat">2 мес</div>
+                  <div class="sc-stat">Q треб: <b>3</b></div>
+                </div>
+              </div>
+              <div class="sc-foot">
+                <span class="prepay">Предоплата 25%</span>
+                <button class="btn-take">Взять →</button>
+              </div>
+            </div>
+
+            <div class="sc">
+              <div class="sc-tbar tbar-t2"></div>
+              <div class="sc-body">
+                <div class="sc-name">Редизайн интернет-магазина</div>
+                <div class="sc-client">ООО «МегаШоп»</div>
+                <div class="sc-stats">
+                  <div class="sc-stat"><b>550 000 ₽</b></div>
+                  <div class="sc-stat">3 мес</div>
+                  <div class="sc-stat">Q треб: <b>9</b></div>
+                </div>
+              </div>
+              <div class="sc-foot">
+                <span class="prepay" style="visibility:hidden">—</span>
+                <button class="btn-take">Взять →</button>
+              </div>
+            </div>
+
+            <div class="sc">
+              <div class="sc-tbar tbar-t2"></div>
+              <div class="sc-body">
+                <div class="sc-name">UX-аудит SaaS-платформы</div>
+                <div class="sc-client">ООО «ОблакоПро»</div>
+                <div class="sc-stats">
+                  <div class="sc-stat"><b>390 000 ₽</b></div>
+                  <div class="sc-stat">2 мес</div>
+                  <div class="sc-stat">Q треб: <b>10</b></div>
+                </div>
+              </div>
+              <div class="sc-foot">
+                <span class="prepay">Предоплата 20%</span>
+                <button class="btn-take">Взять →</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div><!-- /view-game -->
+
+      <!-- TREE VIEW -->
+      <div class="cview" id="view-tree">
+        <div class="zone-hd">
+          <span class="zone-title">Дерево навыков</span>
+        </div>
+        <div class="view-placeholder">
+          <div class="ph-box">
+            <div class="ph-ico">🌳</div>
+            <div class="ph-title">Дерево 2.0</div>
+            <div class="ph-desc">В прототипе не развёрнуто.<br>Переключение работает — вернитесь на Проекты.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MARKET VIEW -->
+      <div class="cview" id="view-market">
+        <div class="zone-hd">
+          <span class="zone-title">Живой рынок</span>
+        </div>
+        <div class="view-placeholder">
+          <div class="ph-box">
+            <div class="ph-ico">📊</div>
+            <div class="ph-title">Конкуренты и рынок</div>
+            <div class="ph-desc">В прототипе не развёрнуто.<br>Переключение работает — вернитесь на Проекты.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPANY VIEW -->
+      <div class="cview" id="view-company">
+        <div class="zone-hd">
+          <span class="zone-title">Компания и активы</span>
+        </div>
+        <div class="view-placeholder">
+          <div class="ph-box">
+            <div class="ph-ico">🏢</div>
+            <div class="ph-title">Офисы, суббренды, M&amp;A</div>
+            <div class="ph-desc">В прототипе не развёрнуто.<br>Переключение работает — вернитесь на Проекты.</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /center -->
+
+    <!-- ─── RIGHT HUD ──────────────────────────────────── -->
+    <div class="hud" id="hud-right">
+      <div class="hud-head">
+        <span class="hud-title">Контекст</span>
+        <button class="hud-tog" onclick="toggleHud('right')" title="Свернуть">
+          <span class="arr arr-r">▶</span>
+        </button>
+      </div>
+
+      <div class="hud-body">
+
+        <div class="rhud-section-lbl">P&L прогноз</div>
+        <div class="metric-row">
+          <span class="m-lbl">Выручка/мес</span>
+          <span class="m-val m-green">+825 000 ₽</span>
+        </div>
+        <div class="metric-row">
+          <span class="m-lbl">ФОТ + overhead</span>
+          <span class="m-val m-red">−445 000 ₽</span>
+        </div>
+        <div class="metric-row">
+          <span class="m-lbl">Прибыль/мес</span>
+          <span class="m-val m-green">+380 000 ₽</span>
+        </div>
+        <div class="metric-row">
+          <span class="m-lbl">До цели 7.5M</span>
+          <span class="m-val m-blue">6 255 000 ₽</span>
+        </div>
+
+        <div class="hud-divider" style="margin:8px 0"></div>
+
+        <div class="rhud-section-lbl">Рынок</div>
+        <div class="metric-row">
+          <span class="m-lbl">Рейтинг</span>
+          <span class="rank-badge">🏆 #2</span>
+        </div>
+        <div class="metric-row">
+          <span class="m-lbl">Поглощений</span>
+          <span class="m-val">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="m-lbl">Конкурентов</span>
+          <span class="m-val m-amber">4 активных</span>
+        </div>
+
+        <div class="hud-divider" style="margin:8px 0"></div>
+
+        <div class="rhud-section-lbl">Лог событий</div>
+        <div class="log-item">✅ Получена предоплата 195 000 ₽ по проекту МеталлГрупп</div>
+        <div class="log-item">⭐ Репутация +3 за вовремя сданный проект</div>
+        <div class="log-item">⚠️ Усталость растёт — загрузка 92%</div>
+        <div class="log-item">📋 Конкурент «АльфаДев» вышел в топ-3</div>
+
+      </div>
+
+      <div class="coll-icons">
+        <div class="ci" title="P&L">📈</div>
+        <div class="ci" title="Рынок">🌐</div>
+        <div class="ci" title="Лог">📜</div>
+        <div class="ci" title="Развернуть" onclick="toggleHud('right')" style="margin-top:4px;font-size:10px;color:var(--tm)">◀</div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ─── FLOATING ACTION BAR ────────────────────────── -->
+  <div id="fab">
+
+    <button class="fab go pulsing" onclick="nextTurn()">
+      <span class="fab-ico">⚡</span>
+      <span class="fab-lbl">Ход</span>
+    </button>
+
+    <button class="fab active" id="fab-game" onclick="switchView('view-game','fab-game')">
+      <span class="fab-ico">📋</span>
+      <span class="fab-lbl">Проекты</span>
+    </button>
+
+    <button class="fab" id="fab-tree" onclick="switchView('view-tree','fab-tree')">
+      <span class="fab-ico">🌳</span>
+      <span class="fab-lbl">Древо</span>
+    </button>
+
+    <button class="fab" id="fab-market" onclick="switchView('view-market','fab-market')">
+      <span class="fab-ico">📊</span>
+      <span class="fab-lbl">Рынок</span>
+    </button>
+
+    <button class="fab" id="fab-company" onclick="switchView('view-company','fab-company')">
+      <span class="fab-ico">🏢</span>
+      <span class="fab-lbl">Активы</span>
+    </button>
+
+    <button class="fab" onclick="toggleHud('left')">
+      <span class="fab-ico">👥</span>
+      <span class="fab-lbl">Команда</span>
+    </button>
+
+    <button class="fab" onclick="toggleHud('right')">
+      <span class="fab-ico">📈</span>
+      <span class="fab-lbl">Метрики</span>
+    </button>
+
+  </div>
+
+  <!-- turn flash overlay -->
+  <div id="turn-flash"></div>
+
+</div><!-- /app -->
+
+
+</div>
+
+
+<!-- ══ MODE SELECT ══ -->
+<div id="screen-mode" class="screen active">
+  <div class="logo-wrap">
+    <div class="logo-icon">🏢</div>
+    <div class="logo-title">BizTycoon</div>
+    <div class="logo-sub">Business Simulator — Prototype v3.1</div>
+  </div>
+
+  <!-- Базовый режим — всегда доступен -->
+  <div class="mode-base-card">
+    <div class="mode-base-left">
+      <span style="font-size:22px">🎮</span>
+      <div>
+        <div class="mode-base-name">Классический режим</div>
+        <div class="mode-base-desc">Управляй компанией, масштабируй команду, достигни финансовой цели.</div>
+      </div>
+    </div>
+    <span class="dlc-pill" style="background:rgba(45,212,191,.14);color:var(--teal)">Базовый</span>
+  </div>
+
+  <!-- Сценарий — выбирается до старта, перезагружает страницу (v3.1) -->
+  <div class="dlc-section-label">Сценарий</div>
+  <div id="scenario-select" style="display:flex;gap:8px;flex-wrap:wrap">
+    <!-- заполняется initScenarioSelect() из SCENARIO_REGISTRY (ui.js) -->
+  </div>
+
+  <!-- Сложность — пресеты экономики (v3.9) -->
+  <div class="dlc-section-label">Сложность</div>
+  <div id="difficulty-select" style="display:flex;gap:8px;flex-wrap:wrap">
+    <!-- заполняется initDifficultySelect() из ScenarioLoader.DIFFICULTY_ORDER -->
+  </div>
+
+  <!-- Расширения — рендерятся из DLC.getAll() -->
+  <div class="dlc-section-label">Расширения</div>
+  <div id="dlc-cards">
+    <!-- заполняется DLC.renderModeScreen() после загрузки loader.js -->
+  </div>
+
+  <div class="mode-footer" style="margin-top:20px">
+    <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px"
+            onclick="goTo('screen-scenario-editor');">
+      📋 Редактор сценариев
+    </button>
+    <button class="btn btn-ghost" id="btn-load-save" style="font-size:12px;padding:8px 14px"
+            onclick="openSaveModal()">
+      📂 Загрузить игру
+    </button>
+    <button class="btn btn-primary" id="btn-mode-next"
+            onclick="goTo('screen-intro'); SE.syncIntroStats();"
+            style="font-size:15px;padding:13px 32px">
+      Начать →
+    </button>
+  </div>
+</div>
+
+<!-- ══ SCENARIO EDITOR ══ -->
+<div id="screen-scenario-editor" class="screen">
+  <!-- Заполняется через SE.render() -->
+</div>
+
+<!-- ══ INTRO ══ -->
+<div id="screen-intro" class="screen">
+  <div class="logo-wrap">
+    <div class="logo-icon">🏢</div>
+    <div class="logo-title">BizTycoon</div>
+    <div class="logo-sub">Business Simulator — Prototype v3.1</div>
+  </div>
+  <div class="intro-desc">
+    Ты открываешь <strong>собственное диджитал-агентство</strong>. Клиенты не приходят сами — их нужно искать: каждый <strong>скаутинг</strong> стоит рабочих дней и не гарантирует результат. Каждый найденный проект — свой риск: кто-то задерживает оплату, кто-то платит хорошо, но портит репутацию. Доведи баланс до <strong>7 500 000 ₽</strong>, пока деньги не кончились.
+  </div>
+  <div class="stat-row">
+    <div class="stat-box"><div class="val" id="intro-stat-money">1 000 000 ₽</div><div class="lbl">Стартовый капитал</div></div>
+    <div class="stat-box"><div class="val">17–23 дн./мес</div><div class="lbl">Рабочие дни (произв. календарь)</div></div>
+    <div class="stat-box"><div class="val" id="intro-stat-goal">7 500 000 ₽</div><div class="lbl">Цель</div></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:4px">
+    <button class="btn btn-ghost" style="padding:13px 18px;font-size:14px" onclick="goTo('screen-mode')">← Назад</button>
+    <button class="btn btn-primary" style="flex:1;justify-content:center;font-size:16px;padding:15px;" onclick="goTo('screen-spec')">
+      Выбрать специализацию →
+    </button>
+  </div>
+</div>
+
+<!-- ══ SPEC ══ -->
+<div id="screen-spec" class="screen">
+  <h2>Выбери специализацию</h2>
+  <p>Каждая специализация даёт уникальный бонус к выплатам и пассивный эффект на весь ран</p>
+  <div class="spec-grid">
+    <!-- v3.1: карточки рендерятся из SCENARIO.specs (renderSpecGrid в ui.js) —
+         статический HTML ломал не-агентские сценарии (SPECS другие) -->
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <button class="btn btn-ghost" onclick="goTo('screen-intro')">← Назад</button>
+    <button class="btn btn-primary" id="btn-start-game" onclick="startGame()" disabled>Начать дело →</button>
+  </div>
+</div>
+
+<!-- ══ GAME ══ -->
+<div id="screen-game" class="screen">
+
+  <div class="game-header">
+    <div class="game-logo"><span class="logo-exit" onclick="confirmExitToMenu()" title="Выйти в меню" style="cursor:pointer;user-select:none;transition:opacity .15s" onmouseover="this.style.opacity='.6'" onmouseout="this.style.opacity='1'">BizTycoon <span>/ <span id="g-spec-name"></span></span></span></div>
+    <!-- Командный мостик: банк + цель + рабочие дни -->
+    <div class="header-stats">
+      <div class="hstat">
+        <div class="v amber" id="g-money">500 000 ₽</div>
+        <div class="l">В банке</div>
+      </div>
+      <div class="hstat">
+        <div class="v" id="g-cashflow" style="font-size:12px">+0 ₽</div>
+        <div class="l">Cashflow</div>
+      </div>
+      <!-- Прогресс к цели сценария — главный индикатор -->
+      <div class="hstat hstat-goal" style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;margin-bottom:3px">
+          <span style="font-size:10px;color:var(--muted)" id="g-goal-label">Цель</span>
+          <span id="g-goal-pct" style="font-size:11px;font-weight:700;color:var(--accent)">0%</span>
+        </div>
+        <div style="height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
+          <div id="g-goal-bar" style="height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width .4s"></div>
+        </div>
+        <div id="g-money-saved" style="font-size:9px;color:var(--muted);margin-top:2px;text-align:right">0 / 7 500 000 ₽</div>
+      </div>
+      <div class="hstat"><div class="v" id="g-month">Янв 2026</div><div class="l">Месяц</div></div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+      <button onclick="openSaveModal()" title="Сохранения (Ctrl+S)" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:14px;padding:5px 9px;transition:color .15s,border-color .15s" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">💾</button>
+      <button onclick="confirmExitToMenu()" title="Завершить сессию и выйти в меню" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--sub);cursor:pointer;font-size:12px;padding:5px 10px;transition:color .15s,border-color .15s;white-space:nowrap" onmouseover="this.style.color='var(--fg)';this.style.borderColor='var(--fg)'" onmouseout="this.style.color='var(--sub)';this.style.borderColor='var(--border)'">← Меню</button>
+    </div>
+  </div>
+
+  <!-- Бегущая строка рынка (Ф.8 · вариант B) -->
+  <div id="mkt-ticker" class="mkt-ticker" style="display:none" onclick="switchTab('market')" title="Открыть рынок"></div>
+
+  <!-- Actions bar — клик открывает календарь-планировщик (v3.5) -->
+  <div class="actions-bar" onclick="openCalendar()" style="cursor:pointer" title="Открыть календарь-планировщик">
+    <div class="actions-label">📅 Рабочие дни <span style="color:var(--muted);font-weight:400;font-size:9px">· календарь ▸</span></div>
+    <div class="actions-pips" id="g-action-pips"></div>
+    <div class="actions-val" id="g-action-val">10 / 10</div>
+  </div>
+
+  <!-- Tab navigation -->
+  <div class="game-tabs">
+    <button class="gtab active" id="tab-btn-main" onclick="switchTab('main')">🎮 Проекты</button>
+    <button class="gtab" id="tab-btn-portfolio" onclick="switchTab('portfolio')">
+      📁 Портфолио
+      <span class="tab-badge" id="tab-portfolio-badge" style="display:none">0</span>
+    </button>
+    <button class="gtab" id="tab-btn-ai" onclick="switchTab('ai')" style="position:relative">
+      🤖 Нейросеть
+      <span class="tab-badge" id="tab-ai-badge" style="display:none;background:var(--purple)">!</span>
+    </button>
+    <button class="gtab" id="tab-btn-market" onclick="switchTab('market')">📈 Рынок</button>
+  </div>
+
+  <!-- Main tab -->
+  <div id="tab-panel-main" class="tab-panel active">
+  <div class="game-body">
+
+    <!-- LEFT — проекты + аналитика -->
+    <div class="col-main">
+
+      <button id="btn-advance" class="advance-btn" onclick="advanceMonth()">⏭ Завершить месяц</button>
+
+      <div class="panel">
+        <div class="panel-title">
+          Активные проекты
+          <span class="badge badge-spec" id="g-client-count">0/0</span>
+        </div>
+        <div id="g-clients-list"></div>
+      </div>
+
+      <!-- P&L — свёрнутая сводка, полный разбор по клику -->
+      <div class="panel" style="padding-bottom:0">
+        <div class="panel-title" onclick="toggleAcc('pnl')"
+          style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none">
+          <span>P&L</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="g-pnl-summary" style="font-size:11px;color:var(--sub)">—</span>
+            <span id="acc-arrow-pnl" style="font-size:11px;color:var(--muted)">▸</span>
+          </div>
+        </div>
+        <div id="acc-pnl" style="display:none;padding-bottom:10px">
+          <div id="g-pnl"></div>
+        </div>
+      </div>
+      <!-- скрытые DOM-элементы для обратной совместимости с ui.js -->
+      <div style="display:none">
+        <div id="g-progress-pct"></div>
+        <div id="g-progress-bar"></div>
+      </div>
+
+      <!-- Метрики переехали сюда — рядом с проектами и P&L -->
+      <div class="panel" style="padding-bottom:0">
+        <div class="panel-title" onclick="toggleAcc('metrics')"
+          style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none">
+          <span>Метрики</span>
+          <span id="acc-arrow-metrics" style="font-size:11px;color:var(--muted)">▾</span>
+        </div>
+        <div id="acc-metrics" style="padding-bottom:10px">
+          <div id="g-metrics"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">История</div>
+        <div id="g-log" style="max-height:150px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT — действия + команда + апгрейды -->
+    <div class="col-side">
+
+      <!-- Рынок — виджет-крючок (Ф.8 · вариант B) -->
+      <div id="g-market-widget"></div>
+
+      <!-- Скаутинг -->
+      <div class="panel">
+        <div class="panel-title">Действия</div>
+        <button class="btn btn-teal" id="btn-scout" onclick="doScouting()" style="width:100%;justify-content:center;font-size:13px;padding:10px;">
+          🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label"></span>
+        </button>
+        <div id="loans-host" style="margin-top:8px"></div>
+        <!-- [DEV] Тестовые кнопки — всегда видны.
+             Кнопка LC-теста удалена (v3.0): весь пул работает через lifecycle-флоу -->
+        <button onclick="G.money=99999999;renderGame();" title="DEV: бесконечный баланс"
+          style="margin-top:4px;width:100%;background:rgba(45,212,191,.07);border:1px solid rgba(45,212,191,.2);color:rgba(45,212,191,.7);border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;">
+          💰 +∞ баланс <span style="color:rgba(45,212,191,.4);font-weight:400">99M₽</span>
+        </button>
+      </div>
+
+      <!-- Команда + Найм (объединённая панель) -->
+      <div class="panel">
+        <div class="panel-title">👥 Команда</div>
+        <div id="g-team-list"></div>
+
+        <!-- Секция найма — раскрывается по клику -->
+        <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,.06);padding-top:6px">
+          <button onclick="toggleAcc('hire')"
+            style="width:100%;background:none;border:none;color:var(--sub);display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 2px;font-size:12px;font-weight:600;text-align:left">
+            <span>Нанять</span>
+            <span style="color:var(--muted);font-weight:400;font-size:10px" id="hire-cost-label"></span>
+            <span style="margin-left:auto;font-size:11px;transition:transform .2s" id="acc-arrow-hire">▸</span>
+          </button>
+          <div id="acc-hire" style="display:none;margin-top:6px">
+            <div id="g-hire-list"></div>
+          </div>
+        </div>
+
+        <!-- Забота о команде: повторяемые акции (вынесены из дерева, v3.4) -->
+        <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--sub);margin-bottom:6px">💆 Забота о команде</div>
+          <div id="recovery-actions" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+      </div>
+
+      <!-- Прокачка — открывается в модале -->
+      <div class="panel" style="padding:10px 12px">
+        <button onclick="openPerkModal()"
+          style="width:100%;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);
+                 border-radius:8px;padding:10px 14px;cursor:pointer;
+                 display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="font-size:18px;line-height:1">🌳</span>
+            <div style="text-align:left">
+              <div style="font-size:13px;font-weight:700;color:var(--text)">Дерево навыков</div>
+              <div id="perk-btn-sub" style="font-size:10px;color:var(--sub);margin-top:1px">Загрузка…</div>
+            </div>
+          </div>
+          <span style="font-size:13px;color:var(--muted)">→</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+  </div><!-- /tab-panel-main -->
+
+  <!-- Portfolio tab -->
+  <div id="tab-panel-portfolio" class="tab-panel">
+    <div id="g-portfolio-content"></div>
+  </div>
+
+  <!-- AI tab -->
+  <div id="tab-panel-ai" class="tab-panel">
+    <div id="g-ai-content"></div>
+  </div>
+
+  <!-- Market tab (Ф.8 · вариант C) -->
+  <div id="tab-panel-market" class="tab-panel">
+    <div id="g-market-content"></div>
+  </div>
+
+</div>
+
+<!-- ══ RESULTS ══ -->
+<div id="screen-results" class="screen">
+  <div class="result-hero">
+    <div class="result-icon" id="r-icon">🏆</div>
+    <div class="result-title" id="r-title"></div>
+    <div class="result-sub"   id="r-sub"></div>
+    <div class="result-kpis"  id="r-kpis"></div>
+  </div>
+  <div class="chart-panel">
+    <div class="chart-title">Кривая баланса по месяцам</div>
+    <div class="chart-wrap" id="r-chart"></div>
+  </div>
+  <div class="analytics-grid">
+    <div class="panel">
+      <div class="panel-title">Выручка по проектам</div>
+      <div id="r-breakdown"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Хронология решений</div>
+      <div class="timeline" id="r-timeline"></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title">Инсайты прогона</div>
+    <div id="r-insights"></div>
+  </div>
+  <div style="text-align:center;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <button id="btn-continue-run" class="btn btn-primary" onclick="continueRun()" style="display:none">
+      Продолжить ран →
+    </button>
+    <button class="btn btn-ghost" onclick="resetGame()" style="border:1px solid var(--border)">Завершить и начать заново</button>
+  </div>
+</div>
+
+<!-- ══ EVENT MODAL ══ -->
+<div class="modal-overlay" id="event-modal">
+  <div class="modal">
+    <div class="modal-icon" id="modal-icon">⚡</div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body"  id="modal-body"></div>
+    <div class="modal-choices" id="modal-choices"></div>
+  </div>
+</div>
+
+<!-- ══ LC PHASE MODAL ══ -->
+<div class="modal-overlay" id="lc-modal">
+  <div class="modal" style="max-width:500px;width:100%">
+    <!-- Шапка: фаза + индикаторы -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:6px">
+      <span id="lc-modal-phase"
+        style="font-size:11px;font-weight:700;color:var(--amber);
+               background:rgba(210,153,34,.12);border:1px solid rgba(210,153,34,.3);
+               border-radius:4px;padding:2px 8px;letter-spacing:.3px"></span>
+      <div style="display:flex;gap:12px;align-items:center">
+        <span id="lc-mood-val" style="font-size:11px;font-weight:600">😊 60</span>
+        <span id="lc-risk-val" style="font-size:11px;font-weight:600">⚠️ 0</span>
+      </div>
+    </div>
+    <!-- Иконка + заголовок -->
+    <div class="modal-icon" id="lc-modal-icon">📝</div>
+    <div class="modal-title" id="lc-modal-title"></div>
+    <!-- Тело -->
+    <div class="modal-body" id="lc-modal-body" style="margin-bottom:12px"></div>
+    <!-- Варианты -->
+    <div class="modal-choices" id="lc-modal-choices"></div>
+    <!-- Ф.1/Ф.3: выход из переговоров с возвратом на шаг (вне списка выборов) -->
+    <button id="lc-modal-exit" onclick="if(typeof Projects!=='undefined'&&Projects.exitLCFlow)Projects.exitLCFlow()"
+      style="display:none;width:100%;margin-top:10px;padding:8px;border-radius:8px;border:1px solid rgba(148,163,184,.25);background:rgba(255,255,255,.02);color:var(--sub);cursor:pointer;font-size:11px;font-weight:600">
+      ↩ Выйти — прогресс сохранится, вернётесь на этот шаг с карточки проекта
+    </button>
+  </div>
+</div>
+
+<!-- ══ LC DETAIL PANEL ══ -->
+<div class="modal-overlay" id="lc-detail-modal" onclick="if(event.target===this)Projects.closeDetailPanel()">
+  <div class="modal" style="max-width:560px;width:100%;max-height:85vh;overflow-y:auto">
+    <!-- Шапка -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:17px;font-weight:700;color:var(--text)" id="lc-detail-name">—</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px" id="lc-detail-tier">—</div>
+      </div>
+      <button onclick="Projects.closeDetailPanel()"
+        style="font-size:14px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 6px">✕</button>
+    </div>
+    <!-- Цепочка фаз -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Этапы проекта</div>
+      <div id="lc-detail-chain" style="overflow-x:auto;padding-bottom:4px"></div>
+    </div>
+    <!-- Метрики -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+      <div data-tip="Настроение клиента. Высокое → лучше приём работы на ревью, выше итоговый NPS и шанс бонуса при сдаче. Низкое → претензии и риск ухода клиента. Поднимают: Промежуточный показ, Синхронизация, Бонус-демо." style="text-align:center;padding:8px;background:rgba(255,255,255,.04);border-radius:6px;border:1px solid rgba(255,255,255,.06);cursor:help">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">😊 Настроение</div>
+        <div id="lc-detail-mood">—</div>
+      </div>
+      <div data-tip="Риск проекта. Высокий → в процессе шанс критической ошибки (−% прогресса) и удар по настроению клиента (вплоть до ухода). Снижают: Разбор рисков, Синхронизация, Антикризисная встреча." style="text-align:center;padding:8px;background:rgba(255,255,255,.04);border-radius:6px;border:1px solid rgba(255,255,255,.06);cursor:help">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">⚠️ Риск</div>
+        <div id="lc-detail-risk">—</div>
+      </div>
+      <div data-tip="Качество работы. Окупается ТОЛЬКО при сдаче: бонус к итоговой оплате (до +20%), к репутации и NPS. В процессе на скорость не влияет. Поднимают: Внешний аудит, Бонус-демо, UX-ревью, выбор в КП." style="text-align:center;padding:8px;background:rgba(255,255,255,.04);border-radius:6px;border:1px solid rgba(255,255,255,.06);cursor:help">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">✨ Качество</div>
+        <div id="lc-detail-quality">—</div>
+      </div>
+    </div>
+    <!-- Теги: скрыты от игрока (внутренние данные) -->
+    <div id="lc-detail-tags" style="display:none"></div>
+    <!-- Активные действия + История решений (заполняется из JS) -->
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">История решений</div>
+      <div id="lc-detail-history" style="font-size:11px;max-height:280px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCOUT MODAL ══ -->
+<div class="modal-overlay" id="scout-modal">
+  <div class="modal modal-wide">
+    <div class="scout-header">
+      <h3 id="scout-title">Результаты скаутинга</h3>
+      <p  id="scout-sub"></p>
+    </div>
+    <div class="scout-grid" id="scout-grid"></div>
+    <div style="display:flex;gap:8px;margin-top:4px;flex-shrink:0;">
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="refreshScoutPool()">
+        🔄 Обновить пул <span style="color:rgba(255,255,255,.4);font-size:11px" id="refresh-cost-label"></span>
+      </button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="closeScout()">
+        Закрыть — вернуться позже
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<!-- ══ STAFF SCOUT MODAL ══ -->
+<div class="modal-overlay" id="staff-scout-modal" onclick="if(event.target===this)closeStaffScoutModal()">
+  <div class="modal modal-wide" style="max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden">
+    <div class="scout-header" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h3>🔍 Скаутинг специалистов</h3>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="closeStaffScoutModal()">✕</button>
+      </div>
+      <p>Найди и найми уникальных специалистов для своего агентства</p>
+    </div>
+    <div id="candidate-pool-list" style="overflow-y:auto;flex:1;min-height:0;padding-right:2px"></div>
+    <button class="btn btn-ghost" onclick="closeStaffScoutModal()"
+            style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
+  </div>
+</div>
+
+<!-- ══ STAFF PROFILE MODAL ══ -->
+<div class="modal-overlay" id="staff-profile-modal" onclick="if(event.target===this)closeStaffProfileModal()">
+  <div class="modal modal-wide" style="max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:12px">
+      <h3 style="font-size:16px;font-weight:700">Профиль кандидата</h3>
+      <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="closeStaffProfileModal()">✕</button>
+    </div>
+    <div id="staff-profile-body" style="overflow-y:auto;flex:1;min-height:0;padding-right:2px"></div>
+    <button class="btn btn-ghost" onclick="closeStaffProfileModal()"
+            style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">← Назад к пулу</button>
+  </div>
+</div>
+
+<!-- ══ STAFF ASSIGN MODAL ══ -->
+<div class="modal-overlay" id="staff-assign-modal" onclick="if(event.target===this)closeAssignModal()">
+  <div class="modal modal-wide" style="max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:12px">
+      <div>
+        <h3 style="font-size:16px;font-weight:700">👥 Команда на проект</h3>
+        <p id="staff-assign-subtitle" style="font-size:12px;color:var(--sub);margin-top:2px"></p>
+      </div>
+      <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="closeAssignModal()">✕</button>
+    </div>
+    <div id="staff-assign-body" style="overflow-y:auto;flex:1;min-height:0;padding-right:2px"></div>
+    <button class="btn btn-ghost" onclick="closeAssignModal()"
+            style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
+  </div>
+</div>
+
+<!-- ══ PERK TREE MODAL ══ -->
+<div class="modal-overlay" id="perk-modal" onclick="if(event.target===this)closePerkModal()">
+  <div class="modal" style="max-width:460px;width:100%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden;padding:18px 18px 14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:14px">
+      <div>
+        <h3 style="font-size:16px;font-weight:700;margin:0">🌳 Дерево навыков</h3>
+        <p id="perk-modal-sub" style="font-size:11px;color:var(--text);margin:3px 0 0"></p>
+      </div>
+      <button class="btn btn-ghost" style="padding:5px 10px;font-size:13px;flex-shrink:0" onclick="closePerkModal()">✕</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;min-height:0;padding-right:2px">
+      <div id="g-upgrades-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONFIRM EXIT MODAL (Б.1) ══ -->
+<div class="modal-overlay" id="confirm-exit-modal">
+  <div class="modal" style="max-width:340px;text-align:center;padding:28px 24px">
+    <div class="modal-icon">🚪</div>
+    <div class="modal-title">Выйти в главное меню?</div>
+    <div class="modal-body">Текущий прогресс рана будет записан в мета-прогресс. Несохранённые изменения за этот месяц потеряются.</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-ghost" style="min-width:100px"
+        onclick="document.getElementById('confirm-exit-modal').classList.remove('active')">Остаться</button>
+      <button class="btn" style="min-width:100px;background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.4)"
+        onclick="_doExitToMenu()">Выйти</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STAFF QUIT MODAL (Б.4) ══ -->
+<style>
+  @keyframes bt-shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px) rotate(-4deg); }
+    40%      { transform: translateX(6px)  rotate(4deg); }
+    60%      { transform: translateX(-4px) rotate(-2deg); }
+    80%      { transform: translateX(4px)  rotate(2deg); }
+  }
+  #staff-quit-modal.active .modal-icon { animation: bt-shake .55s ease forwards; }
+</style>
+<div class="modal-overlay" id="staff-quit-modal" onclick="if(event.target===this)_closeStaffQuitModal()">
+  <div class="modal" style="max-width:360px;text-align:center;padding:28px 24px">
+    <div class="modal-icon" id="sqm-icon">🚪</div>
+    <div class="modal-title" id="sqm-name">Сотрудник покинул команду</div>
+    <div class="modal-body" style="margin-bottom:14px">
+      <span id="sqm-role" style="display:block;margin-bottom:10px;color:var(--sub);font-size:13px"></span>
+      Причина: <b style="color:var(--amber)">выгорание</b> — усталость команды достигла критического уровня.
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px">
+        <span>Усталость команды</span>
+        <span id="sqm-fatigue-label" style="font-weight:700;color:var(--red)">0%</span>
+      </div>
+      <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden">
+        <div id="sqm-fatigue-bar" style="height:100%;background:var(--red);border-radius:3px;transition:width .4s;width:0%"></div>
+      </div>
+    </div>
+    <button class="btn" style="min-width:120px;justify-content:center"
+      onclick="_closeStaffQuitModal()">Понял</button>
+  </div>
+</div>
+
+<!-- ══ SAVE MODAL ══ -->
+<div class="modal-overlay" id="save-modal" onclick="if(event.target===this)closeSaveModal()">
+  <div class="modal modal-wide">
+    <div class="scout-header">
+      <h3>💾 Сохранения</h3>
+      <p>Ручные сохранения и авто-сохранения по месяцам · <span style="color:var(--sub)">Ctrl+S — быстрое сохранение</span></p>
+    </div>
+    <div style="margin-bottom:12px;flex-shrink:0;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="quickSave()" style="flex:1;justify-content:center">💾 Сохранить сейчас</button>
+      <button class="btn btn-ghost" onclick="exportSaves()" title="Скачать все раны как JSON" style="padding:7px 12px;font-size:12px;border:1px solid var(--border);white-space:nowrap">⬇ Экспорт</button>
+      <button class="btn btn-ghost" onclick="_triggerImportFile()" title="Импортировать раны из JSON" style="padding:7px 12px;font-size:12px;border:1px solid var(--border);white-space:nowrap">⬆ Импорт</button>
+    </div>
+    <div id="save-list"></div>
+    <button class="btn btn-ghost" onclick="closeSaveModal()" style="width:100%;justify-content:center;margin-top:10px;flex-shrink:0">Закрыть</button>
+  </div>
+</div>
+
+<!-- Календарь-планировщик (v3.5) -->
+<div id="calendar-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:280;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:860px;width:94%;max-height:86vh;overflow:auto;padding:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <b style="font-size:15px">📅 Календарь-планировщик</b>
+      <button class="btn btn-xs btn-ghost" onclick="closeCalendar()">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--sub);margin-bottom:10px">Производственный календарь, прогнозы сдач и выплат по текущему темпу команды, дедлайны и отложенные события</div>
+    <div id="calendar-body"></div>
+  </div>
+</div>
+
+<!-- BUILD:START -->
+<script src="src/constants.js"></script>
+<script src="src/events.js"></script>
+<script>
+  // Runtime-выбор сценария (v3.1): какой файл грузить — решает localStorage.
+  // В dist-сборке этот лоадер заменяется embed-блоком со всеми сценариями.
+  (function () {
+    var id = localStorage.getItem('bt_scenario_v1') || 'agency';
+    if (!/^[a-z0-9_]+$/.test(id)) id = 'agency';
+    document.write('<scr' + 'ipt src="scenarios/' + id + '.data.js"><\/scr' + 'ipt>');
+    document.write('<scr' + 'ipt src="src/scenario-loader.js"><\/scr' + 'ipt>');
+  })();
+</script>
+<script src="scenarios/presets/index.js"></script>
+<!-- scenario-editor до engine.js: applyActiveScenario модифицирует SCENARIO in-place,
+     после чего engine.js биндит свои const из уже изменённого объекта -->
+<script src="src/staff.js"></script>
+<script src="src/scenario-editor.js"></script>
+<script>SE.applyActiveScenario();</script>
+<script src="src/engine.js"></script>
+<script src="src/projects.js"></script>
+<script src="src/ui.js?d=3"></script>
+<script src="src/saves.js"></script>
+<script src="src/ai.js"></script>
+<!-- Опциональные модули ядра — выключаются комментированием строки
+     (или флагом OUTSOURCE_ENABLED / RUNES_ENABLED / LIVING_MARKET_ENABLED
+     внутри файла) -->
+<script src="src/outsource.js"></script>
+<script src="src/runes.js"></script>
+<script src="src/storyarcs.js"></script>
+<script src="src/runmap.js"></script>
+<script src="src/meta.js"></script>
+<script src="src/livingmarket.js"></script>
+<script src="src/competitors.js"></script>
+<!-- DLC loader — последним; DLC-скрипты грузятся динамически только при включении -->
+<script src="dlc/loader.js"></script>
+<script>
+  initState();
+  initEventBus();
+  initScenarioSelect();   // v3.1: карточки выбора сценария на экране режима
+  initDifficultySelect(); // v3.9: пресеты сложности
+  renderSpecGrid();       // v3.1: spec-карточки из SCENARIO.specs
+  applyScenarioChrome();  // v3.1: интро/лого/title из SCENARIO
+  SE.syncIntroStats();
+
+  // Кнопка загрузки: активна только при наличии сохранений
+  (function() {
+    const btn = document.getElementById('btn-load-save');
+    if (btn && !hasSaves()) btn.disabled = true;
+  })();
+
+  // Ф.10: авто-резюм последней сессии при перезагрузке страницы
+  // (вместо выброса в главное меню). Если что-то пойдёт не так — тихо остаёмся в меню.
+  (function autoResumeSession() {
+    try {
+      if (typeof _currentRun !== 'function' || typeof _restore !== 'function') return;
+      const run = _currentRun();
+      if (!run || !run.steps || run.steps.length === 0) return;
+      const newest = run.steps.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0))[0];
+      if (!newest || !newest.state) return;
+      _restore(newest.state);
+      goTo('screen-game');
+      if (typeof renderGame === 'function') renderGame();
+      if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('render');
+      if (typeof notify === 'function') notify('⏮ Сессия восстановлена', 'info');
+    } catch (e) {
+      console.warn('autoResume failed:', e); // fallback — остаёмся в меню
+    }
+  })();
+
+  // Загружаем включённые DLC (асинхронно, не блокирует UI)
+  DLC.init();
+
+  // Рендерим карточки расширений на mode-screen
+  DLC.renderModeScreen();
+</script>
+<!-- BUILD:END -->
+<link rel="stylesheet" href="src/ui2-acc.css?d=4">
+<script src="src/ui2.js?d=11"></script>
+</body>
+</html>

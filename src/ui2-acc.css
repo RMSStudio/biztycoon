@@ -1,0 +1,154 @@
+/* ui2-acc.css — аккордеон проектов (Ф.5 v2). Scoped под .v2-acc, портирован из ui-projects-accordion.html. */
+.v2-acc{--col:#13151f;--col-h:#191c28;--line:rgba(255,255,255,.06);--t:#dde3f0;--tm:#7a88a3;--td:#3a4260;--acc:#e1456a;--acc-d:#c5395b;--green:#27c06b;--amber:#f5a524;--red:#e85252;--teal:#13b8a6;color:var(--t)}
+.v2-acc{display:flex;flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;gap:0;background:#08090e}
+.v2-acc::-webkit-scrollbar{height:6px}
+.v2-acc::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px}
+.v2-acc .pcol{position:relative;flex:0 0 210px;min-width:210px;height:100%;
+    background:var(--col);border:none;border-radius:0;
+    box-shadow:inset -1px 0 0 var(--line);
+    cursor:pointer;overflow:hidden;display:flex;flex-direction:column;
+    transition:flex-basis .42s cubic-bezier(.4,0,.15,1), min-width .42s cubic-bezier(.4,0,.15,1), background .3s;}
+.v2-acc .pcol:hover{background:var(--col-h)}
+.v2-acc .pcol:not(.open){box-shadow:inset 0 3px 0 var(--pa,var(--acc)), inset -1px 0 0 var(--line)}
+.v2-acc .pcol.open{flex:1 1 auto;min-width:640px;cursor:default;box-shadow:none}
+.v2-acc .pcol.open{background:var(--pa,var(--acc))}
+.v2-acc .pc-pay{margin:20px 20px 0;line-height:.92}
+.v2-acc .pc-pay .v{font-size:38px}
+.v2-acc .pc-pay .l{font-size:9px;color:var(--tm);text-transform:uppercase;letter-spacing:.12em;margin-top:6px;font-weight:700}
+.v2-acc .pc-tick{width:30px;height:3px;background:var(--pa,var(--acc));margin:18px 20px 10px;border-radius:0}
+.v2-acc .pc-name{font-size:17px;font-weight:800;margin:0 20px;line-height:1.12}
+.v2-acc .pc-sub{font-size:10px;color:var(--tm);margin:7px 20px 0;letter-spacing:.05em;text-transform:uppercase;font-weight:700}
+.v2-acc .pc-phase{font-size:11px;margin:8px 20px 0;font-weight:800}
+.v2-acc .pc-spacer{flex:1}
+.v2-acc .pc-foot{margin:0 20px 18px}
+.v2-acc .pc-foot .pct{display:flex;justify-content:space-between;font-size:10px;color:var(--tm);margin-bottom:5px;font-weight:700}
+.v2-acc .pc-vbar{height:5px;background:rgba(255,255,255,.08);border-radius:0;overflow:hidden}
+.v2-acc .pc-vbar>i{display:block;height:100%}
+.v2-acc /* ── раскрытое тело (ОДНА колонка,
+.v2-acc всё друг под другом) ── */
+  .pc-full{display:none;flex:1;min-height:0;overflow-y:auto}
+.v2-acc .pcol.open .pc-collapsed{display:none !important}
+.v2-acc .pcol.open .pc-full{display:flex;flex-direction:column;gap:12px;padding:16px 32px 20px;overflow-y:auto;overflow-x:hidden}
+.v2-acc .pcol.det .pc-full{display:none}
+.v2-acc .colL,
+.v2-acc .colR{display:contents}
+.v2-acc .pc-art{flex:1;margin:14px 18px 12px;border-radius:14px;overflow:hidden;
+    background:rgba(255,255,255,.035);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;min-height:60px}
+.v2-acc .pc-art .ico{font-size:58px;opacity:.5}
+.v2-acc .pcol.open .pc-art{display:none}
+.v2-acc .pc-details{display:none;flex-direction:column;flex:1;min-height:0;padding:18px 32px 20px;overflow-y:auto;overflow-x:hidden}
+.v2-acc .pcol.det .pc-details{display:flex;animation:v2AccSwap .3s ease}
+.v2-acc .pcol.open .pc-full{animation:v2AccSwap .3s ease}
+.v2-acc .det-back{align-self:flex-start;font-size:12px;font-weight:700;border-radius:8px;padding:7px 13px;cursor:pointer;border:1px solid transparent;margin-bottom:14px}
+.v2-acc .det-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.v2-acc .det-cell{border-radius:12px;padding:13px 14px}
+.v2-acc .det-cell .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;opacity:.55;font-weight:800}
+.v2-acc .det-cell .v{font-size:20px;font-weight:800;margin-top:5px}
+.v2-acc .det-log{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
+.v2-acc .det-row{display:flex;justify-content:space-between;gap:14px;font-size:12px;padding:9px 0;border-bottom:1px solid var(--line)}
+.v2-acc .det-row .ph{font-weight:700;opacity:.7}
+.v2-acc .det-row .ch{font-weight:600}
+.v2-acc .pcol.open .det-back{background:rgba(255,255,255,.16);color:#fff}
+.v2-acc .pcol.open .det-cell{background:rgba(255,255,255,.1)}
+.v2-acc .pcol.open .det-row{border-bottom-color:rgba(255,255,255,.18)}
+.v2-acc .det-pay{margin-top:4px}
+.v2-acc .dp-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:11px}
+.v2-acc .dp-sum{font-size:18px;font-weight:900}
+.v2-acc .dp-sum i{font-size:11px;font-weight:600;opacity:.55;font-style:normal}
+.v2-acc .dp-track{display:flex;gap:4px;height:62px}
+.v2-acc .dp-seg{position:relative;border-radius:9px;padding:9px 11px;display:flex;flex-direction:column;justify-content:space-between;
+    background:rgba(255,255,255,.07);border:1px solid var(--line);overflow:hidden;min-width:0}
+.v2-acc .dp-seg b{font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v2-acc .dp-seg span{font-size:10px;opacity:.55;font-weight:700}
+.v2-acc .dp-seg em{font-size:14px;font-weight:900;font-style:normal;letter-spacing:-.01em}
+.v2-acc .pcol.open .dp-seg{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16)}
+.v2-acc .dp-seg.done{background:rgba(39,192,107,.16);border-color:rgba(39,192,107,.4)}
+.v2-acc .pcol.open .dp-seg.done{background:rgba(255,255,255,.92);color:var(--pa-d,var(--acc-d));border-color:transparent}
+.v2-acc .dp-seg.next{background:rgba(245,165,36,.14);border-color:rgba(245,165,36,.45)}
+.v2-acc .pcol.open .dp-seg.next{background:rgba(255,255,255,.34);border-color:rgba(255,255,255,.5)}
+.v2-acc .dp-seg.done::after{content:'✓';position:absolute;top:7px;right:9px;font-size:11px;font-weight:900;opacity:.7}
+.v2-acc .dp-legend{display:flex;gap:16px;margin-top:9px;font-size:10px;opacity:.6;font-weight:700}
+.v2-acc .dp-legend span{display:flex;align-items:center;gap:5px}
+.v2-acc .dp-legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.v2-acc .dp-legend i.d{background:#27c06b}
+.v2-acc .dp-legend i.n{background:#f5a524}
+.v2-acc .dp-legend i.w{background:rgba(255,255,255,.22)}
+.v2-acc .pcol.open .dp-legend i.d{background:#fff}
+.v2-acc .nps-foot{padding-top:16px;border-top:1px solid var(--line)}
+.v2-acc .pcol.open .nps-foot{border-top-color:rgba(255,255,255,.25)}
+.v2-acc .nps-foot .lbl{margin-bottom:11px}
+.v2-acc .nps-foot .frow{display:flex;align-items:center;gap:16px}
+.v2-acc .nps-foot .bar{flex:1;height:12px;overflow:hidden;background:rgba(255,255,255,.12)}
+.v2-acc .nps-foot .bar>i{display:block;height:100%;background:var(--green)}
+.v2-acc .nps-foot .val{font-size:30px;font-weight:900}
+.v2-acc .nps-foot button{font-size:14px;font-weight:700;border-radius:10px;padding:13px 20px;cursor:pointer;border:1px solid transparent}
+.v2-acc .pcol.open .nps-foot .bar>i{background:#fff}
+.v2-acc .pcol.open .nps-foot .val{color:#fff}
+.v2-acc .pcol.open .nps-foot button{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.22)}
+.v2-acc .pcol.open .pc-pay{display:none}
+.v2-acc .pc-head-open{padding:26px 30px 0}
+.v2-acc .pcol:not(.open) .pc-head-open{display:none}
+.v2-acc .pc-head-open{padding:20px 32px 0}
+.v2-acc .pc-head-open .pay{font-size:38px;line-height:.9}
+.v2-acc .pc-head-open .pay small{font-size:12px;font-weight:600;opacity:.7;margin-left:9px;letter-spacing:.06em}
+.v2-acc .pc-head-open .nm{font-size:25px;font-weight:800;margin-top:10px;line-height:1.05}
+.v2-acc .pc-head-open .sb{font-size:11px;margin-top:6px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;opacity:.7}
+.v2-acc .pcol:not(.open) .pc-head-open,
+.v2-acc .pcol:not(.open) .pc-tick-open{display:none}
+.v2-acc .colL,
+.v2-acc .colR{display:flex;flex-direction:column;min-height:0}
+.v2-acc .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;opacity:.6;margin-bottom:9px}
+.v2-acc .badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.v2-acc .badge{font-size:12px;padding:5px 11px;border-radius:7px;font-weight:700}
+.v2-acc .seg{display:flex;gap:4px;margin-bottom:6px}
+.v2-acc .seg>i{flex:1;height:8px;border-radius:0;overflow:hidden;background:rgba(255,255,255,.1)}
+.v2-acc .seg>i>b{display:block;height:100%}
+.v2-acc .seg-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:18px}
+.v2-acc .pill{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    border-radius:11px;padding:12px 16px;font-weight:800;font-size:14px}
+.v2-acc .pill .go{border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:800;cursor:pointer}
+.v2-acc .nps-big{margin-top:auto}
+.v2-acc .nps-big .lbl{margin-bottom:8px}
+.v2-acc .nps-big .barwrap{display:flex;align-items:center;gap:12px}
+.v2-acc .nps-big .bar{flex:1;height:10px;border-radius:0;overflow:hidden;background:rgba(255,255,255,.12)}
+.v2-acc .nps-big .bar>i{display:block;height:100%}
+.v2-acc .nps-big .val{font-size:26px;font-weight:900}
+.v2-acc .acts{display:flex;gap:8px;margin-top:14px}
+.v2-acc .acts button{flex:1;font-size:13px;font-weight:700;border-radius:9px;padding:11px;cursor:pointer;border:1px solid transparent}
+.v2-acc .mrq{display:flex;gap:18px;font-size:16px;font-weight:800;margin-bottom:10px}
+.v2-acc .teamhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.v2-acc .teamhead .t{font-size:13px;font-weight:700}
+.v2-acc .teamhead .b{display:flex;gap:8px}
+.v2-acc .teamhead .b button{font-size:12px;font-weight:700;border-radius:8px;padding:7px 13px;cursor:pointer;border:1px solid transparent}
+.v2-acc .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.v2-acc .chip{font-size:12px;padding:7px 12px;border-radius:9px;cursor:pointer}
+.v2-acc .warn{font-size:12px;font-weight:700;margin-bottom:10px}
+.v2-acc .pace{font-size:12px;opacity:.7}
+.v2-acc .pc-close{position:absolute;top:18px;right:20px;font-size:12px;border-radius:8px;padding:6px 13px;cursor:pointer;z-index:3;font-weight:700;border:1px solid rgba(255,255,255,.22);box-shadow:none;-webkit-appearance:none;appearance:none}
+.v2-acc .pcol:not(.open) .pc-close{display:none}
+.v2-acc .pcol.open{color:#fff}
+.v2-acc .pcol.open .pc-head-open .pay{color:#fff}
+.v2-acc .pcol.open .pc-tick-open{background:#fff}
+.v2-acc .pcol.open .badge{background:rgba(255,255,255,.16);color:#fff}
+.v2-acc .pcol.open .seg>i>b{background:#fff}
+.v2-acc .pcol.open .seg-row,
+.v2-acc .pcol.open .mrq span{color:#fff}
+.v2-acc .pcol.open .pill{background:rgba(255,255,255,.14);color:#fff}
+.v2-acc .pcol.open .pill .go{background:#fff;color:var(--pa-d,var(--acc-d))}
+.v2-acc .pcol.open .nps-big .bar>i{background:#fff}
+.v2-acc .pcol.open .nps-big .val{color:#fff}
+.v2-acc .pcol.open .acts button,
+.v2-acc .pcol.open .teamhead .b button{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.2)}
+.v2-acc .pcol.open .chip{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.v2-acc .pcol.open .chip.on{background:#fff;color:var(--pa-d,var(--acc-d));font-weight:800}
+.v2-acc .pcol.open .warn{color:#fff}
+.v2-acc .pcol.open .pc-close{background:rgba(255,255,255,.16);color:#fff}
+.v2-acc .pcol.open .nps-big .barwrap .lbl,
+.v2-acc .pcol.open .teamhead .t{color:#fff}
+.v2-acc .pc-tick-open{width:36px;height:4px;background:#fff;margin-bottom:0}
+@keyframes v2AccSwap{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+.v2-acc-empty{margin:auto;color:var(--tm);font-size:13px;padding:40px;text-align:center}
+
+.v2-acc .pcol.open .pc-full::-webkit-scrollbar,.v2-acc .pc-details::-webkit-scrollbar{width:6px}
+.v2-acc .pcol.open .pc-full::-webkit-scrollbar-thumb,.v2-acc .pc-details::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:3px}
