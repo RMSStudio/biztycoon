@@ -214,6 +214,24 @@ _ok(G.living.journal.some(j => j.id === 'stage_studio'),  'журнал: stage_s
 _ok(G.living.journal.some(j => j.id === 'stage_agency'), 'журнал: stage_agency');
 `));
 
+// ── 8b (Ф.9): ПОБЕДА в ядре — выход на «Империю» фаерит победу (без DLC) ──
+add(run('Тест 8b: Ф.9 — достижение Империи ставит флаг победы (ядро, режим выключен)', `
+initState(); selectSpec('smm'); startGame();
+G.completedProjects = [];
+for (let i = 0; i < 100; i++) G.completedProjects.push({ id:'p'+i, revenue: 6000000, tier:5 });
+G.staff = []; for (let i = 0; i < 18; i++) G.staff.push({});
+G.reputation = 90;
+G.market = { playerRank: 1, awardsWon: 2, monthsAtRank1: 5, acquisitions: 3 };
+_ok(!G._wonAlreadyCelebrated, 'до тика — победа не зафиксирована');
+advanceMonth();
+_eq(G.living.stage, 5, 'дошли до Империи (stage=5)');
+_ok(G._wonAlreadyCelebrated === true, 'победа зафиксирована (флаг _wonAlreadyCelebrated) — без DLC');
+_ok(G._endGameFired === true, 'engine-флаг _endGameFired выставлен');
+advanceMonth();
+_eq(G.living.stage, 5, 'стадия осталась Империей при повторном тике');
+_ok(G._wonAlreadyCelebrated === true, 'флаг победы стабилен (без дубля)');
+`));
+
 // ── 9: стадия не теряется при повторном advanceMonth ──
 add(run('Тест 9: достигнутая стадия не откатывается даже если условия больше не выполнены', `
 initState(); selectSpec('smm'); startGame();

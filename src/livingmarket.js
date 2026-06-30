@@ -2152,6 +2152,20 @@
       G.living.stage = i;
       _logStageReached(st);
     }
+    // Ф.9: ПОБЕДА в ядре — выход на последнюю стадию «Империя». Её gate
+    // (100 сдач · 500M ₽ · ≥3 поглощения) и есть «майлстоуны Империи»:
+    // _tickStages повышает стадию только при выполненном gate, значит
+    // достижение последней стадии = требования закрыты = победа.
+    // Не под DLC — игра проходима и с «Прокачкой», и без неё. Soft-win:
+    // экран победы (ui.js endGame) показывает кнопку «Продолжить ран».
+    if (_stageIdx(G) >= STAGES.length - 1 && !G._wonAlreadyCelebrated) {
+      G._wonAlreadyCelebrated = true;
+      if (typeof G._endGameFired !== 'undefined') G._endGameFired = true;
+      // Задержка — даём церемонии стадии закрыться до экрана результатов.
+      setTimeout(() => {
+        if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('end_game', { won: true });
+      }, 650);
+    }
   }
 
   function _logStageReached(st) {

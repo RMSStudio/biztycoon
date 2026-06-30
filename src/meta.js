@@ -428,12 +428,16 @@
   function awardAtEndGame(won, g) {
     const meta = _loadMeta();
     g = g || (typeof G !== 'undefined' ? G : {});
-    const stage  = (g.runMap && g.runMap.stageIdx) || 0;
+    // Ф.9: источник стадии — СТАДИЯ КОМПАНИИ (g.living.stage, 0..5 Гараж→Империя),
+    // а не вестигиальный g.runMap.stageIdx. Прогрессию ведёт ядро (livingmarket).
+    const stage  = (g.living && typeof g.living.stage === 'number') ? g.living.stage
+                 : ((g.runMap && g.runMap.stageIdx) || 0);
     const runeId = (g.activeRune && g.activeRune.id) || null;
     const bankrupt = !won && ((g.money || 0) <= 0);
 
     const baseAward  = won ? 100 : 30;
-    const stageBonus = Math.min(80, stage * 20);
+    // Пересчёт под 6 стадий (idx 0..5): Империя (5) даёт максимум +100.
+    const stageBonus = Math.min(100, stage * 20);
     let totalAward   = baseAward + stageBonus;
 
     meta.totalRuns++;
@@ -658,7 +662,7 @@
           const tag = r.won ? '<span style="color:var(--green)">🏆 победа</span>'
                     : r.bankrupt ? '<span style="color:var(--red)">💀 банкротство</span>'
                     : '<span style="color:var(--amber)">🏳 завершён</span>';
-          return `<div style="font-size:11px;color:var(--sub);padding:3px 0">M${r.monthsPlayed} · этап ${r.stageReached + 1}/5 · ${tag}${r.runeId ? ` · ${r.runeId}` : ''}</div>`;
+          return `<div style="font-size:11px;color:var(--sub);padding:3px 0">M${r.monthsPlayed} · стадия ${r.stageReached + 1}/6 · ${tag}${r.runeId ? ` · ${r.runeId}` : ''}</div>`;
         }).join('')
       : '<div style="font-size:11px;color:var(--muted)">История пуста</div>';
 

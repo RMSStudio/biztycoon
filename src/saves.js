@@ -61,13 +61,14 @@ function _snap() {
 function _restore(snapshot) {
   Object.keys(snapshot.G).forEach(k => { G[k] = snapshot.G[k]; });
   DECISIONS = (snapshot.DECISIONS || []).slice();
-  // п.31: если в загруженном сейве уже достигнут финальный этап Run Map —
-  // ставим флаг, чтобы milestone-модал не вызвал повторный экран победы.
-  // (milestonesShown блокирует сам модал, но флаг нужен для engine-защиты.)
-  const stages = (typeof window !== 'undefined' && window.RunMap)
-    ? window.RunMap.getStages() : [];
-  const finalStageIdx = stages.length > 0 ? stages.length - 1 : 4;
-  if ((G.runMap?.stageIdx ?? 0) >= finalStageIdx) {
+  // Ф.9: если в загруженном сейве уже достигнута финальная стадия компании
+  // («Империя») — ставим флаг, чтобы core-победа (livingmarket _tickStages)
+  // не вызвала повторный экран победы при загрузке.
+  const lmStages = (typeof window !== 'undefined' && window.LivingMarket && window.LivingMarket.getStages)
+    ? window.LivingMarket.getStages() : [];
+  const finalStageIdx = lmStages.length > 0 ? lmStages.length - 1 : 5;
+  const curStage = (G.living && typeof G.living.stage === 'number') ? G.living.stage : 0;
+  if (curStage >= finalStageIdx) {
     G._wonAlreadyCelebrated = true;
     G._endGameFired = true;
   }

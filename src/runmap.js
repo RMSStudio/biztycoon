@@ -137,37 +137,27 @@
     return (s && Array.isArray(s.bonuses) && s.bonuses.length >= 3) ? s.bonuses : DEFAULT_BONUSES;
   }
 
-  // ── Обёртка advanceMonth ─────────────────────────────
-  if (typeof window.advanceMonth === 'function' && !window.advanceMonth.__rmWrapped) {
-    const _origAdvance = window.advanceMonth;
-    window.advanceMonth = function () {
-      const r = _origAdvance.apply(this, arguments);
-      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return r;
-      try { _tickRunMap(); } catch (e) { console.warn('[runmap] tick error:', e); }
-      return r;
-    };
-    window.advanceMonth.__rmWrapped = true;
+  // ── Бонус-чекпоинт на повышении стадии компании (Ф.9) ─
+  // Раньше бонусы давала собственная МЕСЯЧНАЯ лестница Run Map (этапы по
+  // месяцам 6/14/22/30). Ф.9 слил треки: теперь roguelite-чекпоинт навешен
+  // на core-эвент livingmarket `stage_reached` (повышение стадии компании
+  // Гараж→…→Империя). Под DLC «Прокачка» (`mastery`): на каждом повышении
+  // (Студия…Империя) — выбор 1 из 3 бонусов. Прогрессию/победу ведёт ЯДРО.
+  if (typeof EventBus !== 'undefined' && EventBus.on) {
+    EventBus.on('stage_reached', (data) => {
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return;
+      const stage = data && data.stage;
+      if (!stage || (typeof stage.idx === 'number' && stage.idx <= 0)) return; // Гараж — без бонуса
+      try { _showStageBonusModal(stage); } catch (e) { console.warn('[mastery] stage bonus error:', e); }
+    });
   }
 
   // ── Стейт ────────────────────────────────────────────
+  // g.runMap.choicesTaken хранит историю выбранных бонусов (читается метой).
+  // stageIdx больше НЕ ведёт прогресс — прогрессию ведёт g.living.stage (ядро).
   function _ensureState(g) {
     g.runMap = g.runMap || { stageIdx: 0, choicesTaken: [], milestonesShown: [] };
     return g.runMap;
-  }
-
-  // ── Тик карты ────────────────────────────────────────
-  function _tickRunMap() {
-    if (typeof G === 'undefined' || !G) return;
-    const stages = _getStages();
-    const st = _ensureState(G);
-    const cur  = stages[st.stageIdx];
-    const next = stages[st.stageIdx + 1];
-    if (!cur || !next) return;            // финальный этап, не двигаемся дальше
-    if ((G.month || 0) < cur.monthEnd) return;
-    // Защита от двойного срабатывания одного и того же milestone
-    if ((st.milestonesShown || []).includes(next.id)) return;
-    st.milestonesShown = (st.milestonesShown || []).concat(next.id);
-    _showMilestoneModal(next, cur);
   }
 
   // ── Применение эффектов бонуса (DSL-режим + legacy apply) ─
@@ -196,12 +186,13 @@
     return list.includes(stageId);
   }
 
-  // ── Модал milestone-перехода ─────────────────────────
-  function _showMilestoneModal(nextStage, prevStage) {
+  // ── Модал бонус-чекпоинта на повышении стадии компании ─
+  // stage — объект стадии из livingmarket STAGES (id/name/icon/idx/sub).
+  function _showStageBonusModal(stage) {
     const bonusesAll = _getBonuses();
-    // Сначала отфильтруем бонусы, подходящие текущему этапу:
-    // универсальные + те, что объявили stages/exclusiveStages для nextStage.id.
-    const stageScoped = bonusesAll.filter(b => _bonusFitsStage(b, nextStage.id));
+    // Сначала отфильтруем бонусы, подходящие стадии:
+    // универсальные + те, что объявили stages/exclusiveStages для stage.id.
+    const stageScoped = bonusesAll.filter(b => _bonusFitsStage(b, stage.id));
     // 3 случайных бонуса из ОТКРЫТОЙ части пула.
     // Запираемые (prepay/penalty_shield/fatigue/portfolio в дефолтном пуле,
     // в сценарных пулах — свои) появляются по мере мета-прогресса
@@ -230,106 +221,55 @@
     }
     const pool = unlocked.slice().sort(() => Math.random() - 0.5).slice(0, 3);
     EventBus.emit('show_event', { ev: {
-      id:       'runmap_' + nextStage.id,
+      id:       'mastery_stage_' + stage.id,
       _runmap:  true,
-      icon:     nextStage.icon,
-      title:    `Новый этап рана: ${nextStage.name}`,
-      body:     `${prevStage.icon} ${prevStage.name} пройден. ${nextStage.sub} Выбери один бонус — он останется до конца партии.`,
+      icon:     stage.icon || '⭐',
+      title:    `Прокачка: стадия «${stage.name}»`,
+      body:     `${stage.icon || '⭐'} Компания выросла до стадии «${stage.name}». ${stage.sub || ''} Выбери один бонус — он останется до конца партии.`,
       choices:  pool.map(b => ({
         text: `${b.icon} ${b.name}`,
         desc: b.desc,
         fn:   (g) => {
-          try { _applyBonusEffects(b, g); } catch (e) { console.warn('[runmap] bonus apply', e); }
-          // Продвигаем этап
+          try { _applyBonusEffects(b, g); } catch (e) { console.warn('[mastery] bonus apply', e); }
+          // Прогресс/победу ведёт ЯДРО (livingmarket). Здесь только применяем
+          // бонус и пишем историю выбора (читается метой как choicesTaken).
           const st = _ensureState(g);
-          const stages = _getStages();
-          st.stageIdx = Math.min(stages.length - 1, st.stageIdx + 1);
-          st.choicesTaken = (st.choicesTaken || []).concat({ stage: nextStage.id, bonus: b.id });
+          st.choicesTaken = (st.choicesTaken || []).concat({ stage: stage.id, bonus: b.id });
           if (typeof addLog === 'function') {
-            addLog(`${nextStage.icon} Этап «${nextStage.name}»: бонус — ${b.log || b.name}`, 'purple');
+            addLog(`${stage.icon || '⭐'} Стадия «${stage.name}»: бонус — ${b.log || b.name}`, 'purple');
           }
-          if (typeof notify === 'function') notify(`${nextStage.icon} ${nextStage.name}: ${b.name}`, 'success');
+          if (typeof notify === 'function') notify(`${stage.icon || '⭐'} ${stage.name}: ${b.name}`, 'success');
           EventBus.emit('render');
-          // v2.2.3: Победа = достижение финального этапа Run Map.
-          // Задержка 600мс — даём модалу закрыться до перехода на экран результатов.
-          const isFinalStage = st.stageIdx >= stages.length - 1;
-          if (isFinalStage && !g._wonAlreadyCelebrated) {
-            g._wonAlreadyCelebrated = true;
-            if (typeof g._endGameFired !== 'undefined') g._endGameFired = true;
-            setTimeout(() => {
-              if (typeof EventBus !== 'undefined') EventBus.emit('end_game', { won: true });
-            }, 600);
-          }
         },
       })),
     }});
   }
 
-  // ── UI: пилюля этапа в game-header ───────────────────
-  function _injectPill() {
-    if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return;
-    if (typeof G === 'undefined' || !G || !G.runMap) return;
-    const header = document.querySelector('.game-header .game-logo');
-    if (!header) return;
-    const stages = _getStages();
-    const stage = stages[G.runMap.stageIdx] || stages[0];
-
-    let pill = document.getElementById('runmap-pill');
-    if (!pill) {
-      pill = document.createElement('span');
-      pill.id = 'runmap-pill';
-      pill.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.3px;vertical-align:middle;cursor:default';
-      pill.onclick = (e) => e.stopPropagation();
-      header.appendChild(pill);
-    }
-    pill.style.background = `${stage.color}22`;
-    pill.style.color      = stage.color;
-    pill.style.border     = `1px solid ${stage.color}55`;
-    pill.title            = `Этап ${G.runMap.stageIdx + 1}/${stages.length}: ${stage.name}. ${stage.sub}`;
-    pill.textContent      = `${stage.icon} ${stage.name}`;
-  }
-
-  EventBus.on('render', _injectPill);
-  try { _injectPill(); } catch (e) {}
+  // (Ф.9) Пилюля этапа Run Map убрана — прогрессию показывает ОДНА пилюля
+  // стадий компании (livingmarket _renderStagePill). Дубль-лестница удалена.
 
   // ── Публичный API ────────────────────────────────────
   window.RunMap = {
-    _tick:        _tickRunMap,
-    getStages:    () => _getStages().slice(),
-    getBonuses:   () => _getBonuses().slice(),
-    // v3.17: только бонусы, подходящие конкретному этапу
-    // (универсальные + те, у кого stages/exclusiveStages содержит stageId).
+    getBonuses:         () => _getBonuses().slice(),
+    // бонусы, подходящие конкретной стадии (универсальные + объявившие stages/exclusiveStages).
     getBonusesForStage: (stageId) => _getBonuses().filter(b => _bonusFitsStage(b, stageId)),
     bonusFitsStage:     _bonusFitsStage,
-    getDefaultStages:   () => DEFAULT_STAGES.slice(),
     getDefaultBonuses:  () => DEFAULT_BONUSES.slice(),
-    getState:     () => (typeof G !== 'undefined' && G ? G.runMap || null : null),
-    getCurrent:   () => {
-      const stages = _getStages();
-      if (typeof G === 'undefined' || !G || !G.runMap) return stages[0];
-      return stages[G.runMap.stageIdx] || stages[0];
-    },
-    // Применение эффектов конкретного бонуса (для дебага / тестов)
-    applyBonusEffects: _applyBonusEffects,
-    // Для дебага/тестов: форсированно открыть milestone-модал
-    forceMilestone: () => {
-      const st = _ensureState(G);
-      const stages = _getStages();
-      const cur  = stages[st.stageIdx];
-      const next = stages[st.stageIdx + 1];
-      if (!cur || !next) return false;
-      _showMilestoneModal(next, cur);
-      return true;
+    getState:           () => (typeof G !== 'undefined' && G ? G.runMap || null : null),
+    applyBonusEffects:  _applyBonusEffects,
+    // Для дебага/тестов: форсированно показать бонус-модал для стадии компании.
+    forceStageBonus: (stage) => {
+      try { _showStageBonusModal(stage || { id: 'studio', name: 'Студия', icon: '🛠', idx: 1, sub: '' }); return true; }
+      catch (e) { return false; }
     },
   };
 
-  // Сообщаем какой источник этапов/бонусов
+  // Источник пула бонусов
   const _src = (typeof SCENARIO !== 'undefined' && SCENARIO && SCENARIO.runMap)
     ? `сценарий «${SCENARIO.id || '?'}»` : 'дефолт';
-  // v3.17: показываем сколько из пула — этап-эксклюзивы
   const _bonuses = _getBonuses();
   const _exclusives = _bonuses.filter(b => b.stages || b.exclusiveStages).length;
-  console.log('[runmap] v0.3 активирован: источник — ' + _src +
-    ', ' + _getStages().length + ' этапов, пул из ' + _bonuses.length + ' бонусов' +
-    (_exclusives ? ' (из них этап-эксклюзивов: ' + _exclusives + ')' : ''));
+  console.log('[mastery/runmap] v0.4 (Ф.9): бонус-чекпоинт на стадии компании; источник пула — ' + _src +
+    ', пул из ' + _bonuses.length + ' бонусов' +
+    (_exclusives ? ' (этап-эксклюзивов: ' + _exclusives + ')' : ''));
 })();
