@@ -1911,13 +1911,13 @@ const Projects = (() => {
   // Источники-бонусы (комбинация, НЕ со старта) — подключаются во 2-м проходе:
   //   • перк Древа 2.0 (G.perks.extraProjectAction)
   //   • спец-эффект назначенного специалиста (роль/трейт)
-  //   • roguelite-открытие (G.runMap.bonusProjectAction)
+  //   • mastery-открытие (G.runMap.bonusProjectAction)
   function getActionsPerMonth(client) {
     let n = 1;
     if (typeof G !== 'undefined') {
       // перк Древа 2.0 (хук — узел выставляет флаг)
       if (G.perks && G.perks.extraProjectAction) n += (G.perks.extraProjectAction | 0);
-      // roguelite-открытие (хук — DLC выставляет бонус)
+      // mastery-открытие (хук — DLC выставляет бонус)
       if (G.runMap && G.runMap.bonusProjectAction) n += (G.runMap.bonusProjectAction | 0);
       // спец-эффект: Менеджер, назначенный на этот проект, даёт +1 действие/мес
       if (client && Array.isArray(G.staff)) {

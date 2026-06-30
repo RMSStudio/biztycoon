@@ -60,10 +60,10 @@ function makeSandbox(opts) {
   opts = opts || {};
   REGISTRY.clear();
   // Гейт DLC «Rogue-lite»: руны активируются только если включён DLC
-  // (по умолчанию включён в тестах; передать noRoguelite:true для negative-test)
-  const _fakeLS = opts.noRoguelite
+  // (по умолчанию включён в тестах; передать noMastery:true для negative-test)
+  const _fakeLS = opts.noMastery
     ? {}
-    : { 'bt_enabled_dlcs_v1': JSON.stringify(['roguelite']) };
+    : { 'bt_enabled_dlcs_v1': JSON.stringify(['mastery']) };
   const sb = {
     console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
     document: fakeDocument,
@@ -230,13 +230,13 @@ _eq(G.month, 0, 'startGame работает без рун (G.month=0 после 
 _ok(typeof G.activeRune === 'undefined', 'G.activeRune не появилась');
 `, s => s.replace('const RUNES_ENABLED = true;', 'const RUNES_ENABLED = false;')));
 
-// ── 10: DLC roguelite не включён — руны не активируются ──
-add(run('Тест 10: без DLC roguelite — руны не активируются', `
+// ── 10: DLC mastery не включён — руны не активируются ──
+add(run('Тест 10: без DLC mastery — руны не активируются', `
 _ok(typeof Runes === 'undefined', 'window.Runes НЕ объявлен (DLC выключен)');
 initState(); selectSpec('smm'); startGame();
 _eq(G.month, 0, 'startGame работает без рун');
 _ok(typeof G.activeRune === 'undefined', 'G.activeRune не появилась');
-`, null, { noRoguelite: true }));
+`, null, { noMastery: true }));
 
 console.log(`\nИтог: ${totals.pass}/${totals.pass + totals.fail} проверок прошли`);
 if (totals.fail > 0) process.exit(1);

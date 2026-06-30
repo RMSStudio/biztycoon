@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  Стартовые перки-руны — реализация roguelite-механики
+//  Стартовые перки-руны — реализация mastery-механики
 //
 //  Активируются ТОЛЬКО когда включён DLC «Rogue-lite»
 //  (тумблер на mode-screen, persistence в localStorage
@@ -35,7 +35,7 @@
 //   + флаг insiderRare → обёртка _generateOffers
 //   + флаг serialUnlock → доп.боост payoutMult при 15 портфолио
 //
-//  Бэклог: п.13 «Roguelite-механики», первый шаг
+//  Бэклог: п.13 «Mastery-механики», первый шаг
 //  (стартовые перки-руны). Story Arcs / Run Map / мета-прогресс —
 //  отдельные итерации, см. backlog/01_features.md.
 // ══════════════════════════════════════════════════════
@@ -49,11 +49,11 @@
   if (!RUNES_ENABLED) return;
 
   // ─── Гейт по DLC «Rogue-lite» ─────────────────────────
-  // Без DLC механика не запускается (правило: roguelite-фичи
+  // Без DLC механика не запускается (правило: mastery-фичи
   // только при активном DLC). Чтение напрямую из localStorage:
   // DLC.isEnabled читать нельзя — dlc/loader.js загружается
   // позже по порядку.
-  if (!_rogueliteEnabled()) return;
+  if (!_masteryEnabled()) return;
 
   if (typeof EventBus === 'undefined') {
     console.error('[runes] EventBus не найден — модуль не активирован');
@@ -62,11 +62,11 @@
   if (window.__RUNES_LOADED) return;
   window.__RUNES_LOADED = true;
 
-  function _rogueliteEnabled() {
+  function _masteryEnabled() {
     try {
       const raw = (typeof localStorage !== 'undefined' && localStorage.getItem('bt_enabled_dlcs_v1')) || '[]';
       const arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.includes('roguelite');
+      return Array.isArray(arr) && arr.includes('mastery');
     } catch (e) { return false; }
   }
 
@@ -198,7 +198,7 @@
     const _origAdvance = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdvance.apply(this, arguments);
-      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return r;
       try { _postAdvance(); } catch (e) { console.warn('[runes] postAdvance:', e); }
       return r;
     };
@@ -210,7 +210,7 @@
     const _origGen = window._generateOffers;
     window._generateOffers = function () {
       const offers = _origGen.apply(this, arguments) || [];
-      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return offers;
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return offers;
       try {
         if (G && G.runeInsiderRare) _injectRareOffer(offers);
       } catch (e) { console.warn('[runes] insider:', e); }
@@ -434,7 +434,7 @@
       <div>
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
           <b style="font-size:17px">🎲 Выбери стартовую руну</b>
-          <span style="font-size:11px;color:var(--muted)">первый шаг roguelite-петли · действует весь ран</span>
+          <span style="font-size:11px;color:var(--muted)">первый шаг mastery-петли · действует весь ран</span>
         </div>
         <div style="font-size:12px;color:var(--sub);margin-top:4px;line-height:1.45">
           Каждый ран начинается с уникального набора условий. Выбери одну из трёх рун — её эффекты держатся до конца партии. Отказаться нельзя: руна задаёт асимметрию рана.
@@ -477,7 +477,7 @@
 
   // ── Пилюля активной руны в game-header ───────────────
   function _injectPill() {
-    if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return;
+    if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return;
     if (!G || !G.activeRune) return;
     const header = document.querySelector('.game-header .game-logo');
     if (!header) return;

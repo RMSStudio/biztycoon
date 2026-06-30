@@ -8,7 +8,7 @@
 //
 //  Они встроены в single-HTML build, чтобы dist работал без
 //  отдельной папки dlc/. Активация — гейтом по localStorage
-//  ('bt_enabled_dlcs_v1' содержит 'roguelite'), который
+//  ('bt_enabled_dlcs_v1' содержит 'mastery'), который
 //  включается через тумблер этого DLC на mode-screen.
 //
 //  Этот файл — точка входа DLC по реестру `dlc/loader.js`.
@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const ID = 'roguelite';
+  const ID = 'mastery';
 
   if (typeof EventBus === 'undefined') {
     console.error(`[DLC:${ID}] EventBus не найден — DLC не активирован`);

@@ -62,10 +62,10 @@ function makeSandbox(opts) {
   opts = opts || {};
   REGISTRY.clear();
   // Гейт DLC «Rogue-lite»: арки активируются только если включён DLC
-  // (по умолчанию включён в тестах; передать noRoguelite:true для negative-test)
-  const _fakeLS = opts.noRoguelite
+  // (по умолчанию включён в тестах; передать noMastery:true для negative-test)
+  const _fakeLS = opts.noMastery
     ? {}
-    : { 'bt_enabled_dlcs_v1': JSON.stringify(['roguelite']) };
+    : { 'bt_enabled_dlcs_v1': JSON.stringify(['mastery']) };
   const sb = {
     console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
     document: fakeDocument,
@@ -116,7 +116,7 @@ function _pickChoice(idx) {
 
 function run(name, body, opts) {
   opts = opts || {};
-  const sb = makeSandbox({ noRoguelite: opts.noRoguelite });
+  const sb = makeSandbox({ noMastery: opts.noMastery });
   const src = loadEngineSrc(opts) + '\n;\n' + HARNESS + '\n;\n' + body;
   vm.createContext(sb);
   try { vm.runInContext(src, sb); }
@@ -271,8 +271,8 @@ const st = StoryArcs.getState();
 _eq(st.inProgress.stageId, 'audit_result', 'стадия audit_result');
 `, { scenario: 'scenarios/bank.data.js' }));
 
-// ── 11: DLC roguelite не включён — арки не активируются ──
-add(run('Тест 11: без DLC roguelite — арки не активируются', `
+// ── 11: DLC mastery не включён — арки не активируются ──
+add(run('Тест 11: без DLC mastery — арки не активируются', `
 _ok(typeof StoryArcs === 'undefined', 'window.StoryArcs НЕ объявлен (DLC выключен)');
 initState(); selectSpec('smm'); startGame();
 __lastEv = null;
@@ -281,7 +281,7 @@ advanceMonth();
 const wasArc = __lastEv && __lastEv._arc;
 _ok(!wasArc, 'после advanceMonth ни одна арка не выстрелила');
 _ok(typeof G.arcState === 'undefined', 'G.arcState не появилась');
-`, { noRoguelite: true }));
+`, { noMastery: true }));
 
 // ── 12: v3.20 — новые арки агентства подключены ──
 add(run('Тест 12: v3.20 agency — pivot_offer / tender_invite в пуле', `

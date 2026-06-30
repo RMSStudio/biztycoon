@@ -17,8 +17,8 @@ const DLC = (() => {
   // scripts[] — пути относительно корня game/
   const REGISTRY = [
     {
-      id:      'roguelite',
-      name:    'Rogue-lite',
+      id:      'mastery',
+      name:    'Прокачка',
       icon:    '⚡',
       version: '0.4',
       desc:    'Стартовые перки-руны + сюжетные арки + карта рана + мета-прогресс между партиями (осколки, ачивки, разблокировки).',
@@ -27,7 +27,7 @@ const DLC = (() => {
       // src/runmap.js, src/meta.js (встраивается в single-HTML билд), но
       // гейтуется проверкой включённости этого DLC через localStorage.
       // Файл ниже — координатор/индикатор + хук на end_game для мета-награды.
-      scripts: ['dlc/roguelite/roguelite.js'],
+      scripts: ['dlc/mastery/mastery.js'],
       styles:  [],
     },
     {
@@ -74,6 +74,22 @@ const DLC = (() => {
   function toggle(id) {
     isEnabled(id) ? disable(id) : enable(id);
   }
+
+  // ── Миграция id режима «Прокачка»: старый 'roguelite' → 'mastery' ──
+  // Режим переименован (имя «Rogue-lite» отдано новому режиму — открытие
+  // механик). Один раз переписываем сохранённый список, чтобы статические
+  // гейты (runes/meta/runmap/storyarcs читают localStorage напрямую) увидели
+  // новый id и тумблер у тех, кто уже включал режим, не слетел.
+  (function _migrateMasteryId() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LS_KEY)) || [];
+      if (Array.isArray(raw) && raw.includes('roguelite')) {
+        const next = raw.map(i => (i === 'roguelite' ? 'mastery' : i))
+                        .filter((v, i, a) => a.indexOf(v) === i);
+        _setEnabled(next);
+      }
+    } catch (e) { /* no-op */ }
+  })();
 
   // ── Динамическая загрузка ─────────────────────────────
   function _loadScript(src) {
@@ -174,7 +190,7 @@ const DLC = (() => {
   }
 
   // ── Live-деактивация DLC без перезагрузки страницы ────
-  // Модули roguelite уже подписаны на advanceMonth/startGame/render,
+  // Модули mastery уже подписаны на advanceMonth/startGame/render,
   // но их обёртки проверяют DLC.isEnabled() перед выполнением логики.
   // disable() выше уже убрал DLC из localStorage → guard вернёт false
   // → все рогалайт-эффекты заморожены немедленно.
@@ -182,8 +198,8 @@ const DLC = (() => {
     const dlc = REGISTRY.find(d => d.id === id);
     if (!dlc) return;
 
-    // Для roguelite: убираем pill-индикаторы из заголовка, если есть
-    if (id === 'roguelite') {
+    // Для mastery: убираем pill-индикаторы из заголовка, если есть
+    if (id === 'mastery') {
       document.getElementById('rune-active-pill')?.remove();
       document.getElementById('runmap-active-pill')?.remove();
     }
@@ -204,11 +220,11 @@ const DLC = (() => {
     const dlc = REGISTRY.find(d => d.id === id);
     if (!dlc) return;
 
-    // 1) Загружаем DLC-координатор (roguelite.js / strategy.js)
+    // 1) Загружаем DLC-координатор (mastery.js / strategy.js)
     try { await load(id); } catch (e) { console.warn('[DLC] coordinator load:', e); }
 
-    // 2) Для roguelite — реактивируем статические модули
-    if (id === 'roguelite') await _reactivateRogueliteModules();
+    // 2) Для mastery — реактивируем статические модули
+    if (id === 'mastery') await _reactivateMasteryModules();
 
     // 3) Перерисовываем DLC-карточки и уведомляем
     renderModeScreen();
@@ -217,9 +233,9 @@ const DLC = (() => {
     }
   }
 
-  // Статические модули roguelite — реинжект с cache-busting.
+  // Статические модули mastery — реинжект с cache-busting.
   // Только для модулей, которые ещё не инициализированы (флаг не установлен).
-  function _reactivateRogueliteModules() {
+  function _reactivateMasteryModules() {
     const MODS = [
       { flag: '__RUNES_LOADED', src: 'src/runes.js'      },
       { flag: '__SA_LOADED',    src: 'src/storyarcs.js'  },
@@ -232,8 +248,8 @@ const DLC = (() => {
     return Promise.all(pending.map(({ src }) => new Promise(resolve => {
       const s    = document.createElement('script');
       s.src      = `${src}?dlc_ts=${Date.now()}`;
-      s.onload   = () => { console.log(`[DLC:roguelite] реактивирован: ${src}`); resolve(); };
-      s.onerror  = () => { console.warn(`[DLC:roguelite] ошибка: ${src}`); resolve(); };
+      s.onload   = () => { console.log(`[DLC:mastery] реактивирован: ${src}`); resolve(); };
+      s.onerror  = () => { console.warn(`[DLC:mastery] ошибка: ${src}`); resolve(); };
       document.head.appendChild(s);
     })));
   }
@@ -251,6 +267,6 @@ const DLC = (() => {
     onToggle,
     _activateLive,               // для тестов / внешнего вызова
     _deactivateLive,             // для тестов / внешнего вызова
-    _reactivateRogueliteModules, // для тестов
+    _reactivateMasteryModules, // для тестов
   };
 })();

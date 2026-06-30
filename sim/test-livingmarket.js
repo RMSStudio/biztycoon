@@ -59,7 +59,7 @@ function makeSandbox(opts) {
   opts = opts || {};
   REGISTRY.clear();
   const _fakeLS = {};
-  if (!opts.noRoguelite) _fakeLS['bt_enabled_dlcs_v1'] = JSON.stringify(['roguelite']);
+  if (!opts.noMastery) _fakeLS['bt_enabled_dlcs_v1'] = JSON.stringify(['mastery']);
   const sb = {
     console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
     document: fakeDocument,

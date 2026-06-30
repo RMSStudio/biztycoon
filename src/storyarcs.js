@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  Сюжетные арки (Story Arcs) — реализация roguelite-механики
+//  Сюжетные арки (Story Arcs) — реализация mastery-механики
 //
 //  Активируются ТОЛЬКО когда включён DLC «Rogue-lite»
 //  (тумблер на mode-screen, persistence в localStorage
@@ -64,7 +64,7 @@
   // ─── Гейт по DLC «Rogue-lite» ─────────────────────────
   // Без DLC механика не запускается. Чтение localStorage напрямую
   // (DLC.isEnabled здесь недоступна — loader.js парсится позже).
-  if (!_rogueliteEnabled()) return;
+  if (!_masteryEnabled()) return;
 
   if (typeof EventBus === 'undefined') {
     console.error('[storyarcs] EventBus не найден — модуль не активирован');
@@ -73,11 +73,11 @@
   if (window.__SA_LOADED) return;
   window.__SA_LOADED = true;
 
-  function _rogueliteEnabled() {
+  function _masteryEnabled() {
     try {
       const raw = (typeof localStorage !== 'undefined' && localStorage.getItem('bt_enabled_dlcs_v1')) || '[]';
       const arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.includes('roguelite');
+      return Array.isArray(arr) && arr.includes('mastery');
     } catch (e) { return false; }
   }
 
@@ -123,7 +123,7 @@
     const _origAdvance = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdvance.apply(this, arguments);
-      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return r;
       try { _tickArcs(); } catch (e) { console.warn('[storyarcs] tick error:', e); }
       return r;
     };

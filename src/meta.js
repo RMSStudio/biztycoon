@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  Мета-прогресс между партиями — roguelite-механика
+//  Мета-прогресс между партиями — mastery-механика
 //
 //  Активируется ТОЛЬКО когда включён DLC «Rogue-lite».
 //  Без DLC модуль молча не регистрируется.
@@ -11,16 +11,16 @@
 //  ачивки — разовые награды за уникальные достижения.
 //
 //  Стейт хранится в localStorage отдельным ключом
-//  'bt_roguelite_meta_v1' — переживает перезагрузку, сброс
+//  'bt_mastery_meta_v1' — переживает перезагрузку, сброс
 //  партии и даже сброс сейвов (это межсессионный прогресс).
 //
 //  Принцип: модули runes/runmap при подготовке пула рандома
 //  опрашивают RogueMeta.isRuneUnlocked / isBonusUnlocked —
 //  заблокированные не попадают в выбор. Координатор
-//  dlc/roguelite/roguelite.js дёргает RogueMeta.awardAtEndGame
+//  dlc/mastery/mastery.js дёргает RogueMeta.awardAtEndGame
 //  при end_game и показывает сводку начисления.
 //
-//  Бэклог: п.13 «Roguelite-механики», четвёртый шаг
+//  Бэклог: п.13 «Mastery-механики», четвёртый шаг
 //  (мета-прогресс между партиями).
 // ══════════════════════════════════════════════════════
 
@@ -29,7 +29,7 @@
 
   const META_ENABLED = true;
   if (!META_ENABLED) return;
-  if (!_rogueliteEnabled()) return;
+  if (!_masteryEnabled()) return;
   if (typeof EventBus === 'undefined') {
     console.error('[meta] EventBus не найден — модуль не активирован');
     return;
@@ -37,15 +37,15 @@
   if (window.__META_LOADED) return;
   window.__META_LOADED = true;
 
-  function _rogueliteEnabled() {
+  function _masteryEnabled() {
     try {
       const raw = (typeof localStorage !== 'undefined' && localStorage.getItem('bt_enabled_dlcs_v1')) || '[]';
       const arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.includes('roguelite');
+      return Array.isArray(arr) && arr.includes('mastery');
     } catch (e) { return false; }
   }
 
-  const LS_KEY  = 'bt_roguelite_meta_v1';
+  const LS_KEY  = 'bt_mastery_meta_v1';
   const VERSION = 1;
 
   // ── Реестры разблокировок ─────────────────────────────
@@ -532,7 +532,7 @@
     const _origAdv = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdv.apply(this, arguments);
-      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return r;
       try { _updateMoneyTrack(typeof G !== 'undefined' ? G : null); } catch (e) {}
       return r;
     };
@@ -542,7 +542,7 @@
     const _origStart = window.startGame;
     window.startGame = function () {
       const r = _origStart.apply(this, arguments);
-      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return r;
       try {
         if (typeof G !== 'undefined' && G) {
           // v0.3: применяем мета-перки до фиксации стартового трека

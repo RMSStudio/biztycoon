@@ -16,7 +16,7 @@
 //     при свежем мета-прогрессе, появляются после набора осколков
 //   - integration с runmap: запираемые бонусы аналогично
 //   - hard kill-switch (META_ENABLED=false) выключает модуль
-//   - без DLC roguelite модуль не активируется
+//   - без DLC mastery модуль не активируется
 // ══════════════════════════════════════════════════════
 
 const fs   = require('fs');
@@ -72,7 +72,7 @@ function makeSandbox(opts) {
   opts = opts || {};
   REGISTRY.clear();
   const _fakeLS = {};
-  if (!opts.noRoguelite) _fakeLS['bt_enabled_dlcs_v1'] = JSON.stringify(['roguelite']);
+  if (!opts.noMastery) _fakeLS['bt_enabled_dlcs_v1'] = JSON.stringify(['mastery']);
   if (opts.shareLS) Object.assign(_fakeLS, _persistentLS);
   const sb = {
     console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
@@ -264,10 +264,10 @@ add(run('Тест 10: META_ENABLED=false → модуль не активиро�
 _ok(typeof RogueMeta === 'undefined', 'window.RogueMeta НЕ объявлен');
 `, { killSwitch: true }));
 
-// ── 11: без DLC roguelite модуль не активируется ──
-add(run('Тест 11: без DLC roguelite → модуль не активирован', `
+// ── 11: без DLC mastery модуль не активируется ──
+add(run('Тест 11: без DLC mastery → модуль не активирован', `
 _ok(typeof RogueMeta === 'undefined', 'window.RogueMeta НЕ объявлен');
-`, { noRoguelite: true }));
+`, { noMastery: true }));
 
 // ── 12: интеграция с runes — без осколков запираемые руны вне пула ──
 add(run('Тест 12: integration runes — запираемые руны вне пула при 0 ✦', `

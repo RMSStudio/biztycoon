@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  Карта рана (Run Map) — реализация roguelite-механики
+//  Карта рана (Run Map) — реализация mastery-механики
 //
 //  Активируется ТОЛЬКО когда включён DLC «Rogue-lite»
 //  (см. правило в src/runes.js / src/storyarcs.js).
@@ -19,7 +19,7 @@
 //  Стейт: G.runMap = { stageIdx, monthsInStage, choicesTaken[] }
 //  переносится через _restore без правок saves.js.
 //
-//  Бэклог: п.13 «Roguelite-механики», третий шаг (Run Map).
+//  Бэклог: п.13 «Mastery-механики», третий шаг (Run Map).
 //  Story Arcs (v3.11) и стартовые руны (v3.10) — предыдущие шаги.
 // ══════════════════════════════════════════════════════
 
@@ -31,7 +31,7 @@
   if (!RUN_MAP_ENABLED) return;
 
   // ─── Гейт по DLC «Rogue-lite» ─────────────────────────
-  if (!_rogueliteEnabled()) return;
+  if (!_masteryEnabled()) return;
 
   if (typeof EventBus === 'undefined') {
     console.error('[runmap] EventBus не найден — модуль не активирован');
@@ -40,11 +40,11 @@
   if (window.__RM_LOADED) return;
   window.__RM_LOADED = true;
 
-  function _rogueliteEnabled() {
+  function _masteryEnabled() {
     try {
       const raw = (typeof localStorage !== 'undefined' && localStorage.getItem('bt_enabled_dlcs_v1')) || '[]';
       const arr = JSON.parse(raw);
-      return Array.isArray(arr) && arr.includes('roguelite');
+      return Array.isArray(arr) && arr.includes('mastery');
     } catch (e) { return false; }
   }
 
@@ -142,7 +142,7 @@
     const _origAdvance = window.advanceMonth;
     window.advanceMonth = function () {
       const r = _origAdvance.apply(this, arguments);
-      if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return r;
+      if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return r;
       try { _tickRunMap(); } catch (e) { console.warn('[runmap] tick error:', e); }
       return r;
     };
@@ -267,7 +267,7 @@
 
   // ── UI: пилюля этапа в game-header ───────────────────
   function _injectPill() {
-    if (typeof DLC !== 'undefined' && !DLC.isEnabled('roguelite')) return;
+    if (typeof DLC !== 'undefined' && !DLC.isEnabled('mastery')) return;
     if (typeof G === 'undefined' || !G || !G.runMap) return;
     const header = document.querySelector('.game-header .game-logo');
     if (!header) return;

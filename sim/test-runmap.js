@@ -9,7 +9,7 @@
 //   - milestone не дублируется при повторных тиках того же месяца
 //   - финальный этап (endgame) больше не показывает milestone
 //   - G.runMap переносится через snapshot (саунд _restore)
-//   - без DLC roguelite модуль не активируется
+//   - без DLC mastery модуль не активируется
 //   - hard kill-switch RUN_MAP_ENABLED=false выключает
 // ══════════════════════════════════════════════════════
 
@@ -60,9 +60,9 @@ const fakeDocument = {
 function makeSandbox(opts) {
   opts = opts || {};
   REGISTRY.clear();
-  const _fakeLS = opts.noRoguelite
+  const _fakeLS = opts.noMastery
     ? {}
-    : { 'bt_enabled_dlcs_v1': JSON.stringify(['roguelite']) };
+    : { 'bt_enabled_dlcs_v1': JSON.stringify(['mastery']) };
   const sb = {
     console, Math, Date, JSON, Intl, setTimeout, clearTimeout,
     document: fakeDocument,
@@ -112,7 +112,7 @@ function _pickChoice(idx) {
 
 function run(name, body, opts) {
   opts = opts || {};
-  const sb = makeSandbox({ noRoguelite: opts.noRoguelite });
+  const sb = makeSandbox({ noMastery: opts.noMastery });
   const src = loadEngineSrc(opts) + '\n;\n' + HARNESS + '\n;\n' + body;
   vm.createContext(sb);
   try { vm.runInContext(src, sb); }
@@ -235,15 +235,15 @@ Object.keys(snapshot.G).forEach(k => { G[k] = snapshot.G[k]; });
 _eq(G.runMap.stageIdx, 1, 'после restore stageIdx=1');
 `));
 
-// ── 8: без DLC roguelite — модуль не активируется ──
-add(run('Тест 8: без DLC roguelite — модуль не активируется', `
+// ── 8: без DLC mastery — модуль не активируется ──
+add(run('Тест 8: без DLC mastery — модуль не активируется', `
 _ok(typeof RunMap === 'undefined', 'window.RunMap НЕ объявлен');
 initState(); selectSpec('smm'); startGame();
 __lastEv = null;
 G.month = 6; advanceMonth();
 _ok(!__lastEv || !__lastEv._runmap, 'milestone не выстреливает');
 _ok(typeof G.runMap === 'undefined', 'G.runMap не появилась');
-`, { noRoguelite: true }));
+`, { noMastery: true }));
 
 // ── 9: hard kill-switch ──
 add(run('Тест 9: RUN_MAP_ENABLED=false — модуль выключен', `
