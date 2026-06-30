@@ -88,6 +88,7 @@
         list.innerHTML = '<div style="padding:18px 8px;text-align:center;color:var(--tm);font-size:12px">Команды пока нет.<br>Наймите специалистов.</div>';
       } else {
         list.innerHTML = staff.map(s => {
+          const iid = s._iid || s.uid || s.id;
           const emo = ROLE_EMOJI[s.role] || '🧑';
           const role = ROLE_LABEL[s.role] || s.roleLabel || s.role || '';
           const grade = GRADE_LABEL[s.grade] || s.gradeLabel || s.grade || '';
@@ -96,7 +97,9 @@
           const moodE = mood >= 70 ? '😊' : mood >= 45 ? '😐' : '😟';
           const moodC = mood >= 70 ? 'var(--green)' : mood >= 45 ? 'var(--amber)' : 'var(--red)';
           const busy = s._assignedProjectId ? '<span title="назначен на проект" style="color:var(--teal);font-size:8px">●</span> ' : '';
-          return '<div class="staff-row" onclick="Ui2.team()" style="cursor:pointer" title="Управление командой">' +
+          return '<div class="staff-row" draggable="true" data-iid="' + iid + '"' +
+            ' ondragstart="Ui2.dndStart(event,\'' + iid + '\')" ondragend="Ui2.dndEnd(event)"' +
+            ' onclick="Ui2.team()" style="cursor:grab" title="Перетащи на проект — назначить · клик — управление командой">' +
             '<div class="staff-av">' + emo + '</div>' +
             '<div class="staff-inf"><div class="staff-name">' + busy + (s.name || '—') + '</div>' +
             '<div class="staff-role">' + role + (grade ? ' · ' + grade : '') + '</div></div>' +
@@ -198,7 +201,7 @@
       const act = here ? `unassignAndRefresh('${iid}','${id}')` : `assignAndRefresh('${iid}','${id}')`;
       const suf = other ? ' ↪' : here ? ' ✕' : '';
       const hint = here ? 'Снять с проекта' : other ? ('Сейчас на «'+other.name+'» — перевести сюда') : 'Назначить';
-      chips.push(`<button class="chip ${here?'on':''}" title="${hint}" onclick="event.stopPropagation();${act}">${s.icon||'👤'} ${first} +${wu}${suf}</button>`);
+      chips.push(`<button class="chip ${here?'on':''}" draggable="true" ondragstart="event.stopPropagation();Ui2.dndStart(event,'${iid}')" ondragend="Ui2.dndEnd(event)" title="${hint} · можно перетащить на другой проект" onclick="event.stopPropagation();${act}">${s.icon||'👤'} ${first} +${wu}${suf}</button>`);
     });
     const warn = team.length===0 ? 'Команды нет — проект идёт на твоей мощности (+2)'
       : (pThr<pLoad ? ('⚠ не хватает '+Math.round(pLoad-pThr)+' ед. — кликни по свободным чипам') : '');
@@ -313,7 +316,7 @@
       ${_accPayments(c, payout)}
     </div>`;
 
-    return `<div class="pcol ${open?'open':''} ${det?'det':''}" style="--pa:${th.pa};--pa-d:${th.pd}" onclick="Ui2.openProj('${id}')">
+    return `<div class="pcol ${open?'open':''} ${det?'det':''}" style="--pa:${th.pa};--pa-d:${th.pd}" onclick="Ui2.openProj('${id}')" ondragover="Ui2.dndOver(event)" ondragleave="Ui2.dndLeave(event)" ondrop="Ui2.dndDrop(event,'${id}')">
       <div class="pc-collapsed" style="display:flex;flex-direction:column;flex:1;min-height:0">
         <div class="pc-pay"><div class="v num">${_f(payout)}</div><div class="l">₽ ${payLabel}</div></div>
         <div class="pc-tick"></div>
@@ -532,6 +535,41 @@
     openProj(id) { id = String(id); if (String(_accOpen) === id) return; _accOpen = id; _accDet.delete(id); renderV2(); _accScrollOpenIntoView(); },
     closeProj()  { _accOpen = null; renderV2(); },
     toggleDet(id){ id = String(id); if (_accDet.has(id)) _accDet.delete(id); else _accDet.add(id); renderV2(); },
+    // ── Ф.4 Drag&drop назначения специалистов (панель→карточка, карточка→карточка) ──
+    _dragIid: null,
+    dndStart(e, iid) {
+      Ui2._dragIid = String(iid);
+      try { e.dataTransfer.setData('text/plain', String(iid)); e.dataTransfer.effectAllowed = 'copyMove'; } catch (_) {}
+      if (document.body) document.body.classList.add('v2-dragging');
+    },
+    dndEnd() {
+      Ui2._dragIid = null;
+      if (document.body) document.body.classList.remove('v2-dragging');
+      document.querySelectorAll('#projects-zone .v2-acc .pcol.dnd-over').forEach(c => c.classList.remove('dnd-over'));
+    },
+    dndOver(e) {
+      // принимаем drop только когда тащим специалиста
+      if (!Ui2._dragIid) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+      const col = e.currentTarget; if (col && col.classList) col.classList.add('dnd-over');
+    },
+    dndLeave(e) {
+      const col = e.currentTarget;
+      if (col && e.relatedTarget && col.contains && col.contains(e.relatedTarget)) return; // переход на дочерний — не снимаем
+      if (col && col.classList) col.classList.remove('dnd-over');
+    },
+    dndDrop(e, projId) {
+      e.preventDefault();
+      const col = e.currentTarget; if (col && col.classList) col.classList.remove('dnd-over');
+      if (document.body) document.body.classList.remove('v2-dragging');
+      let iid = Ui2._dragIid;
+      try { if (!iid && e.dataTransfer) iid = e.dataTransfer.getData('text/plain'); } catch (_) {}
+      Ui2._dragIid = null;
+      if (iid && projId && typeof assignAndRefresh === 'function') {
+        _safe(() => assignAndRefresh(String(iid), String(projId)));  // назначает / переводит на проект
+      }
+    },
     // ── глубокие экраны через легаси-модалки ──
     hire() {
       const g = G_(); if (!g) return;

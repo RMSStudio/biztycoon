@@ -152,3 +152,10 @@
 
 .v2-acc .pcol.open .pc-full::-webkit-scrollbar,.v2-acc .pc-details::-webkit-scrollbar{width:6px}
 .v2-acc .pcol.open .pc-full::-webkit-scrollbar-thumb,.v2-acc .pc-details::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:3px}
+
+/* ── Ф.4 Drag&drop назначения специалистов ── */
+body.v2-dragging .v2-acc .pcol{ outline:1px dashed rgba(255,255,255,.18); outline-offset:-3px; cursor:copy }
+.v2-acc .pcol.dnd-over{ outline:2px solid var(--pa,var(--acc)); outline-offset:-3px }
+.v2-acc .pcol.dnd-over::after{ content:''; position:absolute; inset:0; background:var(--pa,var(--acc)); opacity:.12; pointer-events:none; z-index:5 }
+#hud-left .staff-row[draggable="true"]{ cursor:grab }
+.v2-acc .pcol .chip[draggable="true"]{ cursor:grab }
