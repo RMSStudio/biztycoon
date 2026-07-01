@@ -1295,6 +1295,11 @@ function startSign(pid) {
 //  HIRE
 // ══════════════════════════════════════════════════════
 function hireStaff(id) {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима isModuleUnlocked→true, не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('hire')) {
+    if (typeof notify === 'function') notify('🔒 Найм заперт — открой «Найм» в Дереве открытий', 'error');
+    return;
+  }
   const def=STAFF_DEFS.find(d=>d.id===id);
   if (!def) return;
   if ((G.teamFatigue||0) >= 85) { notify('🔥 Кризис усталости — найм временно недоступен','error'); return; }

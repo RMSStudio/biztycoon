@@ -278,6 +278,11 @@ function _recomputeWU(s) {
 // ── Scout ─────────────────────────────────────────────
 
 function scoutCandidates(tier) {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('hire')) {
+    if (typeof notify === 'function') notify('🔒 Скаутинг спецов заперт — открой «Найм» в Дереве открытий', 'error');
+    return;
+  }
   const costs  = { free:0, paid:25000, premium:60000 };
   const cost   = costs[tier] ?? 0;
   // v3.6: время поиска зависит от тира — дешёвый быстрый, дорогой дольше
@@ -355,6 +360,11 @@ function migrateStaffArr(arr) {
 // ── Hire ──────────────────────────────────────────────
 
 function hireCandidate(id, salary) {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('hire')) {
+    if (typeof notify === 'function') notify('🔒 Найм заперт — открой «Найм» в Дереве открытий', 'error');
+    return;
+  }
   const pool = G.candidatePool || [];
   const idx  = pool.findIndex(c => c.uid === id || c.id === id);
   if (idx < 0) { notify('Кандидат не найден', 'error'); return; }
@@ -883,6 +893,11 @@ function setTeamQuery(v) { _teamQuery = v; _renderTeamGrid(); }
 // ══════════════════════════════════════════════════════
 
 function openStaffScoutModal() {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('hire')) {
+    if (typeof notify === 'function') notify('🔒 Найм заперт — открой «Найм» в Дереве открытий', 'error');
+    return;
+  }
   _renderCandidatePool();
   document.getElementById('staff-scout-modal')?.classList.add('active');
 }
