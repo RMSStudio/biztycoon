@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BizTycoon · Ф.7 — Билд команды (комбинаторика, мокап)</title>
+<style>
+  :root{
+    --bg:#0b0d13; --panel:#12151f; --panel2:#171b28; --line:rgba(255,255,255,.07);
+    --t:#e2e7f3; --tm:#8593ad; --td:#4a5470;
+    --acc:#e1456a; --teal:#17b8a6; --blue:#4f7bf0; --purple:#9a6cf0; --amber:#e8a23a; --green:#2fbd6e; --red:#e8524f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--t);font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;padding:22px;min-height:100vh}
+  .num{font-family:'Archivo Black','Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.02em}
+  h1{font-size:18px;font-weight:800;display:flex;align-items:center;gap:10px;margin-bottom:3px}
+  h1 b{color:var(--acc)}
+  .sub{font-size:12px;color:var(--tm);margin-bottom:18px}
+  .sub em{color:var(--td);font-style:normal}
+
+  .wrap{display:grid;grid-template-columns:1fr 360px;gap:16px;max-width:1240px}
+  .col-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.09em;font-weight:800;color:var(--tm);margin:0 2px 10px;display:flex;align-items:center;gap:8px}
+  .col-lbl .cnt{color:var(--td);font-weight:600}
+
+  /* ── карточки-специалисты (джокеры) ── */
+  .roster{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  .jk{position:relative;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+     border-radius:14px;padding:13px 13px 12px;overflow:hidden;transition:transform .12s,border-color .12s}
+  .jk:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.16)}
+  .jk::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--rc,var(--teal))}
+  .jk-top{display:flex;align-items:flex-start;gap:9px;margin-bottom:9px}
+  .jk-av{width:38px;height:38px;border-radius:9px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .jk-id{flex:1;min-width:0}
+  .jk-name{font-size:13px;font-weight:800;line-height:1.15}
+  .jk-role{font-size:10px;color:var(--tm);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+  .jk-grade{font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;align-self:flex-start;flex-shrink:0}
+  .g-jr{background:rgba(133,147,173,.16);color:var(--tm)} .g-md{background:rgba(79,123,240,.16);color:var(--blue)} .g-sr{background:rgba(154,108,240,.18);color:var(--purple)}
+  .jk-stats{display:flex;gap:12px;font-size:10px;color:var(--tm);margin-bottom:9px;font-weight:700}
+  .jk-stats b{color:var(--t)}
+  .jk-trait{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:9px;padding:8px 9px}
+  .jk-trait .tt{font-size:11px;font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:3px}
+  .jk-trait .td{font-size:10.5px;color:var(--tm);line-height:1.32}
+  .jk-trait .tt .tag{margin-left:auto;font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+  .tag-scale{background:rgba(47,189,110,.16);color:var(--green)}
+  .tag-cond{background:rgba(232,162,58,.16);color:var(--amber)}
+  .tag-trig{background:rgba(232,82,79,.14);color:var(--red)}
+  .tag-syn{background:rgba(154,108,240,.16);color:var(--purple)}
+  .tag-eco{background:rgba(23,184,166,.14);color:var(--teal)}
+  .jk.dim{opacity:.5}
+  .jk .lock{position:absolute;inset:0;background:rgba(8,9,14,.55);backdrop-filter:blur(1px);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--tm);font-weight:700;gap:6px;flex-direction:column}
+  .jk .lock small{font-size:10px;color:var(--td)}
+
+  /* ── правая колонка: синергии ── */
+  .side{display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .card h3{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:11px;display:flex;align-items:center;gap:7px;color:var(--tm)}
+  .syn{border-radius:10px;padding:10px 11px;margin-bottom:9px;border:1px solid var(--line)}
+  .syn:last-child{margin-bottom:0}
+  .syn.on{background:linear-gradient(180deg,rgba(47,189,110,.10),rgba(47,189,110,.03));border-color:rgba(47,189,110,.32)}
+  .syn.near{background:rgba(232,162,58,.06);border-color:rgba(232,162,58,.26)}
+  .syn.off{opacity:.6}
+  .syn-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .syn-h .nm{font-size:12.5px;font-weight:800}
+  .syn-h .st{margin-left:auto;font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:.04em}
+  .st-on{background:var(--green);color:#062615} .st-near{background:rgba(232,162,58,.2);color:var(--amber)} .st-off{background:rgba(255,255,255,.06);color:var(--td)}
+  .syn-eff{font-size:11px;color:var(--t);font-weight:600;margin-bottom:4px}
+  .syn-req{font-size:10px;color:var(--tm)} .syn-req b{color:var(--t)}
+  .syn-mem{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+  .syn-mem span{font-size:9px;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,.05);color:var(--tm);font-weight:700}
+  .syn-mem span.hit{background:rgba(47,189,110,.16);color:var(--green)}
+
+  /* ── проект-локальная синергия ── */
+  .plocal{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+  .plocal .ph{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;margin-bottom:7px}
+  .plocal .ph .pt{color:var(--tm);font-weight:700;font-size:10px}
+  .plocal .chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
+  .plocal .chips b{font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(79,123,240,.14);color:var(--blue);font-weight:700}
+  .plocal .fire{font-size:10.5px;color:var(--green);font-weight:700;display:flex;align-items:center;gap:6px}
+
+  .foot{margin-top:16px;font-size:11px;color:var(--td);max-width:1240px;line-height:1.5}
+  .foot b{color:var(--tm)}
+</style>
+</head>
+<body>
+  <h1>🎛 <b>Билд команды</b> · комбинаторика Rogue-lite <span style="font-size:11px;color:var(--td);font-weight:600;margin-left:auto"></span></h1>
+  <div class="sub">Каждый спец — «джокер» с уникальным трейтом. Сила рана — в сочетании трейтов (штат) и расстановке (проект). <em>Мокап Ф.7 · трейты/числа — заглушки для реакции.</em></div>
+
+  <div class="wrap">
+    <!-- ЛЕВО: ростер джокеров -->
+    <div>
+      <div class="col-lbl">Твоя команда <span class="cnt">· 6 в штате · ФОТ −312К/мес · мораль 78</span></div>
+      <div class="roster">
+
+        <div class="jk" style="--rc:var(--purple)">
+          <div class="jk-top"><div class="jk-av">🎨</div><div class="jk-id"><div class="jk-name">Марина К.</div><div class="jk-role">Дизайнер</div></div><span class="jk-grade g-sr">SR</span></div>
+          <div class="jk-stats"><span>Q <b>82</b></span><span>Скорость <b>×1.1</b></span><span>😊 <b>90</b></span></div>
+          <div class="jk-trait"><div class="tt">🎯 Перфекционист <span class="tag tag-scale">скейл</span></div><div class="td">+1 Q за каждую свою сдачу — растёт весь ран.</div></div>
+        </div>
+
+        <div class="jk" style="--rc:var(--purple)">
+          <div class="jk-top"><div class="jk-av">🎨</div><div class="jk-id"><div class="jk-name">Олег Д.</div><div class="jk-role">Дизайнер</div></div><span class="jk-grade g-md">MD</span></div>
+          <div class="jk-stats"><span>Q <b>61</b></span><span>Скорость <b>×1.0</b></span><span>😊 <b>74</b></span></div>
+          <div class="jk-trait"><div class="tt">🏆 Нишевый <span class="tag tag-cond">услов.</span></div><div class="td">×1.5 к качеству на проектах T3+.</div></div>
+        </div>
+
+        <div class="jk" style="--rc:var(--blue)">
+          <div class="jk-top"><div class="jk-av">💻</div><div class="jk-id"><div class="jk-name">Артём В.</div><div class="jk-role">Разработчик</div></div><span class="jk-grade g-sr">SR</span></div>
+          <div class="jk-stats"><span>Q <b>79</b></span><span>Скорость <b>×1.15</b></span><span>😊 <b>81</b></span></div>
+          <div class="jk-trait"><div class="tt">🧩 Тимлид <span class="tag tag-syn">синерг.</span></div><div class="td">+2 Q за каждого другого разработчика на ЭТОМ проекте.</div></div>
+        </div>
+
+        <div class="jk" style="--rc:var(--blue)">
+          <div class="jk-top"><div class="jk-av">💻</div><div class="jk-id"><div class="jk-name">Соня Р.</div><div class="jk-role">Разработчик</div></div><span class="jk-grade g-jr">JR</span></div>
+          <div class="jk-stats"><span>Q <b>38</b></span><span>Скорость <b>×0.9</b></span><span>😊 <b>82</b></span></div>
+          <div class="jk-trait"><div class="tt">🚀 Марафонец <span class="tag tag-scale">скейл</span></div><div class="td">+5% скорости за каждый месяц на одном проекте.</div></div>
+        </div>
+
+        <div class="jk" style="--rc:var(--teal)">
+          <div class="jk-top"><div class="jk-av">📣</div><div class="jk-id"><div class="jk-name">Ника Ж.</div><div class="jk-role">SMM</div></div><span class="jk-grade g-md">MD</span></div>
+          <div class="jk-stats"><span>Q <b>55</b></span><span>Скорость <b>×1.0</b></span><span>😊 <b>68</b></span></div>
+          <div class="jk-trait"><div class="tt">📡 Комьюнити <span class="tag tag-syn">синерг.</span></div><div class="td">+1 лид при скаутинге за каждого SMM в штате.</div></div>
+        </div>
+
+        <div class="jk" style="--rc:var(--amber)">
+          <div class="jk-top"><div class="jk-av">🧭</div><div class="jk-id"><div class="jk-name">Павел М.</div><div class="jk-role">Менеджер</div></div><span class="jk-grade g-sr">SR</span></div>
+          <div class="jk-stats"><span>Q <b>70</b></span><span>Скорость <b>×1.0</b></span><span>😊 <b>85</b></span></div>
+          <div class="jk-trait"><div class="tt">🎓 Ментор <span class="tag tag-trig">триггер</span></div><div class="td">При сдаче проекта — +2 Q всем джунам в команде.</div></div>
+        </div>
+
+        <div class="jk dim" style="--rc:var(--teal)">
+          <div class="jk-top"><div class="jk-av">🤝</div><div class="jk-id"><div class="jk-name">Переговорщик</div><div class="jk-role">в скауте</div></div><span class="jk-grade g-sr">SR</span></div>
+          <div class="jk-stats"><span>Q <b>—</b></span><span>Скорость <b>—</b></span><span>💰 найм 60К</span></div>
+          <div class="jk-trait"><div class="tt">🦈 Акула <span class="tag tag-eco">эконом.</span></div><div class="td">Аванс-шанс +25%. — доступен в скауте, если возьмёшь.</div></div>
+        </div>
+
+        <div class="jk" style="--rc:var(--td)">
+          <div class="jk-top"><div class="jk-av" style="opacity:.4">🧪</div><div class="jk-id"><div class="jk-name" style="color:var(--td)">HR-специалист</div><div class="jk-role">заперт</div></div></div>
+          <div class="jk-stats" style="opacity:.4"><span>трейт «Мораль-движок»</span></div>
+          <div class="lock">🔒 Трейт-пул заперт<small>Открой узел «Портфолио/HR» в Дереве открытий</small></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ПРАВО: синергии -->
+    <div class="side">
+      <div class="card">
+        <h3>🧬 Синергии штата <span style="margin-left:auto;font-size:10px;color:var(--td);font-weight:700">активно 2 / 4</span></h3>
+
+        <div class="syn on">
+          <div class="syn-h"><span class="nm">🎨 Дизайн-бутик</span><span class="st st-on">актив</span></div>
+          <div class="syn-eff">+15% выплата на брендинг-проекты</div>
+          <div class="syn-req">Нужно: <b>2+ дизайнера</b> в штате — есть 2 ✓</div>
+          <div class="syn-mem"><span class="hit">Марина К.</span><span class="hit">Олег Д.</span></div>
+        </div>
+
+        <div class="syn on">
+          <div class="syn-h"><span class="nm">🧱 Продуктовая команда</span><span class="st st-on">актив</span></div>
+          <div class="syn-eff">+бонус к качеству на T4+ проектах</div>
+          <div class="syn-req">Нужно: <b>Дизайнер + Разработчик + SMM/Копирайтер</b> — собрано ✓</div>
+          <div class="syn-mem"><span class="hit">🎨</span><span class="hit">💻</span><span class="hit">📣</span></div>
+        </div>
+
+        <div class="syn near">
+          <div class="syn-h"><span class="nm">🌱 Джун-раш</span><span class="st st-near">почти</span></div>
+          <div class="syn-eff">Менторство ускоряет рост качества джунов ×2</div>
+          <div class="syn-req">Нужно: <b>3 джуна + Ментор</b> — есть 1 джун, Ментор ✓. <b>Не хватает 2 джунов.</b></div>
+          <div class="syn-mem"><span class="hit">Соня Р.</span><span class="hit">🎓 Ментор</span><span>+2 джуна</span></div>
+        </div>
+
+        <div class="syn off">
+          <div class="syn-h"><span class="nm">💚 Мораль-движок</span><span class="st st-off">заперт</span></div>
+          <div class="syn-eff">HR держит большую команду счастливой → +потолок размера</div>
+          <div class="syn-req">Нужен HR-специалист (трейт-пул заперт в дереве).</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>🎯 Локальная синергия · на проекте</h3>
+        <div class="plocal">
+          <div class="ph"><span>Ритейл-сеть «Полка»</span><span class="pt">T3 · работа</span></div>
+          <div class="chips"><b>🧩 Артём (Тимлид)</b><b>💻 Соня</b><b>💻 +1 разраб</b></div>
+          <div class="fire">✦ Тимлид ×2 других разраба → <b style="color:var(--t)">+4 Q локально на проекте</b></div>
+        </div>
+        <div style="font-size:10.5px;color:var(--tm);margin-top:9px;line-height:1.4">Расстановка (перетаскивание Ф.4) решает, где сработают синерго-трейты. Один и тот же штат даёт разный результат от того, кого с кем поставил.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Как это читается:</b> ростер слева = «джокеры» (найм = выбор джокеров в магазине). Справа сверху — синергии от СОСТАВА штата (глобальные), снизу — ЛОКАЛЬНАЯ синергия от расстановки на конкретном проекте. Слотов нет — команду ограничивает экономика (ФОТ/мораль/мощность). Запертые трейт-пулы открываются узлами «Дерева открытий» между ранами → чем больше открыл, тем глубже возможные билды.
+  </div>
+</body>
+</html>
