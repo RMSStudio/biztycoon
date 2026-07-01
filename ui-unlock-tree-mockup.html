@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BizTycoon · Ф.7 — Дерево открытий (мокап)</title>
+<style>
+  :root{
+    --bg:#0a0c12; --panel:#12151f; --panel2:#171b28; --line:rgba(255,255,255,.08);
+    --t:#e2e7f3; --tm:#8593ad; --td:#454f6b;
+    --acc:#e1456a; --exp:#f5c451;
+    --A:#17b8a6; --B:#4f7bf0; --C:#9a6cf0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 50% -10%,#141827,#0a0c12);color:var(--t);font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;padding:20px 24px 40px}
+  .num{font-family:'Archivo Black','Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.02em}
+
+  header{display:flex;align-items:center;gap:20px;max-width:1140px;margin:0 auto 6px}
+  header h1{font-size:18px;font-weight:800} header h1 b{color:var(--acc)}
+  .exp-pill{margin-left:auto;display:flex;align-items:center;gap:8px;background:rgba(245,196,81,.10);border:1px solid rgba(245,196,81,.32);padding:7px 14px;border-radius:11px}
+  .exp-pill .v{font-size:20px;color:var(--exp)} .exp-pill .l{font-size:10px;color:var(--tm);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+  .prog{max-width:1140px;margin:0 auto 20px;display:flex;align-items:center;gap:12px}
+  .prog .bar{flex:1;height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
+  .prog .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--A),var(--B),var(--C));border-radius:4px;transition:width .3s}
+  .prog .lbl{font-size:11px;color:var(--tm);font-weight:700;white-space:nowrap}
+
+  .root{max-width:1140px;margin:0 auto 4px;display:flex;justify-content:center}
+  .rootnode{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 18px;text-align:center;font-size:12px;color:var(--tm)}
+  .rootnode b{color:var(--t);font-weight:800;display:block;font-size:13px}
+  .stem{width:2px;height:16px;background:var(--line);margin:0 auto}
+
+  .branches{max-width:1140px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .branch{background:linear-gradient(180deg,rgba(255,255,255,.015),transparent);border:1px solid var(--line);border-radius:16px;padding:14px 13px 16px}
+  .branch h2{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .branch.A h2{color:var(--A)} .branch.B h2{color:var(--B)} .branch.C h2{color:var(--C)}
+  .branch h2 .bd{margin-left:auto;font-size:10px;color:var(--td);font-weight:700}
+
+  .node{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:12px;transition:transform .12s,border-color .12s,box-shadow .12s}
+  .node:last-child{margin-bottom:0}
+  .node .tier{position:absolute;top:9px;right:11px;font-size:9px;color:var(--td);font-weight:800}
+  .node .nh{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .node .ico{width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+  .node .nm{font-size:13px;font-weight:800;line-height:1.15}
+  .node .un{font-size:10.5px;color:var(--tm);line-height:1.35;margin-bottom:9px}
+  .node .foot{display:flex;align-items:center;gap:8px}
+  .node .cost{font-size:12px;font-weight:800;color:var(--exp);display:flex;align-items:center;gap:4px}
+  .node .buy{margin-left:auto;font-size:11px;font-weight:800;padding:5px 12px;border-radius:8px;cursor:pointer;border:1px solid transparent;background:var(--acc);color:#fff}
+  .node .buy:hover{filter:brightness(1.08)}
+  .node .buy.dis{background:rgba(255,255,255,.05);color:var(--td);cursor:not-allowed;border-color:var(--line)}
+  .node .st{margin-left:auto;font-size:11px;font-weight:800}
+
+  /* состояния */
+  .node.open{border-color:rgba(47,189,110,.4);background:linear-gradient(180deg,rgba(47,189,110,.08),rgba(47,189,110,.02))}
+  .node.open .st{color:#2fbd6e}
+  .node.avail{border-color:var(--nc,rgba(255,255,255,.28));box-shadow:0 0 0 1px var(--nc,transparent),0 6px 22px -12px var(--nc,transparent)}
+  .node.locked{opacity:.52}
+  .node.locked .lockmsg{font-size:10px;color:var(--amber,#e8a23a);font-weight:700}
+  .branch.A .node.avail{--nc:rgba(23,184,166,.5)} .branch.B .node.avail{--nc:rgba(79,123,240,.5)} .branch.C .node.avail{--nc:rgba(154,108,240,.5)}
+
+  .flash{animation:fl .5s ease}
+  @keyframes fl{0%{box-shadow:0 0 0 0 rgba(47,189,110,.5)}100%{box-shadow:0 0 0 12px rgba(47,189,110,0)}}
+
+  .foot-note{max-width:1140px;margin:18px auto 0;font-size:11px;color:var(--td);line-height:1.5;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .foot-note b{color:var(--tm)}
+  .startbtn{margin-left:auto;font-size:13px;font-weight:800;padding:10px 22px;border-radius:11px;background:var(--panel2);border:1px solid var(--line);color:var(--t);cursor:pointer}
+  .legend{display:flex;gap:12px} .legend span{display:flex;align-items:center;gap:5px} .legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+  <header>
+    <h1>🌐 <b>Дерево открытий</b> · режим Rogue-lite</h1>
+    <div class="exp-pill"><span class="v num" id="exp">340</span><span class="l">экспертиза</span></div>
+  </header>
+  <div class="prog"><span class="lbl">Собранность игры</span><div class="bar"><i id="progbar" style="width:15%"></i></div><span class="lbl" id="progtxt">2 / 13 модулей</span></div>
+
+  <div class="root"><div class="rootnode"><b>🧰 Ручной проект</b>тир 0 · открыт всегда · один заказ руками</div></div>
+  <div class="stem"></div>
+
+  <div class="branches" id="branches"></div>
+
+  <div class="foot-note">
+    <div class="legend">
+      <span><i style="background:#2fbd6e"></i>открыт</span>
+      <span><i style="background:var(--A)"></i>доступен</span>
+      <span><i style="background:#454f6b"></i>заперт</span>
+    </div>
+    <b>Мягкие пререквизиты:</b> узел тира N доступен, когда открыт любой узел тира N−1 (любая ветка) — путь выбираешь сам. Каждый узел открывает не только систему, но и пул трейтов команды (§13). <span class="startbtn">▶ Начать ран</span>
+  </div>
+
+<script>
+const NODES = [
+  // branch A — Студия
+  {id:'hire',    br:'A', tier:1, ico:'🧑‍💻', nm:'Найм',            un:'Роли/грейды/ФОТ/мощность команды + базовые грейд-трейты', cost:100, open:true},
+  {id:'life',    br:'A', tier:2, ico:'📋', nm:'Lifecycle-фазы',      un:'Бриф/планирование/мульти-work + фазовые триггеры', cost:200},
+  {id:'port',    br:'A', tier:3, ico:'📁', nm:'Портфолио/Кейсы',     un:'Пассив Q/реп/лиды + трейты-скейлеры', cost:300},
+  {id:'tree',    br:'A', tier:4, ico:'🌳', nm:'Древо перков 2.0',     un:'In-run узлы + bonusProjectAction (хвост Ф.2)', cost:450},
+  {id:'sub',     br:'A', tier:5, ico:'🏢', nm:'Саббренды/Офисы',      un:'Параллельные команды, +capacity, синерго-трейты штата', cost:650},
+  // branch B — Рынок
+  {id:'scout',   br:'B', tier:1, ico:'🔍', nm:'Скаутинг',            un:'Пул офферов вместо одного заказа + мета/скаут-трейты', cost:100, open:true},
+  {id:'nego',    br:'B', tier:2, ico:'💬', nm:'Переговоры',          un:'КП/условия-вилки + роль Переговорщик + эконом-трейты', cost:200},
+  {id:'market',  br:'B', tier:3, ico:'📈', nm:'Живой рынок',         un:'Конкуренты/рейтинг/тикер + рыночные синергии', cost:350},
+  {id:'shares',  br:'B', tier:4, ico:'📊', nm:'Доли/акции',          un:'Инвест-слой', cost:500},
+  {id:'mna',     br:'B', tier:5, ico:'🤝', nm:'Поглощения M&A',      un:'Ветвистый процесс поглощений', cost:700},
+  // branch C — Технологии/сложность
+  {id:'ai',      br:'C', tier:2, ico:'🧠', nm:'Нейросеть',           un:'AI-ассистент/чат', cost:250},
+  {id:'season',  br:'C', tier:3, ico:'🌦', nm:'Сезоны',              un:'Тематические кварталы (Ф.6) + тайминг-синергии', cost:400},
+  {id:'director',br:'C', tier:4, ico:'🌡', nm:'Директор давления',   un:'Динамическая сложность (Р.4) + острые drawback-архетипы', cost:600},
+];
+const BR = {A:{n:'Студия',s:'команда · ремесло'}, B:{n:'Рынок',s:'экспансия'}, C:{n:'Технологии',s:'сложность'}};
+let exp = 340;
+
+function openTiers(){ const s=new Set([0]); NODES.forEach(n=>{ if(n.open) s.add(n.tier); }); return s; }
+function isAvail(n){ if(n.open) return false; return openTiers().has(n.tier-1); }
+
+function render(){
+  const wrap = document.getElementById('branches'); wrap.innerHTML='';
+  ['A','B','C'].forEach(br=>{
+    const col = document.createElement('div'); col.className='branch '+br;
+    const opened = NODES.filter(n=>n.br===br&&n.open).length, tot=NODES.filter(n=>n.br===br).length;
+    col.innerHTML = `<h2>${br} · ${BR[br].n}<span class="bd">${BR[br].s} · ${opened}/${tot}</span></h2>`;
+    NODES.filter(n=>n.br===br).sort((a,b)=>a.tier-b.tier).forEach(n=>{
+      const avail=isAvail(n), can=avail&&exp>=n.cost;
+      const cls = n.open?'open':(avail?'avail':'locked');
+      let foot;
+      if(n.open) foot = `<span class="st">✓ Открыт</span>`;
+      else if(avail) foot = `<span class="cost">✦ ${n.cost}</span><button class="buy ${can?'':'dis'}" ${can?`onclick="buy('${n.id}')"`:''}>${can?'Открыть':'мало эксп.'}</button>`;
+      else foot = `<span class="cost">✦ ${n.cost}</span><span class="lockmsg" style="margin-left:auto">🔒 нужен узел тира ${n.tier-1}</span>`;
+      col.innerHTML += `<div class="node ${cls}" id="nd-${n.id}"><span class="tier">T${n.tier}</span>
+        <div class="nh"><div class="ico">${n.ico}</div><div class="nm">${n.nm}</div></div>
+        <div class="un">${n.un}</div><div class="foot">${foot}</div></div>`;
+    });
+    wrap.appendChild(col);
+  });
+  const op = NODES.filter(n=>n.open).length;
+  document.getElementById('exp').textContent = exp;
+  document.getElementById('progbar').style.width = Math.round(op/NODES.length*100)+'%';
+  document.getElementById('progtxt').textContent = op+' / '+NODES.length+' модулей';
+}
+function buy(id){
+  const n=NODES.find(x=>x.id===id); if(!n||n.open||exp<n.cost) return;
+  exp-=n.cost; n.open=true; render();
+  const el=document.getElementById('nd-'+id); if(el){ el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),500); }
+}
+render();
+</script>
+</body>
+</html>
