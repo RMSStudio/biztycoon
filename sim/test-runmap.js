@@ -263,33 +263,35 @@ ScenarioLoader.applyOps([{ overheadBump: -0.10 }], G);
 _eq(G.runeOverheadBump, -Math.round(baseOverhead * 0.10), 'overheadBump -10% → runeOverheadBump = -base×0.10');
 `));
 
-// ── 11: фильтр по стадии — bonusFitsStage / getBonusesForStage (bank) ──
-add(run('Тест 11: bonusFitsStage / getBonusesForStage — фильтр по стадии (bank)', `
+// ── 11: фильтр по СТАДИИ КОМПАНИИ — getBonusesForStage (bank, Ф.9 перепривязка) ──
+// Эксклюзивы перепривязаны к стадиям компании: retail→agency, private→holding, topten→empire.
+add(run('Тест 11: getBonusesForStage — эксклюзивы банка на стадиях компании', `
 _ok(typeof RunMap.bonusFitsStage === 'function', 'API bonusFitsStage есть');
 _ok(typeof RunMap.getBonusesForStage === 'function', 'API getBonusesForStage есть');
-const bank_retail  = RunMap.getBonusesForStage('bank_retail').map(b => b.id);
-const bank_topten  = RunMap.getBonusesForStage('bank_topten').map(b => b.id);
-const bank_private = RunMap.getBonusesForStage('bank_private').map(b => b.id);
-_ok(bank_retail.includes('deposit_base'),  'retail: universal deposit_base виден');
-_ok(bank_retail.includes('core_banking'),  'retail: эксклюзив core_banking виден');
-_ok(!bank_retail.includes('spo_capital'),  'retail: SPO (топ-10 эксклюзив) НЕ виден');
-_ok(bank_topten.includes('spo_capital'),     'top-10: SPO виден');
-_ok(!bank_topten.includes('core_banking'),   'top-10: core_banking (retail) НЕ виден');
-_ok(bank_private.includes('vip_office'),      'private: VIP виден');
-_ok(!bank_private.includes('spo_capital'),    'private: SPO НЕ виден');
+const onAgency  = RunMap.getBonusesForStage('agency').map(b => b.id);
+const onEmpire  = RunMap.getBonusesForStage('empire').map(b => b.id);
+const onHolding = RunMap.getBonusesForStage('holding').map(b => b.id);
+_ok(onAgency.includes('deposit_base'),  'agency: universal deposit_base виден');
+_ok(onAgency.includes('core_banking'),  'agency: эксклюзив core_banking (retail→agency) виден');
+_ok(!onAgency.includes('spo_capital'),  'agency: SPO (empire-эксклюзив) НЕ виден');
+_ok(onEmpire.includes('spo_capital'),   'empire: SPO (topten→empire) виден');
+_ok(!onEmpire.includes('core_banking'), 'empire: core_banking (agency) НЕ виден');
+_ok(onHolding.includes('vip_office'),   'holding: VIP (private→holding) виден');
+_ok(!onHolding.includes('spo_capital'), 'holding: SPO НЕ виден');
 `, { scenario: 'bank' }));
 
-// ── 12: агентство — фильтр по стадии (универсальные + эксклюзивы) ──
-add(run('Тест 12: агентство — getBonusesForStage фильтрует эксклюзивы', `
-const onGarage = RunMap.getBonusesForStage('studio_garage').map(b => b.id);
-const onBrand  = RunMap.getBonusesForStage('studio_brand').map(b => b.id);
-const onEnd    = RunMap.getBonusesForStage('studio_endgame').map(b => b.id);
-_ok(onGarage.includes('word_of_mouth'),    'garage: word_of_mouth виден');
-_ok(!onGarage.includes('design_awards'),   'garage: design_awards (brand) НЕ виден');
-_ok(onBrand.includes('thought_leader'),    'brand: thought_leader виден');
-_ok(!onBrand.includes('boutique_premium'), 'brand: бутик (endgame) НЕ виден');
-_ok(onEnd.includes('boutique_premium'),    'endgame: бутик виден');
-_ok(onGarage.includes('cash') && onBrand.includes('cash') && onEnd.includes('cash'),
+// ── 12: агентство — эксклюзивы на стадиях компании (Ф.9 перепривязка) ──
+// garage-эра→studio, brand→holding, endgame→empire.
+add(run('Тест 12: агентство — getBonusesForStage фильтрует эксклюзивы (стадии компании)', `
+const onStudio  = RunMap.getBonusesForStage('studio').map(b => b.id);
+const onHolding = RunMap.getBonusesForStage('holding').map(b => b.id);
+const onEmpire  = RunMap.getBonusesForStage('empire').map(b => b.id);
+_ok(onStudio.includes('word_of_mouth'),     'studio: word_of_mouth (garage→studio) виден');
+_ok(!onStudio.includes('boutique_premium'), 'studio: бутик (empire) НЕ виден');
+_ok(onHolding.includes('thought_leader'),   'holding: thought_leader (brand→holding) виден');
+_ok(!onHolding.includes('boutique_premium'),'holding: бутик (empire) НЕ виден');
+_ok(onEmpire.includes('boutique_premium'),  'empire: бутик (endgame→empire) виден');
+_ok(onStudio.includes('cash') && onHolding.includes('cash') && onEmpire.includes('cash'),
     'универсальный cash виден на всех стадиях');
 `));
 
