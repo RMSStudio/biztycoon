@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BizTycoon · Ф.7 — Редактор каталога комбинаторики</title>
+<style>
+  :root{
+    --bg:#0b0d13; --panel:#12151f; --panel2:#171b28; --line:rgba(255,255,255,.09);
+    --t:#e2e7f3; --tm:#8593ad; --td:#4a5470;
+    --acc:#e1456a; --teal:#17b8a6; --blue:#4f7bf0; --purple:#9a6cf0; --amber:#e8a23a; --green:#2fbd6e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--t);font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;font-size:13px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  header{padding:12px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-shrink:0}
+  header h1{font-size:15px;font-weight:800} header h1 b{color:var(--acc)}
+  header .hint{font-size:11px;color:var(--td);margin-left:6px}
+  .tabs{display:flex;gap:4px;margin-left:auto}
+  .tab{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid transparent;color:var(--tm);background:transparent}
+  .tab.on{background:var(--panel2);color:var(--t);border-color:var(--line)}
+
+  .toolbar{padding:9px 18px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);flex-shrink:0;flex-wrap:wrap}
+  .btn{font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--t)}
+  .btn:hover{border-color:rgba(255,255,255,.22)}
+  .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+  .btn.gh{background:transparent}
+  .toolbar .sp{flex:1}
+  .toolbar .cnt{font-size:11px;color:var(--td)}
+  .saved{font-size:11px;color:var(--green);opacity:0;transition:opacity .3s}
+  .saved.show{opacity:1}
+
+  .grid-wrap{flex:1;overflow:auto;padding:0 0 40px}
+  table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+  th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{position:sticky;top:0;z-index:3;background:var(--panel);padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;color:var(--tm);text-align:left;white-space:nowrap}
+  thead th .colact{display:inline-flex;gap:5px;margin-left:6px;opacity:.5}
+  thead th .colact span{cursor:pointer} thead th .colact span:hover{opacity:1;color:var(--acc)}
+  th.rowh,td.rowh{position:sticky;left:0;z-index:2;background:var(--panel);text-align:center;width:40px;min-width:40px;color:var(--td);font-weight:700;font-size:11px}
+  thead th.rowh{z-index:4}
+  td{background:var(--panel2);padding:0}
+  td textarea{width:100%;min-width:120px;background:transparent;border:none;color:var(--t);font:inherit;font-size:12px;padding:7px 9px;resize:none;outline:none;overflow:hidden;line-height:1.35}
+  td textarea:focus{background:rgba(79,123,240,.10);box-shadow:inset 0 0 0 1px rgba(79,123,240,.4)}
+  td.wide textarea{min-width:230px}
+  td.fam textarea{min-width:110px}
+  tr:hover td{background:#1b2030}
+  .delrow{cursor:pointer;color:var(--td);font-size:14px;line-height:1}
+  .delrow:hover{color:var(--acc)}
+  .addrow-row td{background:transparent;border-right:none}
+  .addrow{margin:8px 0 0 8px;display:inline-block}
+
+  .legend{padding:10px 18px;border-top:1px solid var(--line);font-size:11px;color:var(--td);flex-shrink:0;line-height:1.5}
+  .legend b{color:var(--tm)} .legend code{color:var(--teal);font-family:ui-monospace,Menlo,monospace}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+  <header>
+    <h1>🎛 <b>Каталог комбинаторики</b> · Ф.7 <span class="hint">трейты-джокеры и синергии — редактор данных</span></h1>
+    <div class="tabs">
+      <div class="tab on" data-t="traits" onclick="switchTab('traits')">Трейты</div>
+      <div class="tab" data-t="synergies" onclick="switchTab('synergies')">Синергии</div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button class="btn pri" onclick="addRow()">＋ Строка</button>
+    <button class="btn" onclick="addCol()">＋ Колонка</button>
+    <span class="sp"></span>
+    <span class="saved" id="saved">✓ сохранено</span>
+    <span class="cnt" id="cnt"></span>
+    <button class="btn gh" onclick="importJSON()">Импорт JSON</button>
+    <button class="btn gh" onclick="exportCSV()">Экспорт CSV</button>
+    <button class="btn" onclick="exportJSON()">Экспорт JSON</button>
+    <button class="btn gh" title="сбросить к стартовому каталогу" onclick="resetSeed()">↺ Сброс</button>
+    <input type="file" id="file" accept=".json" onchange="onFile(event)">
+  </div>
+
+  <div class="grid-wrap"><div id="grid"></div></div>
+
+  <div class="legend">
+    <b>Как пользоваться:</b> клик в ячейку — правишь; <b>＋ Строка</b> — новый трейт/синергия; <b>＋ Колонка</b> — новое поле схемы; ✕ у номера строки — удалить; заголовок колонки: ✎ переименовать, ✕ удалить. Автосохранение в браузере + <b>Экспорт JSON</b> = данные для игры (<code>STAFF_TRAITS</code> / <code>TEAM_SYNERGIES</code>). Категории (§13): <code>скейлер · условный · триггер · синерго · эконом · мораль · риск · скаут · drawback</code>. Хуки (§14.2): <code>calcQuality · calcSpeed · calcPayout · onDeliver · onFail · onMonth · onAssign · scoutCandidate …</code>
+  </div>
+
+<script>
+// ── Стартовый каталог из §13 дизайн-дока ──
+const SEED = {
+  traits: {
+    cols: ['id','name','icon','family','pool','weight','rarity','hooks','effect','desc'],
+    rows: [
+      ['perfectionist','Перфекционист','🎯','скейлер','A3','3','common','onDeliver','qAdd:+1 per own delivery','+1 Q за каждую свою сдачу — растёт весь ран'],
+      ['marathoner','Марафонец','🚀','скейлер','A3','3','common','calcSpeed','speedMult +5% per month on project','+5% скорости за каждый месяц на одном проекте'],
+      ['niche','Нишевый','🏆','условный','A1','3','common','calcQuality','qMult ×1.5 if projectTier>=3','×1.5 качество на проектах T3+'],
+      ['soloist','Одиночка','⚡','условный','A1','2','uncommon','calcSpeed','speedMult +40% if soloOnProject','+40% скорость, если один на проекте'],
+      ['mentor','Ментор','🎓','триггер','A2','3','common','onDeliver','qAdd:+2 to jr on team','при сдаче — +2 Q всем джунам в команде'],
+      ['antifragile','Антихрупкий','🛡','триггер','A2','2','uncommon','onFail','moodAdd:+15 team','при провале проекта — мораль команды +15'],
+      ['teamlead','Тимлид','🧩','синерго','A1','3','common','calcQuality:project','qAdd +2 per other developer on project','+2 Q за каждого другого разработчика на ЭТОМ проекте'],
+      ['community','Комьюнити','📡','синерго','B1','2','common','scoutCandidate','leadAdd +1 per SMM in staff','+1 лид при скаутинге за каждого SMM в штате'],
+      ['shark','Акула','🦈','эконом','B2','2','uncommon','onSign','prepayBonus +25%','аванс-шанс +25%'],
+      ['lean','Бережливый','💰','эконом','A1','2','common','calcUpkeep','upkeepMult −15% if teamMood>80','−15% ФОТ, если мораль команды >80'],
+      ['hr_soul','HR-душа','💚','мораль','A3','2','uncommon','moodTick','moodAdd +N/mo team (enabler)','+мораль/мес всей команде — снимает потолок размера'],
+      ['star','Звезда','🌟','drawback','A5','1','rare','calcQuality;moodTick','×2 own; −10 mood others','×2 личный вклад, но −10 мораль остальным (эго)'],
+    ]
+  },
+  synergies: {
+    cols: ['id','name','scope','when','do','desc'],
+    rows: [
+      ['design_boutique','Дизайн-бутик','staff','countRoleInStaff designer>=3','payoutMult +15% if projectType=branding','3+ дизайнера → +15% выплата на брендинг, слабее на тех'],
+      ['product_team','Продуктовая команда','staff','has designer & developer & (smm|copy)','qMult bonus on projectTier>=4','фулл-стек покрытие → бонус к качеству на T4+'],
+      ['junior_rush','Джун-раш','staff','count jr>=3 & has mentor','junior quality growth ×2','все джуны + Ментор → менторство ускоряет рост качества'],
+      ['senior_boutique','Сеньор-бутик','staff','all grade=sr','payoutMult premium; fewer projects','все сеньоры → мало проектов, но премиальные ×выплата'],
+      ['mood_engine','Мораль-движок','staff','has HR-trait','teamSizeCap +N','HR держит большую команду счастливой → +потолок размера (энейблер)'],
+      ['teamlead_local','Локальная: Тимлид','project','teamlead + developers on project','qAdd +2 per developer on project','расстановка: Тимлид + N разрабов на одном проекте → +2 Q за каждого'],
+    ]
+  }
+};
+
+const LS = 'bt_f7_traits_catalog_v1';
+let DB = load();
+let tab = 'traits';
+
+function load(){
+  try{ const raw = localStorage.getItem(LS); if(raw) return JSON.parse(raw); }catch(e){}
+  return JSON.parse(JSON.stringify(SEED));
+}
+function save(){
+  try{ localStorage.setItem(LS, JSON.stringify(DB)); }catch(e){}
+  const s=document.getElementById('saved'); s.classList.add('show'); clearTimeout(window._st); window._st=setTimeout(()=>s.classList.remove('show'),1200);
+}
+function cur(){ return DB[tab]; }
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const WIDE = new Set(['desc','effect','when','do']);
+const FAM  = new Set(['family','scope','hooks']);
+
+function render(){
+  const c = cur();
+  let h = '<table><thead><tr><th class="rowh">#</th>';
+  c.cols.forEach((col,ci)=>{
+    h += `<th>${esc(col)}<span class="colact"><span title="переименовать" onclick="renCol(${ci})">✎</span><span title="удалить колонку" onclick="delCol(${ci})">✕</span></span></th>`;
+  });
+  h += '</tr></thead><tbody>';
+  c.rows.forEach((row,ri)=>{
+    h += `<tr><td class="rowh">${ri+1}<br><span class="delrow" title="удалить строку" onclick="delRow(${ri})">✕</span></td>`;
+    c.cols.forEach((col,ci)=>{
+      const cls = WIDE.has(col)?'wide':(FAM.has(col)?'fam':'');
+      h += `<td class="${cls}"><textarea rows="1" data-r="${ri}" data-c="${ci}" oninput="onEdit(this)">${esc(row[ci])}</textarea></td>`;
+    });
+    h += '</tr>';
+  });
+  h += `</tbody></table><button class="btn addrow" onclick="addRow()">＋ Строка</button>`;
+  document.getElementById('grid').innerHTML = h;
+  document.getElementById('cnt').textContent = `${tab==='traits'?'трейтов':'синергий'}: ${c.rows.length} · колонок: ${c.cols.length}`;
+  // авто-высота
+  document.querySelectorAll('#grid textarea').forEach(autoGrow);
+}
+function autoGrow(t){ t.style.height='auto'; t.style.height=(t.scrollHeight)+'px'; }
+
+function onEdit(t){
+  const r=+t.dataset.r, ci=+t.dataset.c;
+  cur().rows[r][ci] = t.value;
+  autoGrow(t); save();
+}
+function addRow(){ const c=cur(); c.rows.push(c.cols.map(()=> '')); save(); render(); }
+function delRow(ri){ if(!confirm('Удалить строку '+(ri+1)+'?'))return; cur().rows.splice(ri,1); save(); render(); }
+function addCol(){
+  const name = prompt('Название новой колонки (поля):','');
+  if(!name) return; const c=cur();
+  c.cols.push(name); c.rows.forEach(r=>r.push('')); save(); render();
+}
+function renCol(ci){ const c=cur(); const n=prompt('Переименовать колонку:',c.cols[ci]); if(!n)return; c.cols[ci]=n; save(); render(); }
+function delCol(ci){ const c=cur(); if(c.cols.length<=1){alert('Нужна хотя бы одна колонка');return;} if(!confirm('Удалить колонку «'+c.cols[ci]+'» со всеми значениями?'))return; c.cols.splice(ci,1); c.rows.forEach(r=>r.splice(ci,1)); save(); render(); }
+
+function switchTab(t){ tab=t; document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('on',el.dataset.t===t)); render(); }
+
+// ── Экспорт/импорт ──
+function rowsToObjects(sec){ return sec.rows.map(r=>{ const o={}; sec.cols.forEach((c,i)=>o[c]=r[i]); return o; }); }
+function download(name, text, type){ const b=new Blob([text],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
+function exportJSON(){
+  const out = { STAFF_TRAITS: rowsToObjects(DB.traits), TEAM_SYNERGIES: rowsToObjects(DB.synergies) };
+  download('f7_catalog.json', JSON.stringify(out,null,2), 'application/json');
+}
+function exportCSV(){
+  const sec=cur(); const q=s=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
+  const lines=[sec.cols.map(q).join(',')].concat(sec.rows.map(r=>r.map(q).join(',')));
+  download((tab==='traits'?'traits':'synergies')+'.csv', '﻿'+lines.join('\r\n'), 'text/csv');
+}
+function importJSON(){ document.getElementById('file').click(); }
+function onFile(e){
+  const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+  rd.onload=()=>{ try{
+    const j=JSON.parse(rd.result);
+    // принимаем и формат редактора {traits,synergies}, и игровой {STAFF_TRAITS,TEAM_SYNERGIES}
+    if(j.traits&&j.synergies){ DB=j; }
+    else if(j.STAFF_TRAITS||j.TEAM_SYNERGIES){ DB={ traits:objsToSec(j.STAFF_TRAITS||[]), synergies:objsToSec(j.TEAM_SYNERGIES||[]) }; }
+    else { alert('Не распознал формат JSON'); return; }
+    save(); render(); alert('Импортировано.');
+  }catch(err){ alert('Ошибка JSON: '+err.message); } };
+  rd.readAsText(f); e.target.value='';
+}
+function objsToSec(arr){ const cols=[]; arr.forEach(o=>Object.keys(o).forEach(k=>{if(!cols.includes(k))cols.push(k);})); return { cols, rows: arr.map(o=>cols.map(c=>o[c]!=null?o[c]:'')) }; }
+function resetSeed(){ if(!confirm('Сбросить каталог к стартовому (§13)? Текущие правки потеряются.'))return; DB=JSON.parse(JSON.stringify(SEED)); save(); render(); }
+
+render();
+</script>
+</body>
+</html>
