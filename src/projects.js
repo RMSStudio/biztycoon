@@ -122,6 +122,23 @@ const Projects = (() => {
     let chain = [...(CHAIN_PROFILES[profile] || CHAIN_PROFILES.standard)];
     // Юридика — только если требуется проектом или в штате есть юрист
     if (!needLegal) chain = chain.filter(p => p !== 'legal');
+    // Ф.7: гейты режима «Rogue-lite» (вне режима gate→true, ничего не режет).
+    // Голый тир-0 = «подписать → одна work-фаза → сдать».
+    const _u = (typeof isModuleUnlocked === 'function') ? isModuleUnlocked : null;
+    if (_u) {
+      if (!_u('nego')) chain = chain.filter(p => p !== 'proposal' && p !== 'negotiation');
+      if (!_u('life')) {
+        chain = chain.filter(p => p !== 'brief' && p !== 'planning' && p !== 'legal' && p !== 'review');
+        // оставить ровно одну work-фазу
+        let seenWork = false;
+        chain = chain.filter(p => {
+          if (p.startsWith('work_')) { if (seenWork) return false; seenWork = true; }
+          return true;
+        }).map(p => (p.startsWith('work_') ? 'work_0' : p));
+        if (!chain.some(p => p.startsWith('work_'))) chain.unshift('work_0');
+        if (!chain.includes('delivery')) chain.push('delivery');
+      }
+    }
     return chain;
   }
 

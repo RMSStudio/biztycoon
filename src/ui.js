@@ -2066,6 +2066,11 @@ function _aiSend() {
 //  PERK TREE MODAL
 // ══════════════════════════════════════════════════════
 function openPerkModal() {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('tree')) {
+    if (typeof notify === 'function') notify('🔒 Древо перков заперто — открой его в Дереве открытий', 'error');
+    return;
+  }
   // Контент уже актуален (renderGame обновляет g-upgrades-list при каждом тике)
   document.getElementById('perk-modal')?.classList.add('active');
 }

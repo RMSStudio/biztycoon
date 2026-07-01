@@ -17,7 +17,13 @@
 - **Скаутинг проектов** (`scout`): `doScouting` (engine).
 - **Живой рынок** (`market`): `showMarketModal` (competitors + livingmarket).
 - **Поглощения M&A** (`mna`): `openAcquire` (competitors), `acquireCompetitor` (livingmarket → `{ok:false,reason:'locked'}`).
-Все через `typeof isModuleUnlocked==='function'` — вне режима/в sim-тестах не срабатывают. Ещё под гейт голому тир-0 (следующим): lifecycle-фазы, портфолио, древо перков, доли, нейросеть/сезоны/директор.
+- **Lifecycle-фазы** (`life`): `buildPhaseChain` (projects) — без модуля тир-0 получает минимальную цепочку `['work_0','delivery']` (подписать→одна work-фаза→сдать); с открытым — полная. `nego` дополнительно убирает КП/переговоры (`proposal`/`negotiation`).
+- **Переговоры/переговорщик** (`nego`): `delegateSign` (engine).
+- **Портфолио** (`port`): `getPortfolioMultiplier`→1 без модуля.
+- **Древо перков** (`tree`): `openPerkModal` (ui).
+- **Директор давления** (`director`): `_directorTick` спит без модуля.
+Все через `typeof isModuleUnlocked==='function'` — вне режима/в sim-тестах не срабатывают. Проверено на dist: тир-0 полностью голый, цепочка проекта `['work_0','delivery']`, открытие модулей возвращает полное поведение.
+Осталось (не критично для тир-0): сезоны (`getActiveSeason` null-небезопасен → нужен «нейтральный сезон»), нейросеть/саббренды/доли (точки входа/транзитивно через market·mna).
 
 **Интеграция:** `src/unlocks.js` подключён в `index.html`, `index-v2.html`, `build/build.js` (инлайн в dist).
 

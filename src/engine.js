@@ -209,7 +209,7 @@ function getSpeed(g=G) {
   return Math.max(0.2, 1.0 + staffBonus + (g.speedUpgrades||0) + loanDebuff + specBonus + spec2Bonus + seasonMod);
 }
 // +0.4% выручки за каждый балл портфолио, cap +20% при 50 баллах
-function getPortfolioMultiplier(g=G){ return 1+Math.min((g.portfolio||0)*0.004, 0.20); }
+function getPortfolioMultiplier(g=G){ if(typeof isModuleUnlocked==='function'&&!isModuleUnlocked('port'))return 1; return 1+Math.min((g.portfolio||0)*0.004, 0.20); }
 
 // Множитель прогресса от усталости команды
 function getFatigueMult(g=G) {
@@ -365,6 +365,11 @@ function bestFreeNegotiator() {
   return getNegotiators().slice().sort((a, b) => (order[b.grade] || 0) - (order[a.grade] || 0))[0] || null;
 }
 function delegateSign(pid) {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('nego')) {
+    if (typeof notify === 'function') notify('🔒 Переговоры/переговорщик заперты — открой «Переговоры» в Дереве открытий', 'error');
+    return;
+  }
   if (negotiatorFree() <= 0) { notify('Нет свободного переговорщика в этом месяце', 'error'); return; }
   const neg = bestFreeNegotiator();
   if (!neg) { notify('Нет переговорщика в штате', 'error'); return; }
@@ -849,6 +854,8 @@ function _rollCrisis(g, pressure, diff) {
 // Месячный тик директора. Вызывается из advanceMonth после расходов.
 function _directorTick(g = G) {
   if (!g) return;
+  // Ф.7: гейт режима «Rogue-lite» — без модуля 'director' динамическая сложность спит
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('director')) return;
   const d = _directorState(g);
   const diff = _directorDifficulty();
   const cap = DIRECTOR_COMFORT_CAP[diff] ?? 70;
