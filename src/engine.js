@@ -955,6 +955,11 @@ function _generateOffers() {
 }
 
 function doScouting() {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('scout')) {
+    if (typeof notify === 'function') notify('🔒 Систематический скаутинг заперт — открой «Скаутинг» в Дереве открытий', 'error');
+    return;
+  }
   // Если пул уже есть — просто переоткрываем модал без затрат дней
   if (G.scoutPool && G.scoutPool.length>0) {
     showScoutResults(G.scoutPool);

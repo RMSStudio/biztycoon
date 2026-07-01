@@ -1491,6 +1491,8 @@
   // opts (необяз., из ветвистого процесса поглощения): { costMult, yieldMult, extraDays }
   //   — итог переговоров/дью-дилидженс. По умолчанию нейтральны (прямой вызов = как раньше).
   function acquireCompetitor(competitorId, mode, opts) {
+    // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('mna')) return { ok: false, reason: 'locked' };
     if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
     const stage = _gateStage();   // dev-тумблер открывает поглощения без стадии «Сеть»
     if (stage < 3) return { ok: false, reason: 'stage_required', stageReq: 3 };
@@ -1987,6 +1989,11 @@
   // ── UI: модал «Рынок» ─────────────────────────────────────────────────
 
   function showMarketModal() {
+    // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('market')) {
+      if (typeof notify === 'function') notify('🔒 Живой рынок заперт — открой его в Дереве открытий', 'error');
+      return;
+    }
     if (typeof document === 'undefined') return;
     let modal = document.getElementById('market-modal');
     if (!modal) {

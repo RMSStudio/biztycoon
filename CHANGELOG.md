@@ -12,7 +12,12 @@
 
 **Режим `unlocks` («Rogue-lite»):** регистрация в `dlc/loader.js` (тумблер на mode-screen) + `dlc/unlocks/{manifest.json,unlocks.js}` (координатор-маркер). Реальная логика — `src/unlocks.js` (грузится `<script>`, читает localStorage живьём — тумблер без перезагрузки).
 
-**Демонстративный гейт (найм):** `hireStaff` (engine), `scoutCandidates`/`hireCandidate`/`openStaffScoutModal` (staff) — при активном режиме и закрытом модуле `hire` блокируются с подсказкой «открой в Дереве открытий». Через `typeof isModuleUnlocked==='function'` — вне режима/в sim-тестах не срабатывает.
+**Гейты систем (§11.7 шаг 2):** при активном режиме и закрытом модуле блокируются с подсказкой «открой в Дереве открытий»:
+- **Найм** (`hire`): `hireStaff` (engine), `scoutCandidates`/`hireCandidate`/`openStaffScoutModal` (staff).
+- **Скаутинг проектов** (`scout`): `doScouting` (engine).
+- **Живой рынок** (`market`): `showMarketModal` (competitors + livingmarket).
+- **Поглощения M&A** (`mna`): `openAcquire` (competitors), `acquireCompetitor` (livingmarket → `{ok:false,reason:'locked'}`).
+Все через `typeof isModuleUnlocked==='function'` — вне режима/в sim-тестах не срабатывают. Ещё под гейт голому тир-0 (следующим): lifecycle-фазы, портфолио, древо перков, доли, нейросеть/сезоны/директор.
 
 **Интеграция:** `src/unlocks.js` подключён в `index.html`, `index-v2.html`, `build/build.js` (инлайн в dist).
 

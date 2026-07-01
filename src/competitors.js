@@ -274,6 +274,11 @@
   // ── UI: модал «🏆 Рынок» ─────────────────────────────────────────────
 
   function showMarketModal() {
+    // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('market')) {
+      if (typeof notify === 'function') notify('🔒 Живой рынок заперт — открой его в Дереве открытий', 'error');
+      return;
+    }
     if (typeof document === 'undefined') return;
     let m = document.getElementById('cmp-market-modal');
     if (!m) {
@@ -473,6 +478,11 @@
 
   let _lastAcquireId = null;
   function openAcquire(id) {
+    // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('mna')) {
+      if (typeof notify === 'function') notify('🔒 Поглощения заперты — открой «Поглощения M&A» в Дереве открытий', 'error');
+      return;
+    }
     const lm   = _LM();
     const comp = (G.market && G.market.competitors || []).find(c => c.id === id);
     if (!comp || !lm) return;
