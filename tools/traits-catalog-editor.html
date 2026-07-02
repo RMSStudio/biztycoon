@@ -2,204 +2,803 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>BizTycoon · Ф.7 — Редактор каталога комбинаторики</title>
+<title>BizTycoon · Ф.7 — Редактор каталога комбинаторики v2</title>
 <style>
   :root{
-    --bg:#0b0d13; --panel:#12151f; --panel2:#171b28; --line:rgba(255,255,255,.09);
+    --bg:#0b0d13; --panel:#12151f; --panel2:#171b28; --line:rgba(255,255,255,.08);
     --t:#e2e7f3; --tm:#8593ad; --td:#4a5470;
-    --acc:#e1456a; --teal:#17b8a6; --blue:#4f7bf0; --purple:#9a6cf0; --amber:#e8a23a; --green:#2fbd6e;
+    --acc:#e1456a; --teal:#17b8a6; --blue:#4f7bf0; --purple:#9a6cf0; --amber:#e8a23a; --green:#2fbd6e; --red:#e8524f;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--t);font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;font-size:13px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-  header{padding:12px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-shrink:0}
-  header h1{font-size:15px;font-weight:800} header h1 b{color:var(--acc)}
-  header .hint{font-size:11px;color:var(--td);margin-left:6px}
-  .tabs{display:flex;gap:4px;margin-left:auto}
-  .tab{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid transparent;color:var(--tm);background:transparent}
-  .tab.on{background:var(--panel2);color:var(--t);border-color:var(--line)}
 
-  .toolbar{padding:9px 18px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);flex-shrink:0;flex-wrap:wrap}
+  header{padding:11px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-shrink:0;flex-wrap:wrap}
+  header h1{font-size:15px;font-weight:800} header h1 b{color:var(--acc)}
+  .tabs{display:flex;gap:4px}
+  .tab{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid transparent;color:var(--tm)}
+  .tab.on{background:var(--panel2);color:var(--t);border-color:var(--line)}
+  .sp{flex:1}
   .btn{font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--t)}
-  .btn:hover{border-color:rgba(255,255,255,.22)}
+  .btn:hover{border-color:rgba(255,255,255,.24)}
   .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
-  .btn.gh{background:transparent}
-  .toolbar .sp{flex:1}
-  .toolbar .cnt{font-size:11px;color:var(--td)}
+  .btn.gh{background:transparent;color:var(--tm)}
   .saved{font-size:11px;color:var(--green);opacity:0;transition:opacity .3s}
   .saved.show{opacity:1}
-
-  .grid-wrap{flex:1;overflow:auto;padding:0 0 40px}
-  table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
-  th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);vertical-align:top}
-  thead th{position:sticky;top:0;z-index:3;background:var(--panel);padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;color:var(--tm);text-align:left;white-space:nowrap}
-  thead th .colact{display:inline-flex;gap:5px;margin-left:6px;opacity:.5}
-  thead th .colact span{cursor:pointer} thead th .colact span:hover{opacity:1;color:var(--acc)}
-  th.rowh,td.rowh{position:sticky;left:0;z-index:2;background:var(--panel);text-align:center;width:40px;min-width:40px;color:var(--td);font-weight:700;font-size:11px}
-  thead th.rowh{z-index:4}
-  td{background:var(--panel2);padding:0}
-  td textarea{width:100%;min-width:120px;background:transparent;border:none;color:var(--t);font:inherit;font-size:12px;padding:7px 9px;resize:none;outline:none;overflow:hidden;line-height:1.35}
-  td textarea:focus{background:rgba(79,123,240,.10);box-shadow:inset 0 0 0 1px rgba(79,123,240,.4)}
-  td.wide textarea{min-width:230px}
-  td.fam textarea{min-width:110px}
-  tr:hover td{background:#1b2030}
-  .delrow{cursor:pointer;color:var(--td);font-size:14px;line-height:1}
-  .delrow:hover{color:var(--acc)}
-  .addrow-row td{background:transparent;border-right:none}
-  .addrow{margin:8px 0 0 8px;display:inline-block}
-
-  .legend{padding:10px 18px;border-top:1px solid var(--line);font-size:11px;color:var(--td);flex-shrink:0;line-height:1.5}
-  .legend b{color:var(--tm)} .legend code{color:var(--teal);font-family:ui-monospace,Menlo,monospace}
   input[type=file]{display:none}
+
+  .filters{padding:8px 18px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);flex-shrink:0;flex-wrap:wrap}
+  .filters input[type=text]{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--t);font:inherit;font-size:12px;padding:6px 10px;width:200px;outline:none}
+  .fchip{font-size:10.5px;font-weight:800;padding:4px 10px;border-radius:7px;cursor:pointer;border:1px solid var(--line);color:var(--tm);background:transparent}
+  .fchip.on{color:#fff;border-color:transparent}
+  .filters .cnt{margin-left:auto;font-size:11px;color:var(--td)}
+
+  main{flex:1;display:flex;overflow:hidden}
+  .cat{flex:1;overflow-y:auto;padding:14px 16px 60px}
+  .sec-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:var(--tm);margin:16px 2px 9px;display:flex;align-items:center;gap:8px}
+  .sec-h:first-child{margin-top:0}
+  .sec-h .n{color:var(--td);font-weight:700}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:9px}
+
+  .card{position:relative;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:12px;padding:10px 11px 9px;cursor:pointer;overflow:hidden;transition:transform .1s,border-color .1s}
+  .card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--fc,var(--teal))}
+  .card:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.2)}
+  .card.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+  .card .top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .card .ico{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+  .card .nm{font-size:12.5px;font-weight:800;line-height:1.1}
+  .card .idl{font-size:9px;color:var(--td);font-family:ui-monospace,Menlo,monospace;margin-top:1px}
+  .card .ftag{margin-left:auto;font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:5px;text-transform:uppercase;flex-shrink:0;background:color-mix(in srgb,var(--fc) 14%,transparent);color:var(--fc)}
+  .card .formula{font-size:10.5px;color:var(--t);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:5px 7px;margin-bottom:5px;line-height:1.35}
+  .card .formula b{color:var(--amber);font-weight:700}
+  .card .desc{font-size:10px;color:var(--tm);line-height:1.35}
+  .card .meta{display:flex;gap:6px;margin-top:6px;font-size:9px;color:var(--td);font-weight:700}
+  .card .meta .pool{color:var(--blue)}
+  .card .warn{position:absolute;top:7px;right:7px;font-size:11px}
+
+  /* ── редактор-панель ── */
+  aside{width:480px;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;flex-shrink:0;display:none}
+  aside.open{display:block}
+  .ed{padding:14px 16px 60px}
+  .ed h2{font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .ed h2 .x{margin-left:auto;cursor:pointer;color:var(--tm);font-size:15px}
+  .ed h2 .x:hover{color:var(--acc)}
+  .step{border:1px solid var(--line);border-radius:11px;padding:10px 11px;margin-bottom:10px;background:var(--panel2)}
+  .step>.st{font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:7px}
+  .st.kto{color:var(--teal)} .st.kogda{color:var(--blue)} .st.esli{color:var(--amber)} .st.to{color:var(--green)} .st.tekst{color:var(--purple)}
+  .frow{display:flex;gap:7px;margin-bottom:7px;align-items:center;flex-wrap:wrap}
+  .frow label{font-size:10px;color:var(--tm);font-weight:700;width:64px;flex-shrink:0}
+  .frow input,.frow select,.frow textarea{background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--t);font:inherit;font-size:12px;padding:5px 8px;outline:none}
+  .frow input:focus,.frow select:focus,.frow textarea:focus{border-color:var(--blue)}
+  .frow input.small{width:64px} .frow input.grow,.frow textarea{flex:1;min-width:120px}
+  .frow select{cursor:pointer}
+  .rule{border:1px dashed rgba(255,255,255,.14);border-radius:9px;padding:8px 9px;margin-bottom:8px}
+  .rule .rh{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .rule .rh .del{margin-left:auto;cursor:pointer;color:var(--td)} .rule .rh .del:hover{color:var(--acc)}
+  .mini{font-size:10px;color:var(--td);font-weight:700;margin:4px 0 3px}
+  .condrow,.effrow{display:flex;gap:5px;margin-bottom:5px;align-items:center;flex-wrap:wrap}
+  .condrow select,.effrow select{font-size:11px;padding:4px 6px;max-width:165px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--t);cursor:pointer}
+  .condrow input,.effrow input{font-size:11px;padding:4px 7px;flex:1;min-width:60px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--t);outline:none}
+  .condrow .del,.effrow .del{cursor:pointer;color:var(--td);font-size:13px;flex-shrink:0} .condrow .del:hover,.effrow .del:hover{color:var(--acc)}
+  .addmini{font-size:10.5px;font-weight:700;color:var(--blue);cursor:pointer;display:inline-block;margin-top:2px}
+  .addmini:hover{text-decoration:underline}
+  .preview{background:rgba(232,162,58,.07);border:1px solid rgba(232,162,58,.3);border-radius:9px;padding:8px 10px;font-size:11px;line-height:1.4;margin-bottom:10px}
+  .preview b{color:var(--amber)}
+  .probs{background:rgba(232,82,79,.08);border:1px solid rgba(232,82,79,.35);border-radius:9px;padding:8px 10px;font-size:10.5px;color:#f2a3a1;line-height:1.5;margin-bottom:10px}
+  .edbtns{display:flex;gap:7px;margin-top:4px;flex-wrap:wrap}
+  .hintbox{font-size:10px;color:var(--td);line-height:1.45;margin-top:3px}
+  .hintbox code{color:var(--teal);font-family:ui-monospace,Menlo,monospace;font-size:9.5px}
+
+  details.ref{margin:0 18px;border-bottom:1px solid var(--line);flex-shrink:0}
+  details.ref summary{cursor:pointer;font-size:11px;color:var(--tm);font-weight:700;padding:7px 0;list-style:none}
+  details.ref summary::before{content:'📖 '}
+  .refgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;padding:4px 0 12px;font-size:10.5px;color:var(--tm);line-height:1.5}
+  .refgrid b{color:var(--t);display:block;margin-bottom:3px;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+  .refgrid code{color:var(--teal);font-family:ui-monospace,Menlo,monospace;font-size:9.5px}
 </style>
 </head>
 <body>
   <header>
-    <h1>🎛 <b>Каталог комбинаторики</b> · Ф.7 <span class="hint">трейты-джокеры и синергии — редактор данных</span></h1>
+    <h1>🎛 <b>Каталог комбинаторики</b> · Ф.7 v2</h1>
     <div class="tabs">
-      <div class="tab on" data-t="traits" onclick="switchTab('traits')">Трейты</div>
+      <div class="tab on" data-t="traits" onclick="switchTab('traits')">Трейты-джокеры</div>
       <div class="tab" data-t="synergies" onclick="switchTab('synergies')">Синергии</div>
     </div>
-  </header>
-
-  <div class="toolbar">
-    <button class="btn pri" onclick="addRow()">＋ Строка</button>
-    <button class="btn" onclick="addCol()">＋ Колонка</button>
     <span class="sp"></span>
     <span class="saved" id="saved">✓ сохранено</span>
-    <span class="cnt" id="cnt"></span>
-    <button class="btn gh" onclick="importJSON()">Импорт JSON</button>
-    <button class="btn gh" onclick="exportCSV()">Экспорт CSV</button>
-    <button class="btn" onclick="exportJSON()">Экспорт JSON</button>
-    <button class="btn gh" title="сбросить к стартовому каталогу" onclick="resetSeed()">↺ Сброс</button>
+    <button class="btn pri" onclick="newItem()">＋ Новый</button>
+    <button class="btn" title="скачать готовые массивы для вставки в src/traits-data.js" onclick="exportJS()">Экспорт → traits-data.js</button>
+    <button class="btn gh" onclick="exportJSON()">JSON</button>
+    <button class="btn gh" onclick="importJSON()">Импорт</button>
+    <button class="btn gh" title="вернуть актуальный игровой каталог v3.91" onclick="resetSeed()">↺ Сброс к игре</button>
     <input type="file" id="file" accept=".json" onchange="onFile(event)">
-  </div>
+  </header>
 
-  <div class="grid-wrap"><div id="grid"></div></div>
+  <details class="ref">
+    <summary>Справка: формула КТО → КОГДА → ЕСЛИ → ТО (все словари)</summary>
+    <div class="refgrid" id="refgrid"></div>
+  </details>
 
-  <div class="legend">
-    <b>Как пользоваться:</b> клик в ячейку — правишь; <b>＋ Строка</b> — новый трейт/синергия; <b>＋ Колонка</b> — новое поле схемы; ✕ у номера строки — удалить; заголовок колонки: ✎ переименовать, ✕ удалить. Автосохранение в браузере + <b>Экспорт JSON</b> = данные для игры (<code>STAFF_TRAITS</code> / <code>TEAM_SYNERGIES</code>). Категории (§13): <code>скейлер · условный · триггер · синерго · эконом · мораль · риск · скаут · drawback</code>. Хуки (§14.2): <code>calcQuality · calcSpeed · calcPayout · onDeliver · onFail · onMonth · onAssign · scoutCandidate …</code>
-  </div>
+  <div class="filters" id="filters"></div>
+
+  <main>
+    <div class="cat" id="cat"></div>
+    <aside id="aside"><div class="ed" id="ed"></div></aside>
+  </main>
 
 <script>
-// ── Стартовый каталог из §13 дизайн-дока ──
-const SEED = {
-  traits: {
-    cols: ['id','name','icon','family','pool','weight','rarity','hooks','effect','desc'],
-    rows: [
-      ['perfectionist','Перфекционист','🎯','скейлер','A3','3','common','onDeliver','qAdd:+1 per own delivery','+1 Q за каждую свою сдачу — растёт весь ран'],
-      ['marathoner','Марафонец','🚀','скейлер','A3','3','common','calcSpeed','speedMult +5% per month on project','+5% скорости за каждый месяц на одном проекте'],
-      ['niche','Нишевый','🏆','условный','A1','3','common','calcQuality','qMult ×1.5 if projectTier>=3','×1.5 качество на проектах T3+'],
-      ['soloist','Одиночка','⚡','условный','A1','2','uncommon','calcSpeed','speedMult +40% if soloOnProject','+40% скорость, если один на проекте'],
-      ['mentor','Ментор','🎓','триггер','A2','3','common','onDeliver','qAdd:+2 to jr on team','при сдаче — +2 Q всем джунам в команде'],
-      ['antifragile','Антихрупкий','🛡','триггер','A2','2','uncommon','onFail','moodAdd:+15 team','при провале проекта — мораль команды +15'],
-      ['teamlead','Тимлид','🧩','синерго','A1','3','common','calcQuality:project','qAdd +2 per other developer on project','+2 Q за каждого другого разработчика на ЭТОМ проекте'],
-      ['community','Комьюнити','📡','синерго','B1','2','common','scoutCandidate','leadAdd +1 per SMM in staff','+1 лид при скаутинге за каждого SMM в штате'],
-      ['shark','Акула','🦈','эконом','B2','2','uncommon','onSign','prepayBonus +25%','аванс-шанс +25%'],
-      ['lean','Бережливый','💰','эконом','A1','2','common','calcUpkeep','upkeepMult −15% if teamMood>80','−15% ФОТ, если мораль команды >80'],
-      ['hr_soul','HR-душа','💚','мораль','A3','2','uncommon','moodTick','moodAdd +N/mo team (enabler)','+мораль/мес всей команде — снимает потолок размера'],
-      ['star','Звезда','🌟','drawback','A5','1','rare','calcQuality;moodTick','×2 own; −10 mood others','×2 личный вклад, но −10 мораль остальным (эго)'],
-    ]
-  },
-  synergies: {
-    cols: ['id','name','scope','when','do','desc'],
-    rows: [
-      ['design_boutique','Дизайн-бутик','staff','countRoleInStaff designer>=3','payoutMult +15% if projectType=branding','3+ дизайнера → +15% выплата на брендинг, слабее на тех'],
-      ['product_team','Продуктовая команда','staff','has designer & developer & (smm|copy)','qMult bonus on projectTier>=4','фулл-стек покрытие → бонус к качеству на T4+'],
-      ['junior_rush','Джун-раш','staff','count jr>=3 & has mentor','junior quality growth ×2','все джуны + Ментор → менторство ускоряет рост качества'],
-      ['senior_boutique','Сеньор-бутик','staff','all grade=sr','payoutMult premium; fewer projects','все сеньоры → мало проектов, но премиальные ×выплата'],
-      ['mood_engine','Мораль-движок','staff','has HR-trait','teamSizeCap +N','HR держит большую команду счастливой → +потолок размера (энейблер)'],
-      ['teamlead_local','Локальная: Тимлид','project','teamlead + developers on project','qAdd +2 per developer on project','расстановка: Тимлид + N разрабов на одном проекте → +2 Q за каждого'],
-    ]
-  }
+'use strict';
+// ══════════════════════════════════════════════════════════════════
+//  СЛОВАРИ (зеркало src/traits.js — новый предикат/глагол в движке →
+//  допиши сюда, редактор подхватит)
+// ══════════════════════════════════════════════════════════════════
+const FAMILIES = {
+  scaler:      { l:'Скейлер',   c:'#2fbd6e', d:'копит силу за ран (snowball)' },
+  conditional: { l:'Условный',  c:'#e8a23a', d:'бонус в конкретной ситуации' },
+  trigger:     { l:'Триггер',   c:'#e8524f', d:'разовый импульс on-event' },
+  synergy:     { l:'Синерго',   c:'#9a6cf0', d:'масштаб от других спецов' },
+  economic:    { l:'Эконом',    c:'#17b8a6', d:'сколько заработал/потратил' },
+  enabler:     { l:'Энейблер',  c:'#4f7bf0', d:'снимает лимиты (мораль/риск)' },
+  drawback:    { l:'Цена',      c:'#e8524f', d:'силён, но с минусом' },
 };
+const POOLS = {
+  A1:'Найм', A2:'Lifecycle', A3:'Портфолио', A4:'Древо перков', A5:'Саббренды',
+  B1:'Скаутинг', B2:'Переговоры', B3:'Живой рынок', B4:'Доли/акции', B5:'M&A',
+  C1:'Нейросеть', C2:'Сезоны', C3:'Директор',
+};
+const HOOKS = {
+  calcQuality:'📐 Q проекта (ежемес.)', calcSpeed:'⚡ Скорость проекта', calcPayout:'💰 Выплата при сдаче',
+  calcUpkeep:'🧾 ФОТ / мес', calcRisk:'🌡 Риск-события проекта',
+  onDeliver:'🏁 В момент сдачи', onMonth:'📅 Каждый месяц', onHire:'👥 При найме',
+  onStageUp:'📈 Смена стадии', scoutCandidate:'🔍 Кандидат в скауте', filterOffers:'📨 Пул офферов',
+};
+const PREDS = {
+  role:                   { l:'роль = {x}',                     ex:'"designer"' },
+  grade:                  { l:'грейд = {x}',                    ex:'"junior"' },
+  projectTier:            { l:'тир проекта {x}',                ex:'{"min":3}' },
+  projectType:            { l:'тип проекта = {x}',              ex:'"corp"' },
+  soloOnProject:          { l:'один на проекте',                ex:'true' },
+  sameRoleOnProject:      { l:'коллег ЕГО роли рядом {x}',      ex:'{"min":2}' },
+  countRoleOnProject:     { l:'на проекте {x}',                 ex:'{"role":"developer","min":2}' },
+  countGradeOnProject:    { l:'на проекте {x}',                 ex:'{"grade":"senior","min":2}' },
+  countRoleInStaff:       { l:'в штате {x}',                    ex:'{"role":"designer","min":3}' },
+  countGradeInStaff:      { l:'в штате {x}',                    ex:'{"grade":"junior","min":3}' },
+  distinctRolesOnProject: { l:'разных ролей на проекте {x}',    ex:'{"min":3}' },
+  teamSize:               { l:'размер штата {x}',               ex:'{"max":5}' },
+  teamMood:               { l:'мораль штата {x}',               ex:'{"min":75}' },
+  monthsOnProject:        { l:'проект идёт {x} мес',            ex:'{"min":4}' },
+  overdue:                { l:'проект ПРОСРОЧЕН',               ex:'true' },
+  onSchedule:             { l:'проект В СРОК',                  ex:'true' },
+  companyStage:           { l:'стадия компании {x}',            ex:'{"min":2}' },
+  teamHasGrade:           { l:'в команде есть грейд {x}',       ex:'"junior"' },
+  moduleOpen:             { l:'открыт узел {x}',                ex:'"market"' },
+  traitInStaff:           { l:'в штате носитель трейта {x}',    ex:'"mentor"' },
+  traitFamilyInStaff:     { l:'носителей семейства {x}',        ex:'{"family":"scaler","min":3}' },
+};
+const VERBS = {
+  qAdd:      { l:'{x} Q',                  ex:'3' },
+  qMult:     { l:'×(1+{x}) Q',             ex:'0.5' },
+  speedAdd:  { l:'{x} прогресса',          ex:'5' },
+  speedMult: { l:'{x%} скорость',          ex:'0.2' },
+  payoutAdd: { l:'{x}₽ к выплате',         ex:'15000' },
+  payoutMult:{ l:'{x%} выплата',           ex:'0.12' },
+  upkeepAdd: { l:'{x}₽ к ФОТ',             ex:'25000' },
+  upkeepMult:{ l:'{x%} ФОТ',               ex:'-0.10' },
+  riskAdd:   { l:'{x} к риску',            ex:'5' },
+  riskMult:  { l:'{x%} сила риск-событий', ex:'0.3' },
+  money:     { l:'{x}₽ в кассу',           ex:'40000' },
+  rep:       { l:'{x} репутации',          ex:'1' },
+  moodAdd:   { l:'{x} морали',             ex:'2' },
+  fatigueAdd:{ l:'{x} усталости',          ex:'-2' },
+  statAdd:   { l:'перманентно {x}',        ex:'{"stat":"qStat","v":1}' },
+};
+const TARGETS = ['', 'self', 'team', 'staff_all', 'grade:junior', 'grade:senior', 'role:designer', 'role:developer'];
+const STACK_EVENTS = ['project_delivered', 'month_advanced', 'staff_hired'];
 
-const LS = 'bt_f7_traits_catalog_v1';
+// ══════════════════════════════════════════════════════════════════
+//  SEED — АКТУАЛЬНЫЙ ИГРОВОЙ КАТАЛОГ (src/traits-data.js, v3.91)
+//  «↺ Сброс к игре» возвращает к нему. 27 трейтов + 11 синергий.
+// ══════════════════════════════════════════════════════════════════
+const SEED_TRAITS = [
+  { id:'perfectionist', name:'Перфекционист', icon:'💎', family:'scaler', pool:'A3', weight:3, rarity:'common',
+    stackPer:{ event:'project_delivered', ownProject:true, cap:10 },
+    hooks:{ calcQuality:[ { when:[], do:[ { qAdd:1, stackOf:'perfectionist' } ] } ] },
+    desc:'+1 Q проекта за каждую свою сдачу в этом ране (до +10).' },
+  { id:'collector', name:'Коллекционер', icon:'🗃', family:'scaler', pool:'A3', weight:2, rarity:'uncommon',
+    stackPer:{ event:'project_delivered', ownProject:true, cap:10 },
+    hooks:{ calcPayout:[ { when:[], do:[ { payoutAdd:4000, stackOf:'collector' } ] } ] },
+    desc:'Каждая его сдача добавляет +4К к выплатам всех следующих проектов (до +40К).' },
+  { id:'veteran', name:'Ветеран', icon:'🎖', family:'scaler', pool:'A4', weight:2, rarity:'uncommon',
+    stackPer:{ event:'month_advanced', cap:20 },
+    hooks:{ calcQuality:[ { when:[], do:[ { qAdd:0.15, stackOf:'veteran' } ] } ] },
+    desc:'Матереет со временем: +0.15 Q за каждый месяц в ране (до +3).' },
+  { id:'niche_expert', name:'Нишевый', icon:'🎯', family:'conditional', pool:'A1', weight:3, rarity:'common',
+    hooks:{ calcQuality:[ { when:[ { projectTier:{ min:3 } } ], do:[ { qMult:0.5 } ] } ] },
+    desc:'×1.5 к вкладу качества на проектах T3+.' },
+  { id:'loner', name:'Одиночка', icon:'🐺', family:'conditional', pool:'A1', weight:2, rarity:'common',
+    hooks:{ calcSpeed:[ { when:[ { soloOnProject:true } ], do:[ { speedMult:0.4 } ] } ] },
+    desc:'+40% скорость проекта, если работает на нём один.' },
+  { id:'marathoner', name:'Марафонец', icon:'🏃', family:'conditional', pool:'A2', weight:2, rarity:'common',
+    hooks:{ calcSpeed:[ { when:[ { monthsOnProject:{ min:4 } } ], do:[ { speedMult:0.2 } ] } ] },
+    desc:'+20% скорость на проектах длиннее 3 месяцев (раскачивается).' },
+  { id:'cruncher', name:'Кранчер', icon:'🔥', family:'conditional', pool:'A2', weight:2, rarity:'uncommon',
+    hooks:{ calcSpeed:[ { when:[ { overdue:true } ], do:[ { speedMult:0.25 } ] } ],
+            onMonth:  [ { when:[], do:[ { fatigueAdd:1 } ] } ] },
+    desc:'+25% скорость на просроченных проектах, но команда устаёт быстрее.' },
+  { id:'deadliner', name:'Дедлайнер', icon:'⏱', family:'conditional', pool:'B2', weight:2, rarity:'common',
+    hooks:{ calcPayout:[ { when:[ { onSchedule:true } ], do:[ { payoutMult:0.08 } ] } ] },
+    desc:'+8% выплата, если проект сдаётся без просрочки (ставка на дисциплину).' },
+  { id:'corp_wolf', name:'Корпорат-волк', icon:'🏦', family:'conditional', pool:'B3', weight:2, rarity:'uncommon',
+    hooks:{ calcPayout:[ { when:[ { projectType:'corp' } ], do:[ { payoutMult:0.12 } ] } ] },
+    desc:'Знает язык корпораций: +12% выплата на корпоративных проектах.' },
+  { id:'underdog', name:'Мастер мелочей', icon:'🐣', family:'conditional', pool:'B1', weight:2, rarity:'common',
+    hooks:{ calcSpeed:[ { when:[ { projectTier:{ max:1 } } ], do:[ { speedMult:0.35 } ] } ] },
+    desc:'+35% скорость на мелких проектах T1 (анти-Нишевый: любит конвейер).' },
+  { id:'stoic', name:'Стоик', icon:'🧘', family:'conditional', pool:'C2', weight:2, rarity:'uncommon',
+    hooks:{ calcQuality:[ { when:[ { teamMood:{ min:75 } } ], do:[ { qAdd:2 } ] } ] },
+    desc:'+2 Q его проектам, пока средняя мораль штата 75+ (нужна атмосфера).' },
+  { id:'mentor', name:'Ментор', icon:'🎓', family:'trigger', pool:'A2', weight:2, rarity:'uncommon',
+    hooks:{ onDeliver:[ { when:[ { teamHasGrade:'junior' } ], do:[ { statAdd:{ stat:'qStat', v:1 }, target:'grade:junior' } ] } ] },
+    desc:'При сдаче — все джуны команды навсегда +1 к качеству.' },
+  { id:'finisher', name:'Финишер', icon:'🏁', family:'trigger', pool:'B2', weight:2, rarity:'uncommon',
+    hooks:{ onDeliver:[ { when:[ { projectTier:{ min:3 } } ], do:[ { money:40000 } ] } ] },
+    desc:'При сдаче T3+ — разовый бонус 40 000 в кассу.' },
+  { id:'rainmaker', name:'Рейнмейкер', icon:'🌧', family:'trigger', pool:'B3', weight:2, rarity:'uncommon',
+    hooks:{ onDeliver:[ { when:[], do:[ { rep:1 } ] } ] },
+    desc:'Каждая его сдача — +1 к репутации агентства (имя на рынке).' },
+  { id:'teamlead', name:'Тимлид', icon:'🧭', family:'synergy', pool:'A1', weight:2, rarity:'uncommon',
+    hooks:{ calcQuality:[ { when:[ { countRoleOnProject:{ role:'developer', min:2 } } ], do:[ { qAdd:3 } ] } ] },
+    desc:'+3 Q проекта, если рядом на проекте 2+ разработчика.' },
+  { id:'conductor', name:'Дирижёр', icon:'🎼', family:'synergy', pool:'A5', weight:1, rarity:'rare',
+    hooks:{ calcSpeed:[ { when:[ { distinctRolesOnProject:{ min:3 } } ], do:[ { speedMult:0.15 } ] } ] },
+    desc:'+15% скорость, если на проекте 3+ разные роли (награда за диверсити).' },
+  { id:'clone_master', name:'Клон-мастер', icon:'🪞', family:'synergy', pool:'A5', weight:1, rarity:'rare',
+    hooks:{ calcSpeed:[ { when:[ { sameRoleOnProject:{ min:2 } } ], do:[ { speedMult:0.2 } ] } ] },
+    desc:'+20% скорость в моно-стеке: рядом 2+ коллеги его же роли (противоположность Дирижёру).' },
+  { id:'upseller', name:'Апсейлер', icon:'💼', family:'economic', pool:'B2', weight:2, rarity:'uncommon',
+    hooks:{ calcPayout:[ { when:[ { projectTier:{ min:2 } } ], do:[ { payoutMult:0.12 } ] } ],
+            calcRisk:  [ { when:[], do:[ { riskMult:0.3 } ] } ] },
+    desc:'+12% выплата на T2+, но риск-события бьют его проекты на 30% сильнее.' },
+  { id:'shark', name:'Акула', icon:'🦈', family:'economic', pool:'B4', weight:2, rarity:'uncommon',
+    hooks:{ calcPayout:[ { when:[], do:[ { payoutAdd:15000 } ] } ] },
+    desc:'Дожимает условия: +15К к выплате любого своего проекта.' },
+  { id:'frugal', name:'Бережливый', icon:'🌿', family:'economic', pool:'A3', weight:2, rarity:'uncommon',
+    hooks:{ calcUpkeep:[ { when:[ { teamMood:{ min:80 } } ], do:[ { upkeepMult:-0.10 } ] } ] },
+    desc:'−10% ФОТ всей студии, пока мораль 80+ (люди работают не за деньги).' },
+  { id:'discounter', name:'Дискаунтер', icon:'🏷', family:'economic', pool:'B1', weight:2, rarity:'common',
+    hooks:{ calcSpeed: [ { when:[], do:[ { speedMult:0.25 } ] } ],
+            calcPayout:[ { when:[], do:[ { payoutMult:-0.08 } ] } ] },
+    desc:'Гонит объём: +25% скорость его проектов, но −8% выплата (маржа тает).' },
+  { id:'hr_soul', name:'HR-душа', icon:'🤗', family:'enabler', pool:'A5', weight:2, rarity:'uncommon',
+    hooks:{ onMonth:[ { when:[], do:[ { moodAdd:2, target:'staff_all' } ] } ] },
+    desc:'+2 морали всей команде каждый месяц (снимает потолок размера штата).' },
+  { id:'automator', name:'Автоматизатор', icon:'🤖', family:'enabler', pool:'C1', weight:2, rarity:'uncommon',
+    hooks:{ onMonth:[ { when:[], do:[ { fatigueAdd:-2 } ] } ] },
+    desc:'Скрипты и пайплайны: −2 усталости команды каждый месяц.' },
+  { id:'insurer', name:'Страховщик', icon:'🛡', family:'enabler', pool:'C3', weight:1, rarity:'rare',
+    hooks:{ calcRisk:[ { when:[], do:[ { riskMult:-0.25 } ] } ] },
+    desc:'Риск-события бьют его проекты на 25% слабее (превращает хаос в план).' },
+  { id:'star_ego', name:'Звезда', icon:'👑', family:'drawback', pool:'B3', weight:1, rarity:'rare',
+    hooks:{ calcQuality:[ { when:[], do:[ { qAdd:5 } ] } ],
+            onMonth:    [ { when:[], do:[ { moodAdd:-1, target:'staff_all' } ] } ] },
+    desc:'+5 Q любому своему проекту, но −1 морали всем каждый месяц (эго).' },
+  { id:'burnout', name:'Выгораемый', icon:'⚡', family:'drawback', pool:'C3', weight:1, rarity:'rare',
+    hooks:{ calcSpeed:[ { when:[], do:[ { speedMult:0.3 } ] } ],
+            onMonth:  [ { when:[], do:[ { fatigueAdd:2 } ] } ] },
+    desc:'+30% скорость его проектов, но выжигает команду: +2 усталости/мес.' },
+  { id:'expensive_genius', name:'Дорогой гений', icon:'🥇', family:'drawback', pool:'B5', weight:1, rarity:'rare',
+    hooks:{ calcQuality:[ { when:[], do:[ { qAdd:6 } ] } ],
+            calcUpkeep: [ { when:[], do:[ { upkeepAdd:25000 } ] } ] },
+    desc:'+6 Q любому своему проекту, но контракт +25К/мес к ФОТ.' },
+];
+const SEED_SYNERGIES = [
+  { id:'design_boutique', name:'Дизайн-бутик', icon:'🎨', scope:'staff',
+    when:[ { countRoleInStaff:{ role:'designer', min:3 } } ], do:[ { qAdd:4 } ],
+    desc:'3+ дизайнера в штате → +4 Q всем проектам.' },
+  { id:'tech_shop', name:'Тех-шоп', icon:'💻', scope:'staff',
+    when:[ { countRoleInStaff:{ role:'developer', min:3 } } ], do:[ { speedMult:0.10 } ],
+    desc:'3+ разработчика в штате → +10% скорость всех проектов.' },
+  { id:'media_machine', name:'Медиа-машина', icon:'📡', scope:'staff',
+    when:[ { countRoleInStaff:{ role:'smm', min:3 } } ], do:[ { money:10000, on:'onMonth' } ],
+    desc:'3+ SMM в штате → медийный поток приносит +10К каждый месяц.' },
+  { id:'healthy_studio', name:'Здоровая студия', icon:'🏛', scope:'staff',
+    when:[ { countGradeInStaff:{ grade:'senior', min:1 } }, { countGradeInStaff:{ grade:'middle', min:2 } }, { countGradeInStaff:{ grade:'junior', min:3 } } ],
+    do:[ { upkeepMult:-0.05 }, { moodAdd:1, on:'onMonth', target:'staff_all' } ],
+    desc:'Пирамида 1 sr / 2+ md / 3+ jr → −5% ФОТ и +1 мораль/мес.' },
+  { id:'jun_rush', name:'Джун-раш', icon:'🌱', scope:'staff',
+    when:[ { countGradeInStaff:{ grade:'junior', min:3 } }, { traitInStaff:'mentor' } ],
+    do:[ { qAdd:3 }, { upkeepMult:-0.05 } ],
+    desc:'3+ джуна под крылом Ментора → +3 Q всем проектам и −5% ФОТ (дёшево и растёт).' },
+  { id:'boutique', name:'Бутик', icon:'🕰', scope:'staff',
+    when:[ { countGradeInStaff:{ grade:'senior', min:3 } }, { teamSize:{ max:5 } } ],
+    do:[ { payoutMult:0.12 } ],
+    desc:'3+ senior в компактном штате (≤5) → +12% выплата: редкие дорогие сдачи.' },
+  { id:'snowball', name:'Снежный ком', icon:'❄️', scope:'staff',
+    when:[ { traitFamilyInStaff:{ family:'scaler', min:3 } } ], do:[ { qAdd:2 } ],
+    desc:'3+ скейлера в штате → +2 Q всем: слаб на старте, имба к концу рана.' },
+  { id:'enterprise_ready', name:'Энтерпрайз-готовность', icon:'⚖️', scope:'staff',
+    when:[ { countRoleInStaff:{ role:'designer', min:1 } }, { countRoleInStaff:{ role:'developer', min:1 } },
+           { countRoleInStaff:{ role:'copywriter', min:1 } }, { countRoleInStaff:{ role:'lawyer', min:1 } } ],
+    do:[ { payoutMult:0.08, when:[ { projectTier:{ min:4 } } ] } ],
+    desc:'Полное покрытие + юрист → +8% выплата на крупных тендерах T4+.' },
+  { id:'product_team', name:'Продуктовая команда', icon:'🚀', scope:'project',
+    when:[ { countRoleOnProject:{ role:'designer', min:1 } }, { countRoleOnProject:{ role:'developer', min:1 } },
+           { countRoleOnProject:{ role:'copywriter', min:1 } } ],
+    do:[ { payoutMult:0.10, when:[ { projectTier:{ min:3 } } ] } ],
+    desc:'Дизайнер+разработчик+копирайтер на одном проекте → +10% выплата на T3+.' },
+  { id:'pair_review', name:'Парное ревью', icon:'🔍', scope:'project',
+    when:[ { countGradeOnProject:{ grade:'senior', min:2 } } ], do:[ { qAdd:3 } ],
+    desc:'2+ senior на одном проекте → +3 Q (ревьюят друг друга).' },
+  { id:'fire_brigade', name:'Пожарная команда', icon:'🚒', scope:'project',
+    when:[ { overdue:true }, { countRoleOnProject:{ role:'manager', min:1 } } ],
+    do:[ { speedMult:0.20 } ],
+    desc:'Менеджер на просроченном проекте → +20% скорость: антикризисный режим.' },
+];
+
+// ══════════════════════════════════════════════════════════════════
+//  Состояние
+// ══════════════════════════════════════════════════════════════════
+const LS = 'bt_f7_traits_catalog_v2';
 let DB = load();
 let tab = 'traits';
+let selIdx = -1;
+let fFam = '', fPool = '', fQ = '';
 
 function load(){
-  try{ const raw = localStorage.getItem(LS); if(raw) return JSON.parse(raw); }catch(e){}
-  return JSON.parse(JSON.stringify(SEED));
+  try{ const raw = localStorage.getItem(LS); if(raw){ const j = JSON.parse(raw); if(j.traits && j.synergies) return j; } }catch(e){}
+  return { traits: deep(SEED_TRAITS), synergies: deep(SEED_SYNERGIES) };
 }
+function deep(o){ return JSON.parse(JSON.stringify(o)); }
 function save(){
   try{ localStorage.setItem(LS, JSON.stringify(DB)); }catch(e){}
   const s=document.getElementById('saved'); s.classList.add('show'); clearTimeout(window._st); window._st=setTimeout(()=>s.classList.remove('show'),1200);
 }
-function cur(){ return DB[tab]; }
+function items(){ return DB[tab]; }
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-const WIDE = new Set(['desc','effect','when','do']);
-const FAM  = new Set(['family','scope','hooks']);
+// ══════════════════════════════════════════════════════════════════
+//  Человекочитаемая формула
+// ══════════════════════════════════════════════════════════════════
+function fmtArg(a){
+  if (a === true) return '';
+  if (typeof a === 'string') return a;
+  if (typeof a === 'number') return String(a);
+  if (a && typeof a === 'object'){
+    const parts = [];
+    if (a.role)  parts.push(a.role);
+    if (a.grade) parts.push(a.grade);
+    if (a.family) parts.push('сем. ' + a.family);
+    if (a.stat)  parts.push(a.stat + (a.v!=null?(' +' + a.v):''));
+    if (a.min != null && a.max != null) parts.push(a.min + '–' + a.max);
+    else if (a.min != null) parts.push('≥' + a.min);
+    else if (a.max != null) parts.push('≤' + a.max);
+    return parts.join(' ');
+  }
+  return JSON.stringify(a);
+}
+function fmtWhen(when){
+  if (!when || !when.length) return 'всегда';
+  return when.map(c => Object.keys(c).map(k => {
+    const p = PREDS[k];
+    const lbl = p ? p.l : k + ' {x}';
+    return lbl.replace('{x}', fmtArg(c[k])).replace(/ +/g,' ').trim();
+  }).join(' и ')).join(' и ');
+}
+function fmtVal(verb, v){
+  if (verb.endsWith('Mult')) { const pct = Math.round(v*100); return (pct>0?'+':'') + pct + '%'; }
+  if (typeof v === 'number') return (v>0?'+':'') + (Math.abs(v)>=1000 ? Math.round(v/1000)+'К' : v);
+  return fmtArg(v);
+}
+function fmtDo(dos){
+  return (dos||[]).map(op => {
+    const verb = Object.keys(op).find(k => VERBS[k]);
+    if (!verb) return '?';
+    let s = VERBS[verb].l.replace('{x%}', fmtVal(verb, op[verb])).replace('{x}', fmtVal(verb, op[verb]));
+    if (op.stackOf) s += ' × стек';
+    if (op.target)  s += ' → ' + op.target;
+    if (op.when)    s += ' (если ' + fmtWhen(op.when) + ')';
+    if (op.on)      s += ' · ' + (HOOKS[op.on]||op.on).replace(/^[^ ]+ /,'');
+    return s;
+  }).join(' · ');
+}
+function traitFormula(t){
+  const parts = [];
+  Object.keys(t.hooks||{}).forEach(h => (t.hooks[h]||[]).forEach(r => {
+    const when = fmtWhen(r.when);
+    parts.push(`<b>[${(HOOKS[h]||h).replace(/^[^ ]+ /,'')}]</b> ${when==='всегда'?'':'если ' + when + ' '}→ ${fmtDo(r.do)}`);
+  }));
+  if (t.stackPer) parts.push(`<b>[копит]</b> ${t.stackPer.event}${t.stackPer.ownProject?' (свои)':''} до ${t.stackPer.cap!=null?t.stackPer.cap:'∞'}`);
+  return parts.join('<br>') || '<i>правил нет</i>';
+}
+function synFormula(sy){
+  return `<b>[${sy.scope==='project'?'на ОДНОМ проекте':'весь штат'}]</b> если ${fmtWhen(sy.when)} → ${fmtDo(sy.do)}`;
+}
 
-function render(){
-  const c = cur();
-  let h = '<table><thead><tr><th class="rowh">#</th>';
-  c.cols.forEach((col,ci)=>{
-    h += `<th>${esc(col)}<span class="colact"><span title="переименовать" onclick="renCol(${ci})">✎</span><span title="удалить колонку" onclick="delCol(${ci})">✕</span></span></th>`;
+// ── лёгкая валидация (зеркало TraitEngine.validateCatalog) ──
+function problems(item, isSyn){
+  const errs = [];
+  if (!item.id) errs.push('нет id');
+  if (items().filter(x => x.id === item.id).length > 1) errs.push('дубль id «' + item.id + '»');
+  if (!item.name) errs.push('нет name');
+  if (!item.desc) errs.push('нет desc');
+  const checkWhen = w => (w||[]).forEach(c => Object.keys(c).forEach(k => { if (!PREDS[k]) errs.push('неизвестный предикат «' + k + '»'); }));
+  const checkDo = d => (d||[]).forEach(op => {
+    const verbs = Object.keys(op).filter(k => !['when','target','on','stackOf'].includes(k));
+    if (!verbs.some(k => VERBS[k])) errs.push('нет известного глагола: ' + verbs.join('/'));
+    checkWhen(op.when);
   });
-  h += '</tr></thead><tbody>';
-  c.rows.forEach((row,ri)=>{
-    h += `<tr><td class="rowh">${ri+1}<br><span class="delrow" title="удалить строку" onclick="delRow(${ri})">✕</span></td>`;
-    c.cols.forEach((col,ci)=>{
-      const cls = WIDE.has(col)?'wide':(FAM.has(col)?'fam':'');
-      h += `<td class="${cls}"><textarea rows="1" data-r="${ri}" data-c="${ci}" oninput="onEdit(this)">${esc(row[ci])}</textarea></td>`;
+  if (isSyn){
+    if (item.scope && !['staff','project'].includes(item.scope)) errs.push('scope не staff/project');
+    checkWhen(item.when); checkDo(item.do);
+  } else {
+    if (item.pool && !POOLS[item.pool]) errs.push('неизвестный pool «' + item.pool + '»');
+    if (item.family && !FAMILIES[item.family]) errs.push('неизвестное семейство «' + item.family + '»');
+    Object.keys(item.hooks||{}).forEach(h => {
+      if (!HOOKS[h]) errs.push('неизвестный хук «' + h + '»');
+      (item.hooks[h]||[]).forEach(r => { checkWhen(r.when); checkDo(r.do); });
     });
-    h += '</tr>';
+  }
+  return errs;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  Каталог-карточки
+// ══════════════════════════════════════════════════════════════════
+function renderFilters(){
+  const el = document.getElementById('filters');
+  let h = `<input type="text" placeholder="🔍 Поиск по имени/id/описанию" value="${esc(fQ)}" oninput="fQ=this.value;renderCat()">`;
+  if (tab === 'traits'){
+    h += Object.keys(FAMILIES).map(f =>
+      `<span class="fchip ${fFam===f?'on':''}" style="${fFam===f?'background:'+FAMILIES[f].c:''}" onclick="fFam=fFam==='${f}'?'':'${f}';renderFilters();renderCat()">${FAMILIES[f].l}</span>`).join('');
+    h += `<select class="fchip" style="background:var(--panel)" onchange="fPool=this.value;renderCat()">
+      <option value="">пул: все</option>${Object.keys(POOLS).map(p=>`<option ${fPool===p?'selected':''} value="${p}">${p} · ${POOLS[p]}</option>`).join('')}</select>`;
+  } else {
+    [['staff','Штат'],['project','Проект']].forEach(([sc,l]) => {
+      h += `<span class="fchip ${fFam===sc?'on':''}" style="${fFam===sc?'background:var(--purple)':''}" onclick="fFam=fFam==='${sc}'?'':'${sc}';renderFilters();renderCat()">${l}</span>`;
+    });
+  }
+  h += `<span class="cnt" id="cnt"></span>`;
+  el.innerHTML = h;
+}
+
+function renderCat(){
+  const el = document.getElementById('cat');
+  const list = items();
+  const q = fQ.toLowerCase();
+  const visible = list.map((it, i) => ({ it, i })).filter(({it}) => {
+    if (q && !((it.name||'') + (it.id||'') + (it.desc||'')).toLowerCase().includes(q)) return false;
+    if (tab === 'traits'){
+      if (fFam && it.family !== fFam) return false;
+      if (fPool && it.pool !== fPool) return false;
+    } else if (fFam && (it.scope||'staff') !== fFam) return false;
+    return true;
   });
-  h += `</tbody></table><button class="btn addrow" onclick="addRow()">＋ Строка</button>`;
-  document.getElementById('grid').innerHTML = h;
-  document.getElementById('cnt').textContent = `${tab==='traits'?'трейтов':'синергий'}: ${c.rows.length} · колонок: ${c.cols.length}`;
-  // авто-высота
-  document.querySelectorAll('#grid textarea').forEach(autoGrow);
-}
-function autoGrow(t){ t.style.height='auto'; t.style.height=(t.scrollHeight)+'px'; }
 
-function onEdit(t){
-  const r=+t.dataset.r, ci=+t.dataset.c;
-  cur().rows[r][ci] = t.value;
-  autoGrow(t); save();
+  let h = '';
+  if (tab === 'traits'){
+    Object.keys(FAMILIES).forEach(f => {
+      const group = visible.filter(({it}) => it.family === f);
+      if (!group.length) return;
+      h += `<div class="sec-h" style="color:${FAMILIES[f].c}">${FAMILIES[f].l} <span class="n">· ${FAMILIES[f].d} · ${group.length}</span></div><div class="cards">`;
+      group.forEach(({it, i}) => h += traitCard(it, i));
+      h += '</div>';
+    });
+    const other = visible.filter(({it}) => !FAMILIES[it.family]);
+    if (other.length){ h += `<div class="sec-h">Прочее</div><div class="cards">`; other.forEach(({it,i}) => h += traitCard(it,i)); h += '</div>'; }
+  } else {
+    [['staff','🧬 Синергии штата (глобальные)'],['project','🎯 Проект-локальные (решает расстановка)']].forEach(([sc, lbl]) => {
+      const group = visible.filter(({it}) => (it.scope||'staff') === sc);
+      if (!group.length) return;
+      h += `<div class="sec-h" style="color:var(--purple)">${lbl} <span class="n">· ${group.length}</span></div><div class="cards">`;
+      group.forEach(({it, i}) => h += synCard(it, i));
+      h += '</div>';
+    });
+  }
+  el.innerHTML = h || '<div style="color:var(--td);padding:30px;text-align:center">Ничего не найдено</div>';
+  const cnt = document.getElementById('cnt');
+  if (cnt) cnt.textContent = `${tab==='traits'?'трейтов':'синергий'}: ${list.length} (показано ${visible.length})`;
 }
-function addRow(){ const c=cur(); c.rows.push(c.cols.map(()=> '')); save(); render(); }
-function delRow(ri){ if(!confirm('Удалить строку '+(ri+1)+'?'))return; cur().rows.splice(ri,1); save(); render(); }
-function addCol(){
-  const name = prompt('Название новой колонки (поля):','');
-  if(!name) return; const c=cur();
-  c.cols.push(name); c.rows.forEach(r=>r.push('')); save(); render();
+
+function traitCard(t, i){
+  const fc = (FAMILIES[t.family]||{c:'#8593ad'}).c;
+  const errs = problems(t, false);
+  return `<div class="card ${selIdx===i?'sel':''}" style="--fc:${fc}" onclick="selectItem(${i})">
+    ${errs.length?`<span class="warn" title="${esc(errs.join('; '))}">⚠️</span>`:''}
+    <div class="top"><div class="ico">${t.icon||'✦'}</div>
+      <div><div class="nm">${esc(t.name||'—')}</div><div class="idl">${esc(t.id||'')}</div></div>
+      <span class="ftag">${(FAMILIES[t.family]||{l:t.family||'?'}).l}</span></div>
+    <div class="formula">${traitFormula(t)}</div>
+    <div class="desc">${esc(t.desc||'')}</div>
+    <div class="meta"><span class="pool">🌐 ${t.pool||'—'} ${POOLS[t.pool]||''}</span><span>вес ${t.weight!=null?t.weight:'—'}</span><span>${t.rarity||''}</span></div>
+  </div>`;
 }
-function renCol(ci){ const c=cur(); const n=prompt('Переименовать колонку:',c.cols[ci]); if(!n)return; c.cols[ci]=n; save(); render(); }
-function delCol(ci){ const c=cur(); if(c.cols.length<=1){alert('Нужна хотя бы одна колонка');return;} if(!confirm('Удалить колонку «'+c.cols[ci]+'» со всеми значениями?'))return; c.cols.splice(ci,1); c.rows.forEach(r=>r.splice(ci,1)); save(); render(); }
+function synCard(sy, i){
+  const fc = sy.scope === 'project' ? '#4f7bf0' : '#9a6cf0';
+  const errs = problems(sy, true);
+  return `<div class="card ${selIdx===i?'sel':''}" style="--fc:${fc}" onclick="selectItem(${i})">
+    ${errs.length?`<span class="warn" title="${esc(errs.join('; '))}">⚠️</span>`:''}
+    <div class="top"><div class="ico">${sy.icon||'🧬'}</div>
+      <div><div class="nm">${esc(sy.name||'—')}</div><div class="idl">${esc(sy.id||'')}</div></div>
+      <span class="ftag" style="background:${fc}22;color:${fc}">${sy.scope==='project'?'проект':'штат'}</span></div>
+    <div class="formula">${synFormula(sy)}</div>
+    <div class="desc">${esc(sy.desc||'')}</div>
+  </div>`;
+}
 
-function switchTab(t){ tab=t; document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('on',el.dataset.t===t)); render(); }
+// ══════════════════════════════════════════════════════════════════
+//  Конструктор (правая панель)
+// ══════════════════════════════════════════════════════════════════
+function selectItem(i){ selIdx = i; renderCat(); renderEd(); }
+function closeEd(){ selIdx = -1; document.getElementById('aside').classList.remove('open'); renderCat(); }
 
-// ── Экспорт/импорт ──
-function rowsToObjects(sec){ return sec.rows.map(r=>{ const o={}; sec.cols.forEach((c,i)=>o[c]=r[i]); return o; }); }
+function upd(path, value){
+  let o = items()[selIdx];
+  for (let k = 0; k < path.length - 1; k++) o = o[path[k]];
+  if (value === undefined) delete o[path[path.length-1]];
+  else o[path[path.length-1]] = value;
+  save(); renderCat(); renderEd();
+}
+function parseArg(s){
+  s = (s==null?'':String(s)).trim();
+  if (s === '' || s === 'true') return true;
+  try { return JSON.parse(s); } catch(e) {}
+  if (!isNaN(+s)) return +s;
+  return s;
+}
+function argStr(a){ return a === true ? 'true' : (typeof a === 'string' ? a : JSON.stringify(a)); }
+function pstr(path){ return esc(JSON.stringify(path)); }
+
+function whenBlock(when, basePath){
+  let h = '';
+  (when||[]).forEach((cond, ci) => {
+    const k = Object.keys(cond)[0] || '';
+    h += `<div class="condrow">
+      <select onchange='changePred(${pstr(basePath)},${ci},this.value)'>
+        <option value="">— условие —</option>
+        ${Object.keys(PREDS).map(p=>`<option ${p===k?'selected':''} value="${p}">${p}</option>`).join('')}
+      </select>
+      <input value="${esc(argStr(cond[k]))}" placeholder="${esc((PREDS[k]||{}).ex||'аргумент')}"
+        onchange='setPredArg(${pstr(basePath)},${ci},this.value)'>
+      <span class="del" onclick='delWhen(${pstr(basePath)},${ci})'>✕</span>
+    </div>`;
+  });
+  h += `<span class="addmini" onclick='addWhen(${pstr(basePath)})'>＋ условие</span>`;
+  return h;
+}
+function doBlock(dos, basePath, withOn){
+  let h = '';
+  (dos||[]).forEach((op, oi) => {
+    const verb = Object.keys(op).find(k => VERBS[k]) || '';
+    h += `<div class="effrow">
+      <select onchange='changeVerb(${pstr(basePath)},${oi},this.value)'>
+        <option value="">— эффект —</option>
+        ${Object.keys(VERBS).map(v=>`<option ${v===verb?'selected':''} value="${v}">${v}</option>`).join('')}
+      </select>
+      <input value="${esc(argStr(op[verb]))}" placeholder="${esc((VERBS[verb]||{}).ex||'значение')}"
+        onchange='setVerbVal(${pstr(basePath)},${oi},this.value)'>
+      <select title="цель (для событийных глаголов)" onchange='setOpKey(${pstr(basePath)},${oi},"target",this.value)'>
+        ${TARGETS.map(t=>`<option ${((op.target||'')===t)?'selected':''} value="${t}">${t||'цель: авто'}</option>`).join('')}
+      </select>
+      ${withOn ? `<select title="хук (для событийных глаголов)" onchange='setOpKey(${pstr(basePath)},${oi},"on",this.value)'>
+        <option value="">хук: авто</option>${Object.keys(HOOKS).map(hk=>`<option ${((op.on||'')===hk)?'selected':''} value="${hk}">${hk}</option>`).join('')}</select>` : ''}
+      <span class="del" onclick='delDo(${pstr(basePath)},${oi})'>✕</span>
+    </div>`;
+    if (op.when) h += `<div class="mini">└ доп. если:</div>` + whenBlock(op.when, basePath.concat([oi,'when']));
+    else h += `<span class="addmini" onclick='addOpWhen(${pstr(basePath)},${oi})'>＋ доп. условие на эффект</span><br>`;
+  });
+  h += `<span class="addmini" onclick='addDo(${pstr(basePath)})'>＋ эффект</span>`;
+  return h;
+}
+
+function renderEd(){
+  const aside = document.getElementById('aside');
+  if (selIdx < 0 || !items()[selIdx]){ aside.classList.remove('open'); return; }
+  aside.classList.add('open');
+  const it = items()[selIdx];
+  const isSyn = tab === 'synergies';
+  const errs = problems(it, isSyn);
+  let h = `<h2>${isSyn?'🧬 Синергия':'🃏 Трейт'} · конструктор <span class="x" onclick="closeEd()">✕</span></h2>`;
+  h += `<div class="preview">📝 <b>Формула:</b><br>${isSyn ? synFormula(it) : traitFormula(it)}</div>`;
+  if (errs.length) h += `<div class="probs">⚠️ ${errs.map(esc).join('<br>')}</div>`;
+
+  h += `<div class="step"><div class="st kto">① КТО — паспорт</div>
+    <div class="frow"><label>id</label><input class="grow" value="${esc(it.id||'')}" onchange="upd(['id'],this.value)">
+      <label style="width:auto">иконка</label><input class="small" value="${esc(it.icon||'')}" onchange="upd(['icon'],this.value)"></div>
+    <div class="frow"><label>имя</label><input class="grow" value="${esc(it.name||'')}" onchange="upd(['name'],this.value)"></div>`;
+  if (!isSyn){
+    h += `<div class="frow"><label>семейство</label><select onchange="upd(['family'],this.value)">
+        ${Object.keys(FAMILIES).map(f=>`<option ${it.family===f?'selected':''} value="${f}">${FAMILIES[f].l} — ${FAMILIES[f].d}</option>`).join('')}</select></div>
+      <div class="frow"><label>пул</label><select onchange="upd(['pool'],this.value)">
+        ${Object.keys(POOLS).map(p=>`<option ${it.pool===p?'selected':''} value="${p}">${p} · ${POOLS[p]}</option>`).join('')}</select>
+        <label style="width:auto" title="вес в рандоме скаута: больше = чаще">вес</label><input class="small" value="${it.weight!=null?it.weight:2}" onchange="upd(['weight'],+this.value||1)">
+        <select onchange="upd(['rarity'],this.value)">${['common','uncommon','rare'].map(r=>`<option ${it.rarity===r?'selected':''}>${r}</option>`).join('')}</select></div>`;
+  } else {
+    h += `<div class="frow"><label>масштаб</label><select onchange="upd(['scope'],this.value)">
+      <option ${it.scope!=='project'?'selected':''} value="staff">штат — состав всей студии</option>
+      <option ${it.scope==='project'?'selected':''} value="project">проект — состав на ОДНОМ проекте (расстановка)</option></select></div>`;
+  }
+  h += `</div>`;
+
+  if (!isSyn){
+    h += `<div class="step"><div class="st kogda">② КОГДА · ③ ЕСЛИ · ④ ТО — правила</div>`;
+    Object.keys(it.hooks||{}).forEach(hk => {
+      (it.hooks[hk]||[]).forEach((rule, ri) => {
+        h += `<div class="rule"><div class="rh">
+          <select onchange="moveRule('${hk}',${ri},this.value)">${Object.keys(HOOKS).map(x=>`<option ${x===hk?'selected':''} value="${x}">${HOOKS[x]}</option>`).join('')}</select>
+          <span class="del" onclick="delRule('${hk}',${ri})">✕ правило</span></div>
+          <div class="mini">ЕСЛИ (все условия сразу; пусто = всегда):</div>${whenBlock(rule.when, ['hooks',hk,ri,'when'])}
+          <div class="mini">ТО:</div>${doBlock(rule.do, ['hooks',hk,ri,'do'], false)}
+        </div>`;
+      });
+    });
+    h += `<span class="addmini" onclick="addRule()">＋ правило</span></div>`;
+    h += `<div class="step"><div class="st kogda">⑤ Скейлер (опц.) — накопление стека</div>`;
+    if (it.stackPer){
+      h += `<div class="frow"><label>событие</label><select onchange="upd(['stackPer','event'],this.value)">
+          ${STACK_EVENTS.map(e=>`<option ${it.stackPer.event===e?'selected':''}>${e}</option>`).join('')}</select>
+        <label style="width:auto" title="считать только события СВОИХ проектов">свои</label>
+        <input type="checkbox" ${it.stackPer.ownProject?'checked':''} onchange="upd(['stackPer','ownProject'],this.checked||undefined)">
+        <label style="width:auto">кап</label><input class="small" value="${it.stackPer.cap!=null?it.stackPer.cap:10}" onchange="upd(['stackPer','cap'],+this.value||10)">
+        <span style="cursor:pointer;color:var(--td)" onclick="upd(['stackPer'],undefined)">✕ убрать</span></div>
+      <div class="hintbox">Чтобы эффект РОС со стеком, добавь в эффект <code>stackOf:"${esc(it.id)}"</code> через JSON-режим ниже (образец — «Перфекционист»). Величина глагола умножится на накопленный счётчик.</div>`;
+    } else {
+      h += `<span class="addmini" onclick="upd(['stackPer'],{event:'project_delivered',ownProject:true,cap:10})">＋ сделать скейлером</span>`;
+    }
+    h += `</div>`;
+  } else {
+    h += `<div class="step"><div class="st esli">② ЕСЛИ — условия на состав (все сразу)</div>${whenBlock(it.when, ['when'])}</div>`;
+    h += `<div class="step"><div class="st to">③ ТО — эффекты (хук берётся из глагола; событийным можно задать хук и цель)</div>${doBlock(it.do, ['do'], true)}</div>`;
+  }
+
+  h += `<div class="step"><div class="st tekst">${isSyn?'④':'⑥'} ТЕКСТ — описание для игрока (одной строкой)</div>
+    <div class="frow"><textarea rows="2" onchange="upd(['desc'],this.value)">${esc(it.desc||'')}</textarea></div></div>`;
+
+  h += `<details><summary style="cursor:pointer;font-size:11px;color:var(--tm);font-weight:700;margin-bottom:6px">{} Править как JSON (продвинутое)</summary>
+    <div class="frow"><textarea rows="10" style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px" onchange="rawEdit(this)">${esc(JSON.stringify(it, null, 2))}</textarea></div></details>`;
+  h += `<div class="edbtns">
+    <button class="btn" onclick="dupItem()">⧉ Дублировать</button>
+    <button class="btn gh" style="color:var(--red)" onclick="delItem()">🗑 Удалить</button>
+  </div>`;
+
+  document.getElementById('ed').innerHTML = h;
+}
+
+// — операции конструктора —
+function getPath(path){ let o = items()[selIdx]; for (const k of path){ if (o == null) return null; o = o[k]; } return o; }
+function setPath(path, v){ let o = items()[selIdx]; for (let k=0;k<path.length-1;k++){ if (o[path[k]] == null) o[path[k]] = (typeof path[k+1]==='number'?[]:{}); o = o[path[k]]; } o[path[path.length-1]] = v; }
+function changePred(path, ci, name){
+  const arr = getPath(path); if (!arr) return;
+  if (!name){ arr.splice(ci,1); } else {
+    const old = arr[ci] || {};
+    const oldKey = Object.keys(old)[0];
+    arr[ci] = { [name]: (oldKey === name) ? old[oldKey] : (PREDS[name] ? parseArg(PREDS[name].ex) : true) };
+  }
+  save(); renderCat(); renderEd();
+}
+function setPredArg(path, ci, val){
+  const arr = getPath(path); if (!arr || !arr[ci]) return;
+  const k = Object.keys(arr[ci])[0]; if (!k) return;
+  arr[ci][k] = parseArg(val); save(); renderCat(); renderEd();
+}
+function addWhen(path){ let arr = getPath(path); if (!arr){ setPath(path, []); arr = getPath(path); } arr.push({ projectTier:{ min:2 } }); save(); renderCat(); renderEd(); }
+function delWhen(path, ci){ const arr = getPath(path); if (!arr) return; arr.splice(ci,1); save(); renderCat(); renderEd(); }
+function changeVerb(path, oi, name){
+  const arr = getPath(path); if (!arr) return;
+  if (!name){ arr.splice(oi,1); } else {
+    const op = arr[oi] || {};
+    const oldVerb = Object.keys(op).find(k => VERBS[k]);
+    const extras = {}; ['when','target','on','stackOf'].forEach(k => { if (op[k] != null) extras[k] = op[k]; });
+    arr[oi] = Object.assign({ [name]: (oldVerb === name) ? op[oldVerb] : parseArg(VERBS[name].ex) }, extras);
+  }
+  save(); renderCat(); renderEd();
+}
+function setVerbVal(path, oi, val){
+  const arr = getPath(path); if (!arr || !arr[oi]) return;
+  const verb = Object.keys(arr[oi]).find(k => VERBS[k]); if (!verb) return;
+  arr[oi][verb] = parseArg(val); save(); renderCat(); renderEd();
+}
+function setOpKey(path, oi, key, val){
+  const arr = getPath(path); if (!arr || !arr[oi]) return;
+  if (val) arr[oi][key] = val; else delete arr[oi][key];
+  save(); renderCat(); renderEd();
+}
+function addDo(path){ let arr = getPath(path); if (!arr){ setPath(path, []); arr = getPath(path); } arr.push({ qAdd:2 }); save(); renderCat(); renderEd(); }
+function delDo(path, oi){ const arr = getPath(path); if (!arr) return; arr.splice(oi,1); save(); renderCat(); renderEd(); }
+function addOpWhen(path, oi){ const arr = getPath(path); if (!arr || !arr[oi]) return; arr[oi].when = [{ projectTier:{ min:3 } }]; save(); renderCat(); renderEd(); }
+function addRule(){
+  const it = items()[selIdx];
+  it.hooks = it.hooks || {};
+  it.hooks.calcQuality = it.hooks.calcQuality || [];
+  it.hooks.calcQuality.push({ when:[], do:[ { qAdd:2 } ] });
+  save(); renderCat(); renderEd();
+}
+function delRule(hk, ri){
+  const it = items()[selIdx];
+  it.hooks[hk].splice(ri,1);
+  if (!it.hooks[hk].length) delete it.hooks[hk];
+  save(); renderCat(); renderEd();
+}
+function moveRule(fromHk, ri, toHk){
+  if (fromHk === toHk) return;
+  const it = items()[selIdx];
+  const rule = it.hooks[fromHk].splice(ri,1)[0];
+  if (!it.hooks[fromHk].length) delete it.hooks[fromHk];
+  (it.hooks[toHk] = it.hooks[toHk] || []).push(rule);
+  save(); renderCat(); renderEd();
+}
+function rawEdit(t){
+  try { const j = JSON.parse(t.value); items()[selIdx] = j; save(); renderCat(); renderEd(); }
+  catch(e){ alert('Ошибка JSON: ' + e.message); }
+}
+function newItem(){
+  const it = tab === 'traits'
+    ? { id:'new_trait', name:'Новый трейт', icon:'✦', family:'conditional', pool:'A1', weight:2, rarity:'common',
+        hooks:{ calcQuality:[ { when:[], do:[ { qAdd:2 } ] } ] }, desc:'Опиши эффект одной строкой.' }
+    : { id:'new_synergy', name:'Новая синергия', icon:'🧬', scope:'staff',
+        when:[ { countRoleInStaff:{ role:'designer', min:3 } } ], do:[ { qAdd:2 } ], desc:'Условие на состав → эффект.' };
+  items().push(it); selIdx = items().length - 1;
+  save(); renderCat(); renderEd();
+  document.getElementById('aside').scrollTop = 0;
+}
+function dupItem(){
+  const copy = deep(items()[selIdx]); copy.id += '_copy';
+  items().splice(selIdx+1, 0, copy); selIdx++;
+  save(); renderCat(); renderEd();
+}
+function delItem(){
+  const it = items()[selIdx];
+  if (!confirm('Удалить «' + (it.name||it.id) + '»?')) return;
+  items().splice(selIdx,1); selIdx = -1;
+  save(); renderCat(); closeEd();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  Вкладки, справка, экспорт/импорт
+// ══════════════════════════════════════════════════════════════════
+function switchTab(t){
+  tab = t; selIdx = -1; fFam=''; fPool=''; fQ='';
+  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('on',el.dataset.t===t));
+  document.getElementById('aside').classList.remove('open');
+  renderFilters(); renderCat();
+}
+function renderRef(){
+  document.getElementById('refgrid').innerHTML = `
+    <div><b>КОГДА — хуки</b>${Object.keys(HOOKS).map(h=>`<code>${h}</code> ${HOOKS[h].replace(/^[^ ]+ /,'')}`).join('<br>')}</div>
+    <div><b>ЕСЛИ — предикаты (пример аргумента)</b>${Object.keys(PREDS).map(p=>`<code>${p}</code> — ${PREDS[p].l.replace('{x}','…')} · <code>${esc(PREDS[p].ex)}</code>`).join('<br>')}</div>
+    <div><b>ТО — глаголы</b>${Object.keys(VERBS).map(v=>`<code>${v}</code> — ${VERBS[v].l.replace(/\{x%?\}/,'N')} · <code>${esc(VERBS[v].ex)}</code>`).join('<br>')}
+      <br><b style="margin-top:6px">Цели событий</b><code>self · team · staff_all · grade:junior · role:designer</code></div>
+    <div><b>Пулы (узлы «Дерева открытий»)</b>${Object.keys(POOLS).map(p=>`<code>${p}</code> ${POOLS[p]}`).join('<br>')}
+      <br><b style="margin-top:6px">Mult-значения</b>0.15 = +15%, −0.10 = −10%<br>
+      <b style="margin-top:6px">Экспорт</b>«Экспорт → traits-data.js» отдаёт готовые массивы<br>для вставки в <code>src/traits-data.js</code></div>`;
+}
 function download(name, text, type){ const b=new Blob([text],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 function exportJSON(){
-  const out = { STAFF_TRAITS: rowsToObjects(DB.traits), TEAM_SYNERGIES: rowsToObjects(DB.synergies) };
-  download('f7_catalog.json', JSON.stringify(out,null,2), 'application/json');
+  download('f7_catalog.json', JSON.stringify({ STAFF_TRAITS: DB.traits, TEAM_SYNERGIES: DB.synergies }, null, 2), 'application/json');
 }
-function exportCSV(){
-  const sec=cur(); const q=s=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
-  const lines=[sec.cols.map(q).join(',')].concat(sec.rows.map(r=>r.map(q).join(',')));
-  download((tab==='traits'?'traits':'synergies')+'.csv', '﻿'+lines.join('\r\n'), 'text/csv');
+function exportJS(){
+  const js = '// Сгенерировано редактором каталога ' + new Date().toISOString().slice(0,10) +
+    ' — вставь массивы в src/traits-data.js\n\nvar STAFF_TRAITS = ' + JSON.stringify(DB.traits, null, 2) +
+    ';\n\nvar TEAM_SYNERGIES = ' + JSON.stringify(DB.synergies, null, 2) + ';\n';
+  download('traits-data.generated.js', js, 'text/javascript');
 }
 function importJSON(){ document.getElementById('file').click(); }
 function onFile(e){
   const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
   rd.onload=()=>{ try{
     const j=JSON.parse(rd.result);
-    // принимаем и формат редактора {traits,synergies}, и игровой {STAFF_TRAITS,TEAM_SYNERGIES}
-    if(j.traits&&j.synergies){ DB=j; }
-    else if(j.STAFF_TRAITS||j.TEAM_SYNERGIES){ DB={ traits:objsToSec(j.STAFF_TRAITS||[]), synergies:objsToSec(j.TEAM_SYNERGIES||[]) }; }
+    if (j.traits && j.synergies) DB = j;
+    else if (j.STAFF_TRAITS || j.TEAM_SYNERGIES) DB = { traits: j.STAFF_TRAITS||[], synergies: j.TEAM_SYNERGIES||[] };
     else { alert('Не распознал формат JSON'); return; }
-    save(); render(); alert('Импортировано.');
+    selIdx = -1; save(); renderFilters(); renderCat(); closeEd(); alert('Импортировано.');
   }catch(err){ alert('Ошибка JSON: '+err.message); } };
   rd.readAsText(f); e.target.value='';
 }
-function objsToSec(arr){ const cols=[]; arr.forEach(o=>Object.keys(o).forEach(k=>{if(!cols.includes(k))cols.push(k);})); return { cols, rows: arr.map(o=>cols.map(c=>o[c]!=null?o[c]:'')) }; }
-function resetSeed(){ if(!confirm('Сбросить каталог к стартовому (§13)? Текущие правки потеряются.'))return; DB=JSON.parse(JSON.stringify(SEED)); save(); render(); }
+function resetSeed(){
+  if (!confirm('Вернуть актуальный игровой каталог v3.91 (27 трейтов + 11 синергий)? Текущие правки в браузере будут потеряны.')) return;
+  DB = { traits: deep(SEED_TRAITS), synergies: deep(SEED_SYNERGIES) };
+  selIdx = -1; save(); renderFilters(); renderCat(); closeEd();
+}
 
-render();
+renderRef(); renderFilters(); renderCat();
 </script>
 </body>
 </html>
