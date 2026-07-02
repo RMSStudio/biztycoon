@@ -79,6 +79,28 @@
     if ($('sb-prog-pct')) $('sb-prog-pct').textContent = legacyPct + '%';
   }
 
+  // ── Ф.7: бейджи rl-трейтов («джокеры» Rogue-lite) ─────────────────
+  // Активны только в режиме unlocks; вне его строка пустая (v2 не меняется)
+  function _rlTraits(s) {
+    if (typeof TraitEngine === 'undefined' || !TraitEngine.isActive()) return [];
+    return (s.rlTraits || []).map(id => TraitEngine.get(id)).filter(Boolean);
+  }
+  function _rlBadgeRow(s) {
+    const ts = _rlTraits(s);
+    if (!ts.length) return '';
+    return '<div class="staff-jokers">' + ts.map(t =>
+      '<span class="joker" title="' + (t.name + ' — ' + (t.desc || '')).replace(/"/g, '&quot;') + '">' +
+      (t.icon || '✦') + '<i>' + t.name + '</i></span>').join('') + '</div>';
+  }
+  function _rlChipIcons(s) {
+    const ts = _rlTraits(s);
+    return ts.length ? ' ' + ts.map(t => t.icon || '✦').join('') : '';
+  }
+  function _rlChipHint(s) {
+    const ts = _rlTraits(s);
+    return ts.length ? (' · ' + ts.map(t => (t.icon || '✦') + ' ' + t.name).join(', ')) : '';
+  }
+
   // ── TEAM (left HUD) ───────────────────────────────────────────────
   function renderTeam(g) {
     const list = document.querySelector('#hud-left .staff-list');
@@ -102,17 +124,23 @@
             ' onclick="Ui2.team()" style="cursor:grab" title="Перетащи на проект — назначить · клик — управление командой">' +
             '<div class="staff-av">' + emo + '</div>' +
             '<div class="staff-inf"><div class="staff-name">' + busy + (s.name || '—') + '</div>' +
-            '<div class="staff-role">' + role + (grade ? ' · ' + grade : '') + '</div></div>' +
+            '<div class="staff-role">' + role + (grade ? ' · ' + grade : '') + '</div>' +
+            _rlBadgeRow(s) + '</div>' +
             '<span class="staff-q" title="настроение ' + mood + '"><span style="color:' + moodC + '">' + moodE + '</span> Q' + q + '</span></div>';
         }).join('');
       }
     }
-    // действия команды (найм / управление) — переиспользуем легаси-модалки
+    // действия команды (найм / управление) — переиспользуем легаси-модалки;
+    // Ф.7: в режиме Rogue-lite добавляется «🎛 Билд» (экран джокеров/синергий)
     if (list) {
+      const buildBtn = (typeof TraitEngine !== 'undefined' && TraitEngine.isActive() && typeof TraitsUI !== 'undefined')
+        ? '<button class="btn-sm" style="flex:1;color:#b895f5;border-color:rgba(154,108,240,.45)" ' +
+          'title="Билд команды: джокеры и синергии состава" onclick="TraitsUI.showTeamBuild()">🎛 Билд</button>'
+        : '';
       list.insertAdjacentHTML('beforeend',
         '<div style="display:flex;gap:6px;margin-top:10px">' +
         '<button class="btn-sm pri" style="flex:1" onclick="Ui2.hire()">＋ Нанять</button>' +
-        '<button class="btn-sm" style="flex:1" onclick="Ui2.team()">⚙ Команда</button></div>');
+        '<button class="btn-sm" style="flex:1" onclick="Ui2.team()">⚙ Команда</button>' + buildBtn + '</div>');
     }
     const ft = Math.round(g.teamFatigue || 0);
     const fv = document.querySelector('#hud-left .fatigue-val'); if (fv) fv.textContent = ft + '%';
@@ -200,8 +228,8 @@
       const first = (s.name || '').split(' ')[0] || '?';
       const act = here ? `unassignAndRefresh('${iid}','${id}')` : `assignAndRefresh('${iid}','${id}')`;
       const suf = other ? ' ↪' : here ? ' ✕' : '';
-      const hint = here ? 'Снять с проекта' : other ? ('Сейчас на «'+other.name+'» — перевести сюда') : 'Назначить';
-      chips.push(`<button class="chip ${here?'on':''}" draggable="true" ondragstart="event.stopPropagation();Ui2.dndStart(event,'${iid}')" ondragend="Ui2.dndEnd(event)" title="${hint} · можно перетащить на другой проект" onclick="event.stopPropagation();${act}">${s.icon||'👤'} ${first} +${wu}${suf}</button>`);
+      const hint = (here ? 'Снять с проекта' : other ? ('Сейчас на «'+other.name+'» — перевести сюда') : 'Назначить') + _rlChipHint(s);
+      chips.push(`<button class="chip ${here?'on':''}" draggable="true" ondragstart="event.stopPropagation();Ui2.dndStart(event,'${iid}')" ondragend="Ui2.dndEnd(event)" title="${hint} · можно перетащить на другой проект" onclick="event.stopPropagation();${act}">${s.icon||'👤'} ${first}${_rlChipIcons(s)} +${wu}${suf}</button>`);
     });
     const warn = team.length===0 ? 'Команды нет — проект идёт на твоей мощности (+2)'
       : (pThr<pLoad ? ('⚠ не хватает '+Math.round(pLoad-pThr)+' ед. — кликни по свободным чипам') : '');
