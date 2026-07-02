@@ -201,6 +201,9 @@ const DLC = (() => {
     } else {
       _deactivateLive(id);
     }
+    // Сигнал слоям-потребителям (unlocks-ui и др.): режим переключили БЕЗ
+    // перезагрузки — инжектированные кнопки/скрытия должны отреагировать сразу
+    try { if (typeof EventBus !== 'undefined') EventBus.emit('dlc_toggled', { id, enabled: checked }); } catch (e) {}
   }
 
   // ── Live-деактивация DLC без перезагрузки страницы ────
@@ -212,10 +215,12 @@ const DLC = (() => {
     const dlc = REGISTRY.find(d => d.id === id);
     if (!dlc) return;
 
-    // Для mastery: убираем pill-индикаторы из заголовка, если есть
+    // Для mastery: убираем pill-индикаторы из заголовка и кнопку мета-прогресса
+    // на mode-screen (тот же баг «исчезает только после перезагрузки»)
     if (id === 'mastery') {
       document.getElementById('rune-active-pill')?.remove();
       document.getElementById('runmap-active-pill')?.remove();
+      document.getElementById('meta-mode-btn')?.remove();
     }
 
     renderModeScreen();

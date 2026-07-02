@@ -113,6 +113,24 @@ w.eval(`UnlocksUI.applyModuleVisibility()`);
 ok(bodyCls() === '', 'вне режима rl-lock-классов нет');
 w.eval(`localStorage.setItem('bt_enabled_dlcs_v1', JSON.stringify(['unlocks']))`);
 
+// 7: live-выключение тумблера (dlc_toggled) — всё инжектированное исчезает
+w.eval(`UnlocksUI.showTree()`);   // модал открыт
+ok(d.getElementById('unlock-tree-modal').classList.contains('active'), 'подготовка: модал дерева открыт');
+w.eval(`localStorage.setItem('bt_enabled_dlcs_v1', '[]'); EventBus.emit('dlc_toggled', { id: 'unlocks', enabled: false })`);
+ok(!d.getElementById('unlocks-mode-btn'), 'выключение: кнопка «Дерево открытий» исчезла БЕЗ перезагрузки');
+ok(!d.getElementById('unlock-tree-modal').classList.contains('active'), 'выключение: открытый модал дерева закрылся');
+ok(!d.getElementById('unlocks-results-btn'), 'выключение: кнопка на экране результатов убрана');
+ok(Array.from(d.body.classList).filter(c => c.startsWith('rl-lock-')).length === 0, 'выключение: rl-lock-скрытия сняты');
+
+// обратное включение тумблером — кнопка возвращается
+w.eval(`localStorage.setItem('bt_enabled_dlcs_v1', JSON.stringify(['unlocks'])); EventBus.emit('dlc_toggled', { id: 'unlocks', enabled: true })`);
+ok(!!d.getElementById('unlocks-mode-btn'), 'включение: кнопка вернулась');
+ok(d.body.classList.contains('rl-lock-market'), 'включение: скрытия применились сразу');
+
+// чужой режим — не трогаем наши инжекты
+w.eval(`EventBus.emit('dlc_toggled', { id: 'mastery', enabled: false })`);
+ok(!!d.getElementById('unlocks-mode-btn'), 'чужой тумблер (mastery) наши кнопки не трогает');
+
 // чистим за собой
 w.eval(`Unlocks.reset()`);
 

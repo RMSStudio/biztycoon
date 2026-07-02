@@ -329,6 +329,26 @@ body.rl-lock-sub    #btn-assets { display:none !important; }`;
     EventBus.on('render',          () => { setTimeout(() => { try { applyModuleVisibility(); } catch (e) {} }, 0); });
     EventBus.on('navigate',        () => { setTimeout(() => { try { applyModuleVisibility(); } catch (e) {} }, 0); });
     EventBus.on('unlocks_changed', () => { try { applyModuleVisibility(); } catch (e) {} });
+
+    // Тумблер режима на mode-screen переключили БЕЗ перезагрузки (сигнал
+    // dlc/loader.js): при выключении убираем ВСЁ инжектированное сразу —
+    // кнопку дерева, rl-lock-скрытия, кнопку на results, открытые модалы
+    EventBus.on('dlc_toggled', (p) => {
+      if (p && p.id && p.id !== 'unlocks') return;   // чужие режимы не трогаем
+      try {
+        _refreshModeButton();
+        applyModuleVisibility();
+        const U = window.Unlocks;
+        if (!U || !U.isActive()) {
+          const tree = document.getElementById('unlock-tree-modal');
+          if (tree) tree.classList.remove('active');
+          const build = document.getElementById('team-build-modal');
+          if (build) build.classList.remove('active');
+          const rbtn = document.getElementById('unlocks-results-btn');
+          if (rbtn && rbtn.parentElement) rbtn.parentElement.removeChild(rbtn);
+        }
+      } catch (e) {}
+    });
   }
 
   // Страховка: закрытие/обновление страницы среди рана = «ручной выход» (база 30 ✦).
