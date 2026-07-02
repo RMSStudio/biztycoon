@@ -85,23 +85,25 @@ _ok(Unlocks.available('nego'), 'nego доступен (тир 2, открыт т
 `));
 
 // 4 (v2, §15): экономика экспертизы — buy() с тратой, недостаток эксп., пререквизиты
+// Числа берём из Unlocks.TUNING/MODULE_UNLOCKS — тест переживает balance-pass
 add(run('Тест 4: buy() — трата экспертизы, отказы', true, `
+var T = Unlocks.TUNING;
+var hireCost = Unlocks.MODULE_UNLOCKS.find(function(m){ return m.id==='hire'; }).cost;
 _ok(Unlocks.getExp() === 0, 'старт: 0 экспертизы');
 var r1 = Unlocks.buy('hire');
 _ok(!r1.ok && r1.reason === 'exp', 'buy(hire) без эксп. → отказ reason=exp');
-// начислим через awardAtRunEnd (банкротство на стадии 0, без первых разов)
 var s1 = Unlocks.awardAtRunEnd(false, { living: { stage: 0 } });
-_ok(s1 && s1.award === 30, 'проигрыш стадия 0 → +30 (база)');
-_ok(Unlocks.getExp() === 30, 'баланс 30');
+_ok(s1 && s1.award === T.BASE_LOSS, 'проигрыш стадия 0 → база ' + T.BASE_LOSS);
 var s2 = Unlocks.awardAtRunEnd(false, { living: { stage: 2 } });
-_ok(s2.award === 30 + 30, 'проигрыш стадия 2 → 30 + 2×15 = 60');
-_ok(Unlocks.getExp() === 90, 'баланс 90');
+_ok(s2.award === T.BASE_LOSS + 2 * T.STAGE_EXP, 'проигрыш стадия 2 → база + 2×' + T.STAGE_EXP);
 var r2 = Unlocks.buy('life');
 _ok(!r2.ok && r2.reason === 'locked', 'buy(life) → отказ locked (нет тира 1)');
-Unlocks.awardAtRunEnd(false, { living: { stage: 0 } });   // +30 → 120
+// докидываем до цены найма
+while (Unlocks.getExp() < hireCost) Unlocks.awardAtRunEnd(false, { living: { stage: 0 } });
+var balance = Unlocks.getExp();
 var r3 = Unlocks.buy('hire');
-_ok(r3.ok, 'buy(hire) за 100 прошёл');
-_ok(Unlocks.getExp() === 20, 'списание: 120 − 100 = 20');
+_ok(r3.ok, 'buy(hire) за ' + hireCost + ' прошёл');
+_ok(Unlocks.getExp() === balance - hireCost, 'списание корректно');
 _ok(isModuleUnlocked('hire'), 'hire открыт покупкой');
 var r4 = Unlocks.buy('hire');
 _ok(!r4.ok && r4.reason === 'opened', 'повторная покупка → отказ opened');
@@ -109,20 +111,23 @@ _ok(!r4.ok && r4.reason === 'opened', 'повторная покупка → о�
 
 // 5 (v2, §15.1): «первые разы» — единоразовые за мету, победа на сложности
 add(run('Тест 5: awardAtRunEnd — первые разы платятся один раз', true, `
+var T = Unlocks.TUNING;
+var F = {}; Unlocks.FIRSTS.forEach(function(f){ F[f.key] = f.exp; });
+var runs0 = Unlocks.getRuns();
 Unlocks._noteFirst('deliver');
 Unlocks._noteFirst('hire');
 var s1 = Unlocks.awardAtRunEnd(false, { living: { stage: 1 } });
-_ok(s1.firstsExp === 80, 'первая сдача 50 + первый найм 30 = 80');
-_ok(s1.award === 30 + 15 + 80, 'итог рана: 30 + 15 + 80 = 125');
+_ok(s1.firstsExp === F.deliver + F.hire, 'первая сдача + первый найм = ' + (F.deliver + F.hire));
+_ok(s1.award === T.BASE_LOSS + T.STAGE_EXP + F.deliver + F.hire, 'итог рана = база + стадия + первые разы');
 Unlocks._noteFirst('deliver');   // второй ран — та же «первая сдача»
 var s2 = Unlocks.awardAtRunEnd(false, { living: { stage: 1 } });
 _ok(s2.firstsExp === 0, 'повторно «первые разы» НЕ платятся');
 var s3 = Unlocks.awardAtRunEnd(true, { living: { stage: 5 } });
-_ok(s3.base === 100 && s3.stageBonus === 75, 'победа: база 100, Империя 5×15=75');
+_ok(s3.base === T.BASE_WIN && s3.stageBonus === 5 * T.STAGE_EXP, 'победа: база ' + T.BASE_WIN + ', Империя 5×' + T.STAGE_EXP);
 _ok(s3.firsts.length === 1 && s3.firsts[0].key.indexOf('win_') === 0, 'первая победа на сложности учтена');
 var s4 = Unlocks.awardAtRunEnd(true, { living: { stage: 5 } });
 _ok(s4.firstsExp === 0, 'вторая победа на той же сложности — без бонуса');
-_ok(Unlocks.getRuns() === 4, 'счётчик ранов = 4');
+_ok(Unlocks.getRuns() === runs0 + 4, 'счётчик ранов растёт');
 Unlocks.reset();
 _ok(Unlocks.getExp() === 0 && Unlocks.getRuns() === 0, 'reset() чистит эксп. и раны');
 `));

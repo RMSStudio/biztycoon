@@ -40,34 +40,36 @@
     { id:'hire',     branch:'A', tier:1, name:'Найм',             cost:100, ico:'🧑‍💻', un:'Роли/грейды/ФОТ/мощность команды' },
     { id:'life',     branch:'A', tier:2, name:'Lifecycle-фазы',   cost:200, ico:'📋', un:'Бриф/планирование/мульти-work' },
     { id:'port',     branch:'A', tier:3, name:'Портфолио/Кейсы',  cost:300, ico:'📁', un:'Пассив Q/реп/лиды' },
-    { id:'tree',     branch:'A', tier:4, name:'Древо перков 2.0', cost:450, ico:'🌳', un:'In-run узлы + bonusProjectAction' },
-    { id:'sub',      branch:'A', tier:5, name:'Саббренды/Офисы',  cost:650, ico:'🏢', un:'Параллельные команды, +capacity' },
+    { id:'tree',     branch:'A', tier:4, name:'Древо перков 2.0', cost:400, ico:'🌳', un:'In-run узлы + bonusProjectAction' },
+    { id:'sub',      branch:'A', tier:5, name:'Саббренды/Офисы',  cost:600, ico:'🏢', un:'Параллельные команды, +capacity' },
     { id:'scout',    branch:'B', tier:1, name:'Скаутинг',         cost:100, ico:'🔍', un:'Пул офферов вместо одного заказа' },
     { id:'nego',     branch:'B', tier:2, name:'Переговоры',       cost:200, ico:'💬', un:'КП/условия-вилки + Переговорщик' },
     { id:'market',   branch:'B', tier:3, name:'Живой рынок',      cost:350, ico:'📈', un:'Конкуренты/рейтинг/тикер' },
-    { id:'shares',   branch:'B', tier:4, name:'Доли/акции',       cost:500, ico:'📊', un:'Инвест-слой' },
-    { id:'mna',      branch:'B', tier:5, name:'Поглощения M&A',   cost:700, ico:'🤝', un:'Ветвистый процесс поглощений' },
+    { id:'shares',   branch:'B', tier:4, name:'Доли/акции',       cost:450, ico:'📊', un:'Инвест-слой' },
+    { id:'mna',      branch:'B', tier:5, name:'Поглощения M&A',   cost:650, ico:'🤝', un:'Ветвистый процесс поглощений' },
     { id:'ai',       branch:'C', tier:2, name:'Нейросеть',        cost:250, ico:'🧠', un:'AI-ассистент/чат' },
     { id:'season',   branch:'C', tier:3, name:'Сезоны',           cost:400, ico:'🌦', un:'Тематические кварталы (Ф.6)' },
-    { id:'director', branch:'C', tier:4, name:'Директор давления',cost:600, ico:'🌡', un:'Динамическая сложность (Р.4)' },
+    { id:'director', branch:'C', tier:4, name:'Директор давления',cost:550, ico:'🌡', un:'Динамическая сложность (Р.4)' },
   ];
   const BY_ID = {};
   MODULE_UNLOCKS.forEach(m => { BY_ID[m.id] = m; });
 
   // «Первые разы» (§15.1) — единоразовые бонусы за всю мету, не за ран.
   // Ключи win_<difficulty> добавляются динамически (первая победа на сложности).
+  // Числа — balance-pass v3.93 (sim-unlocks-pacing.js): медиана 13/13 за ~20
+  // ранов, ранний доход ~100 ✦, поздний ~300+ ✦ (коридоры §15.2).
   const FIRSTS = [
-    { key:'deliver', exp:50, name:'Первая сдача проекта',   ico:'🏁' },
-    { key:'t2',      exp:40, name:'Первый T2-проект',       ico:'🥈' },
-    { key:'t3',      exp:60, name:'Первый T3-проект',       ico:'🥇' },
-    { key:'hire',    exp:30, name:'Первый найм',            ico:'👥' },
-    { key:'market',  exp:50, name:'Первый выход на рынок',  ico:'📈' },
-    { key:'mna',     exp:80, name:'Первое поглощение',      ico:'🤝' },
+    { key:'deliver', exp:60,  name:'Первая сдача проекта',   ico:'🏁' },
+    { key:'t2',      exp:50,  name:'Первый T2-проект',       ico:'🥈' },
+    { key:'t3',      exp:80,  name:'Первый T3-проект',       ico:'🥇' },
+    { key:'hire',    exp:40,  name:'Первый найм',            ico:'👥' },
+    { key:'market',  exp:60,  name:'Первый выход на рынок',  ico:'📈' },
+    { key:'mna',     exp:100, name:'Первое поглощение',      ico:'🤝' },
   ];
-  const FIRST_WIN_EXP = 100;   // первая победа на каждой сложности
-  const STAGE_EXP     = 15;    // × стадия компании (0..5)
-  const BASE_WIN      = 100;
-  const BASE_LOSS     = 30;
+  const FIRST_WIN_EXP = 150;   // первая победа на каждой сложности
+  const STAGE_EXP     = 50;    // × стадия компании (0..5) — главный «поздний» доход
+  const BASE_WIN      = 150;
+  const BASE_LOSS     = 40;
 
   function _lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
   function _lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -215,6 +217,7 @@
 
   window.Unlocks = {
     MODE_ID, MODULE_UNLOCKS, FIRSTS,
+    TUNING: { BASE_WIN, BASE_LOSS, STAGE_EXP, FIRST_WIN_EXP },   // ручки §15.6 (для тестов/сима)
     isActive, isModuleUnlocked, available,
     unlock, buy, getOpened, getExp, getRuns, reset, list,
     awardAtRunEnd,
