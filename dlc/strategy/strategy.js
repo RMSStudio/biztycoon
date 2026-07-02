@@ -753,7 +753,7 @@ const STRAT = (() => {
     const host = _el('btn-scout')?.parentElement;
     if (!host) return;
     let panel = _el('strat-panel');
-    if (!G._strategyMode) { if (panel) panel.remove(); return; }
+    if (!_active() || !G._strategyMode) { if (panel) panel.remove(); return; }
     if (!panel) {
       panel = document.createElement('div');
       panel.id = 'strat-panel';
@@ -787,8 +787,15 @@ const STRAT = (() => {
     markCurrentBranch(arr[arr.length - 1].id);
   }
 
+  // Режим включён? (живьём из DLC-реестра — скрипт остаётся загруженным после
+  // выключения тумблера, поэтому КАЖДЫЙ рендер обязан перепроверять флаг)
+  function _active() {
+    try { return typeof DLC !== 'undefined' ? DLC.isEnabled('strategy') : true; } catch (e) { return true; }
+  }
+
   // ── Карточка режима на экране выбора специализации ──
   function _renderModeCard() {
+    if (!_active()) { _el('strat-mode-card')?.remove(); return; }   // тумблер выключен → карточку убрать
     const specGrid = document.querySelector('.spec-grid');
     if (!specGrid || _el('strat-mode-card')) return;
     const card = document.createElement('div');
@@ -877,6 +884,13 @@ const STRAT = (() => {
   function init() {
     EventBus.on('render',   () => { _renderModeCard(); _renderPanel(); _checkHorizon(); });
     EventBus.on('navigate', () => setTimeout(_renderModeCard, 0));
+    // Тумблер переключили без перезагрузки (сигнал dlc/loader.js v3.96):
+    // мгновенно убираем/возвращаем карточку и панель, закрываем модал
+    EventBus.on('dlc_toggled', (p) => {
+      if (p && p.id && p.id !== 'strategy') return;
+      _renderModeCard(); _renderPanel();
+      if (!_active() && _el('strat-modal')) _el('strat-modal').remove();
+    });
     // На случай, если экран спеков уже отрисован к моменту загрузки DLC
     setTimeout(_renderModeCard, 200);
     console.log('🧭 Strategy DLC загружен');
