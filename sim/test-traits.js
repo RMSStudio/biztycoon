@@ -183,5 +183,50 @@ var m = TraitEngine.mods('calcQuality', { G:G, project:_proj({ _assignedStaff:['
 _ok(m.add === 0, 'неизвестный предикат → правило просто не срабатывает (движок жив)');
 `));
 
+// 6 (§13.6/§15.3): пулы трейтов ← узлы дерева; выдача в скауте
+add(run('Тест 6: пулы и выдача трейтов кандидатам', true, `
+// все узлы заперты → доступных трейтов нет (у всех стартовых есть pool)
+_ok(TraitEngine.availableTraitPool().length === 0, 'все пулы заперты на тир-0');
+var cand = _staff({ grade:'middle' });
+TraitEngine.assignScoutTraits(cand, function(){ return 0; });   // rng=0 → шанс гарантирован
+_ok(!cand.rlTraits || cand.rlTraits.length === 0, 'кандидату нечего выдать — пулы заперты');
+
+// открыли «Найм» (A1) → доступны только трейты пула A1
+Unlocks.unlock('hire');
+var poolA1 = TraitEngine.availableTraitPool().map(function(t){ return t.id; });
+_ok(poolA1.length === 3, 'открыт A1 → 3 трейта (Нишевый/Одиночка/Тимлид): ' + poolA1.join(','));
+_ok(poolA1.indexOf('niche_expert') >= 0 && poolA1.indexOf('mentor') < 0, 'A2-трейты (Ментор) ещё заперты');
+
+var c2 = _staff({ grade:'middle' });
+TraitEngine.assignScoutTraits(c2, function(){ return 0; });
+_ok(c2.rlTraits && c2.rlTraits.length === 1, 'middle: ровно 1 трейт (rng=0)');
+_ok(poolA1.indexOf(c2.rlTraits[0]) >= 0, 'выданный трейт — из открытого пула');
+
+// senior с rng=0 → 2 трейта, без повторов
+var c3 = _staff({ grade:'senior' });
+TraitEngine.assignScoutTraits(c3, function(){ return 0; });
+_ok(c3.rlTraits.length === 2 && c3.rlTraits[0] !== c3.rlTraits[1], 'senior: 2 разных трейта');
+
+// junior с rng≈1 → шанс 0.6 не сработал, пусто
+var c4 = _staff({ grade:'junior' });
+TraitEngine.assignScoutTraits(c4, function(){ return 0.99; });
+_ok(!c4.rlTraits || c4.rlTraits.length === 0, 'junior при неудачном роллe — без трейта');
+
+// вне режима — выдача no-op (страховка гейта §14.8)
+Unlocks.reset();
+`));
+
+// 7: synergiesOverview — статусы on/near/off для UI
+add(run('Тест 7: статусы синергий (актив/почти/нет)', true, `
+var st = [ _staff({ role:'designer' }), _staff({ role:'designer' }), _staff({ role:'designer' }),
+           _staff({ role:'developer' }), _staff({ role:'developer' }) ];
+var G = { staff:st, activeClients:[] };
+var over = {};
+TraitEngine.synergiesOverview({ G:G }).forEach(function(s){ over[s.id] = s.status; });
+_ok(over.design_boutique === 'on',   'Дизайн-бутик: актив (3 дизайнера)');
+_ok(over.tech_shop === 'near',       'Тех-шоп: почти (2/3 разработчика)');
+_ok(over.healthy_studio === 'off',   'Здоровая студия: нет (грейды не собраны)');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);

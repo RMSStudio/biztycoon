@@ -278,6 +278,47 @@
     });
   }
 
+  // ── §13.6: пулы трейтов ← узлы «Дерева открытий» ─────────────────────
+  // Каталог = ПУЛ; открытие узла расширяет пул, из которого скаут наполняет
+  // кандидатов «джокерами» (§15.3). pool не указан → трейт доступен всегда.
+  const POOL_NODE = { A1:'hire', A2:'life', A3:'port', A4:'tree', A5:'sub',
+                      B1:'scout', B2:'nego', B3:'market', B4:'shares', B5:'mna',
+                      C1:'ai', C2:'season', C3:'director' };
+  function poolOpen(pool) {
+    if (!pool) return true;
+    const node = POOL_NODE[pool] || pool;   // можно указать и id узла напрямую
+    try { return typeof isModuleUnlocked === 'function' ? isModuleUnlocked(node) : true; }
+    catch (e) { return true; }
+  }
+  function availableTraitPool() { return _traits.filter(t => poolOpen(t.pool)); }
+  function get(id) { return _byId['t:' + id] || null; }
+
+  // Выдача rl-трейтов кандидату в скауте (§15.3): количество — от грейда,
+  // выбор — weighted-рандом из ОТКРЫТЫХ пулов, без повторов. rng — для тестов.
+  const GRADE_TRAITS = { junior:{ n:1, chance:0.6 }, middle:{ n:1, chance:1 },
+                         senior:{ n:2, chance:0.65 }, lead:{ n:2, chance:1 }, star:{ n:2, chance:1 } };
+  // n — максимум; первый трейт с вероятностью chance (junior/senior), остальные гарантированы при n>1
+  function assignScoutTraits(candidate, rng) {
+    if (!_active() || !candidate) return candidate;
+    rng = rng || Math.random;
+    const cfg  = GRADE_TRAITS[candidate.grade] || GRADE_TRAITS.middle;
+    const pool = availableTraitPool().filter(t => !(candidate.rlTraits || []).includes(t.id));
+    if (!pool.length) return candidate;
+    let count = 0;
+    for (let i = 0; i < cfg.n; i++) count += (rng() < (i === 0 ? cfg.chance : 0.5)) ? 1 : 0;
+    const picked = [];
+    for (let k = 0; k < count && pool.length; k++) {
+      const totalW = pool.reduce((t, x) => t + (x.weight || 1), 0);
+      let roll = rng() * totalW;
+      let idx = 0;
+      for (; idx < pool.length - 1; idx++) { roll -= (pool[idx].weight || 1); if (roll <= 0) break; }
+      picked.push(pool[idx].id);
+      pool.splice(idx, 1);
+    }
+    if (picked.length) candidate.rlTraits = [...(candidate.rlTraits || []), ...picked];
+    return candidate;
+  }
+
   // ── Активные синергии (для UI «Билд команды», шаг 4) ────────────────
   function activeSynergies(ctx) {
     if (!_active()) return [];
@@ -285,6 +326,31 @@
     return _synergies
       .filter(sy => (sy.scope !== 'project' || ctx.project) && Predicates.check(sy.when, ctx))
       .map(sy => ({ id: sy.id, name: sy.name, icon: sy.icon, desc: sy.desc, scope: sy.scope || 'staff' }));
+  }
+
+  // Статус синергии для UI: 'on' | 'near' (не хватает 1 по count-условию) | 'off'
+  function synergyStatus(sy, ctx) {
+    ctx = ctx || {};
+    if (Predicates.check(sy.when, ctx)) return 'on';
+    // «почти»: ровно одно условие не выполнено, и это count* с дефицитом 1
+    const near = (sy.when || []).every(cond => Object.keys(cond).every(k => {
+      if (Predicates.check([cond], ctx)) return true;
+      const arg = cond[k];
+      if (k === 'countRoleInStaff')  return _staffAll(ctx).filter(s => s.role  === arg.role ).length >= (arg.min || 1) - 1;
+      if (k === 'countGradeInStaff') return _staffAll(ctx).filter(s => s.grade === arg.grade).length >= (arg.min || 1) - 1;
+      if (k === 'countRoleOnProject')  return _team(ctx).filter(s => s.role  === arg.role ).length >= (arg.min || 1) - 1;
+      if (k === 'countGradeOnProject') return _team(ctx).filter(s => s.grade === arg.grade).length >= (arg.min || 1) - 1;
+      return false;
+    }));
+    return near ? 'near' : 'off';
+  }
+  function synergiesOverview(ctx) {
+    if (!_active()) return [];
+    ctx = ctx || {};
+    return _synergies
+      .filter(sy => sy.scope !== 'project' || ctx.project)
+      .map(sy => ({ id: sy.id, name: sy.name, icon: sy.icon, desc: sy.desc,
+                    scope: sy.scope || 'staff', status: synergyStatus(sy, ctx) }));
   }
 
   // ── Подписка на сигналы движка (событийные хуки без врезок) ─────────
@@ -304,8 +370,10 @@
     EventBus.on('stage_reached',  (p) => { const g = (typeof G !== 'undefined') ? G : {}; fire('onStageUp', { G: g, stage: p && p.stage }); });
   }
 
-  W.TraitEngine = { mods, fire, activeSynergies, load, registerTrait, registerSynergy, catalog, isActive: _active,
-                    Predicates, Effects, _onStackEvent };
+  W.TraitEngine = { mods, fire, activeSynergies, synergiesOverview, synergyStatus,
+                    load, registerTrait, registerSynergy, catalog, get,
+                    poolOpen, availableTraitPool, assignScoutTraits, POOL_NODE,
+                    isActive: _active, Predicates, Effects, _onStackEvent };
 
   // Автозагрузка каталога, если данные уже объявлены (traits-data.js грузится раньше)
   try { if (W.STAFF_TRAITS || W.TEAM_SYNERGIES) load(W.STAFF_TRAITS, W.TEAM_SYNERGIES); } catch (e) {}

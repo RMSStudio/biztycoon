@@ -318,8 +318,11 @@ function scoutCandidates(tier) {
     : _pick(_weighted);
 
   const pool = cfg.grades.map((g, i) => generateCandidate(_pickRole(i), g));
-  // Ф.7: скаут-хук — трейты/пулы могут модифицировать кандидатов (no-op вне режима)
-  if (typeof TraitEngine !== 'undefined') pool.forEach(c => TraitEngine.fire('scoutCandidate', { candidate: c }));
+  // Ф.7: выдача rl-трейтов из пулов открытых узлов (§13.6/§15.3) + скаут-хук
+  if (typeof TraitEngine !== 'undefined') pool.forEach(c => {
+    TraitEngine.assignScoutTraits(c);
+    TraitEngine.fire('scoutCandidate', { candidate: c });
+  });
   G.candidatePool = [...(G.candidatePool || []), ...pool];
 
   _renderCandidatePool();
@@ -699,6 +702,15 @@ function _staffCardHTML(s) {
   const hidBadge = hidCount > 0
     ? `<span class="trait-badge trait-hidden" data-tip="Скрытые трейты — раскроются в собеседовании или во время работы." style="cursor:help">❓ ×${hidCount}</span>` : '';
 
+  // Ф.7: rl-трейты («джокеры» режима Rogue-lite) — фиолетовые бейджи
+  const rlBadges = (typeof TraitEngine !== 'undefined' && s.rlTraits && s.rlTraits.length)
+    ? s.rlTraits.map(id => {
+        const t = TraitEngine.get(id); if (!t) return '';
+        return `<span class="trait-badge" data-tip="${t.name} — ${t.desc}" style="cursor:help;
+          background:rgba(154,108,240,.15);color:#b895f5;border:1px solid rgba(154,108,240,.35)">${t.icon || '✦'} ${t.name}</span>`;
+      }).join('')
+    : '';
+
   return `<div class="staff-char-card">
     <div class="staff-char-avatar" style="background:${color}20;border:1.5px solid ${color}40">
       <span>${emoji}</span>
@@ -732,8 +744,8 @@ function _staffCardHTML(s) {
           <span style="font-size:10px;font-weight:600;color:${_loyColor(loy)};min-width:30px;text-align:right">${loy}%</span>
         </div>
       </div>
-      ${traitBadges || hidBadge
-        ? `<div class="staff-char-traits">${traitBadges}${hidBadge}</div>` : ''}
+      ${traitBadges || hidBadge || rlBadges
+        ? `<div class="staff-char-traits">${rlBadges}${traitBadges}${hidBadge}</div>` : ''}
       <div style="display:flex;gap:5px;margin-top:7px">
         <button onclick="praiseStaff('${iid}')" ${praiseUsed ? 'disabled' : ''}
           data-tip="Похвалить: +10 настроения. Бесплатно, раз в месяц на сотрудника."
@@ -830,6 +842,10 @@ function openTeamModal() {
       <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap">
         <div style="font-size:16px;font-weight:800;color:var(--text)">👥 Команда</div>
         <span id="team-modal-count" style="font-size:12px;color:var(--muted)"></span>
+        ${(typeof TraitsUI !== 'undefined' && typeof TraitEngine !== 'undefined' && TraitEngine.isActive())
+          ? `<button onclick="TraitsUI.showTeamBuild()" data-tip="Билд команды: трейты-джокеры и синергии состава (Rogue-lite)"
+               style="background:rgba(154,108,240,.12);border:1px solid rgba(154,108,240,.4);border-radius:8px;
+                      color:#b895f5;cursor:pointer;font-size:12px;font-weight:700;padding:6px 12px">🎛 Билд</button>` : ''}
         <div style="flex:1"></div>
         <input id="team-search" type="text" placeholder="🔍 Поиск по имени" value="${_teamQuery.replace(/"/g,'&quot;')}"
           oninput="setTeamQuery(this.value)"
@@ -1004,7 +1020,16 @@ function _candidateCard(c) {
   const vis    = (c.traits || []).filter(t => t.revealed);
   const hidden = (c.traits || []).filter(t => !t.revealed).length;
 
-  const traitHtml = vis.map(t => {
+  // Ф.7: rl-трейты кандидата («джокеры») — показываем ПЕРВЫМИ, это главное в найме режима
+  const rlHtml = (typeof TraitEngine !== 'undefined' && c.rlTraits && c.rlTraits.length)
+    ? c.rlTraits.map(id => {
+        const t = TraitEngine.get(id); if (!t) return '';
+        return `<span class="trait-badge" data-tip="${t.name} — ${t.desc}" style="cursor:help;
+          background:rgba(154,108,240,.15);color:#b895f5;border:1px solid rgba(154,108,240,.35)">${t.icon || '✦'} ${t.name}</span>`;
+      }).join('')
+    : '';
+
+  const traitHtml = rlHtml + vis.map(t => {
     const td = TRAITS[t.id] || {};
     const cls = td.type === 'pos' ? 'trait-badge trait-pos' : 'trait-badge trait-neg';
     return `<span class="${cls}" data-tip="${(td.label || t.id) + (td.desc ? ' — ' + td.desc : '')}" style="cursor:help">${td.icon || '?'} ${td.label || t.id}</span>`;
