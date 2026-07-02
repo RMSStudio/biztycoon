@@ -1450,6 +1450,7 @@ const Projects = (() => {
     addLog(`🏁 ${client.name}: сдан! +${fmtK(payout)}${bonusStr} · оценка клиента ${finalNPS}`, 'green');
     notify(`${client.icon} ${client.name} — сдан! +${fmtK(payout)}${bonusStr}`, 'success');
     rd(`Завершён: ${client.name} (LC) оценка клиента ${finalNPS}`, 'client');
+    try { EventBus.emit('project_delivered', { id: client.id, tier: client.tier || 1, lc: true }); } catch (_) {}   // сигнал движка (Ф.7)
     _emitRender();
   }
 

@@ -1331,6 +1331,7 @@ function hireStaff(id) {
   G.staff.push(instance);
   G.actions-=dayCost;
   addLog(`👥 Нанят ${def.name} (−${fmt(def.cost)}/мес, −${dayCost} дня)`,'amber');
+  EventBus.emit('staff_hired', { id: def.id });   // сигнал движка (Ф.7 «первые разы» и др.)
   notify(`${def.name} принят! ${def.icon}`,'success');
   rd(`Нанят ${def.name}`,'hire');
   _emitRender();
@@ -1758,6 +1759,7 @@ function completeProject(cid) {
   addLog(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}${penTag}${_specTag}${_qPayoutTag} | NPS ${finalNPS} | Порт. +${pfBonus}${repGain>0?' | Реп +'+repGain:''}`, onTime ? 'green' : 'amber');
   notify(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}`, onTime ? 'success' : 'info');
   rd(`Завершён: ${c.name} → +${fmtK(immediatePayment)} ${timeTag}`, 'event');
+  EventBus.emit('project_delivered', { id: c.id, tier: c.tier || 1, lc: false });   // сигнал движка (Ф.7)
 
   renderPortfolioTab();
   _emitRender();

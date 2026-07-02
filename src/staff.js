@@ -380,6 +380,7 @@ function hireCandidate(id, salary) {
 
   addLog(`👥 Нанят ${c.name} (${c.roleLabel}, ${c.gradeLabel}) — ${_fs(c.cost)}/мес`, 'amber');
   rd(`Нанят ${c.name}`, 'hire');
+  if (typeof EventBus !== 'undefined') EventBus.emit('staff_hired', { id: c.id });   // сигнал движка (Ф.7)
   _renderCandidatePool();   // фикс: открытый попап обновляется сразу, карточка исчезает
   EventBus.emit('render');
   notify(`${c.name} принят в команду! ${c.icon}`, 'success');

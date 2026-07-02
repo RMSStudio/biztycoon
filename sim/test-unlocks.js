@@ -84,5 +84,54 @@ _ok(isModuleUnlocked('scout') && isModuleUnlocked('hire'), 'оба открыт�
 _ok(Unlocks.available('nego'), 'nego доступен (тир 2, открыт тир 1 scout)');
 `));
 
+// 4 (v2, §15): экономика экспертизы — buy() с тратой, недостаток эксп., пререквизиты
+add(run('Тест 4: buy() — трата экспертизы, отказы', true, `
+_ok(Unlocks.getExp() === 0, 'старт: 0 экспертизы');
+var r1 = Unlocks.buy('hire');
+_ok(!r1.ok && r1.reason === 'exp', 'buy(hire) без эксп. → отказ reason=exp');
+// начислим через awardAtRunEnd (банкротство на стадии 0, без первых разов)
+var s1 = Unlocks.awardAtRunEnd(false, { living: { stage: 0 } });
+_ok(s1 && s1.award === 30, 'проигрыш стадия 0 → +30 (база)');
+_ok(Unlocks.getExp() === 30, 'баланс 30');
+var s2 = Unlocks.awardAtRunEnd(false, { living: { stage: 2 } });
+_ok(s2.award === 30 + 30, 'проигрыш стадия 2 → 30 + 2×15 = 60');
+_ok(Unlocks.getExp() === 90, 'баланс 90');
+var r2 = Unlocks.buy('life');
+_ok(!r2.ok && r2.reason === 'locked', 'buy(life) → отказ locked (нет тира 1)');
+Unlocks.awardAtRunEnd(false, { living: { stage: 0 } });   // +30 → 120
+var r3 = Unlocks.buy('hire');
+_ok(r3.ok, 'buy(hire) за 100 прошёл');
+_ok(Unlocks.getExp() === 20, 'списание: 120 − 100 = 20');
+_ok(isModuleUnlocked('hire'), 'hire открыт покупкой');
+var r4 = Unlocks.buy('hire');
+_ok(!r4.ok && r4.reason === 'opened', 'повторная покупка → отказ opened');
+`));
+
+// 5 (v2, §15.1): «первые разы» — единоразовые за мету, победа на сложности
+add(run('Тест 5: awardAtRunEnd — первые разы платятся один раз', true, `
+Unlocks._noteFirst('deliver');
+Unlocks._noteFirst('hire');
+var s1 = Unlocks.awardAtRunEnd(false, { living: { stage: 1 } });
+_ok(s1.firstsExp === 80, 'первая сдача 50 + первый найм 30 = 80');
+_ok(s1.award === 30 + 15 + 80, 'итог рана: 30 + 15 + 80 = 125');
+Unlocks._noteFirst('deliver');   // второй ран — та же «первая сдача»
+var s2 = Unlocks.awardAtRunEnd(false, { living: { stage: 1 } });
+_ok(s2.firstsExp === 0, 'повторно «первые разы» НЕ платятся');
+var s3 = Unlocks.awardAtRunEnd(true, { living: { stage: 5 } });
+_ok(s3.base === 100 && s3.stageBonus === 75, 'победа: база 100, Империя 5×15=75');
+_ok(s3.firsts.length === 1 && s3.firsts[0].key.indexOf('win_') === 0, 'первая победа на сложности учтена');
+var s4 = Unlocks.awardAtRunEnd(true, { living: { stage: 5 } });
+_ok(s4.firstsExp === 0, 'вторая победа на той же сложности — без бонуса');
+_ok(Unlocks.getRuns() === 4, 'счётчик ранов = 4');
+Unlocks.reset();
+_ok(Unlocks.getExp() === 0 && Unlocks.getRuns() === 0, 'reset() чистит эксп. и раны');
+`));
+
+// 6 (v2): вне режима awardAtRunEnd — null (обычная игра не трогается)
+add(run('Тест 6: вне режима экспертиза не начисляется', false, `
+_ok(Unlocks.awardAtRunEnd(true, { living: { stage: 5 } }) === null, 'awardAtRunEnd вне режима → null');
+_ok(Unlocks.getExp() === 0, 'экспертиза не появилась');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);
