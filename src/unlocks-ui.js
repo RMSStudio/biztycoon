@@ -235,6 +235,57 @@
     btn.textContent = '🌐 Дерево открытий' + (awardText ? ' · ' + awardText : ` · ${U.getExp()} ✦`);
   }
 
+  // ── §15.0 п.1 / §11.5: СКРЫТИЕ запертых систем (легаси-UI) ──────────
+  // «Игра сама объявляет, что доступно» — вместо кликабельных кнопок с
+  // ошибкой запертые системы полностью исчезают из UI до открытия узла.
+  // Механизм: body-классы rl-lock-<id> + CSS (работает и для элементов,
+  // создаваемых динамически: пилюля рейтинга, виджет рынка, кнопка активов).
+  // Вне режима Rogue-lite классы сняты — обычная игра не меняется.
+  // v2-слой (index-v2) сознательно НЕ трогаем (решение Романа 2026-07-02).
+  const HIDE_IDS = ['hire', 'scout', 'tree', 'port', 'ai', 'market', 'sub'];
+  // life/nego — фазы внутри проектного флоу (UI-входа нет), season — бейдж сам
+  // гаснет (нейтральный сезон), director — фоновая система без кнопки,
+  // shares/mna — входы внутри рынка (гейтятся его скрытием + своими гейтами).
+
+  function _injectHideCss() {
+    if (document.getElementById('unlocks-hide-css')) return;
+    const st = document.createElement('style');
+    st.id = 'unlocks-hide-css';
+    st.textContent = `
+/* Ф.7: запертые системы скрыты целиком (классы ставит applyModuleVisibility) */
+body.rl-lock-scout  #btn-scout,
+body.rl-lock-hire   #acc-hire,
+body.rl-lock-hire   button[onclick="toggleAcc('hire')"],
+body.rl-lock-tree   .panel:has(button[onclick="openPerkModal()"]),
+body.rl-lock-port   #tab-btn-portfolio,
+body.rl-lock-port   #tab-panel-portfolio,
+body.rl-lock-ai     #tab-btn-ai,
+body.rl-lock-ai     #tab-panel-ai,
+body.rl-lock-market #tab-btn-market,
+body.rl-lock-market #tab-panel-market,
+body.rl-lock-market #g-market-widget,
+body.rl-lock-market #cmp-rank-pill,
+body.rl-lock-sub    #btn-assets { display:none !important; }`;
+    document.head.appendChild(st);
+  }
+
+  function applyModuleVisibility() {
+    const b = document.body;
+    if (!b) return;
+    _injectHideCss();
+    const U = window.Unlocks;
+    const locked = id => !!(U && U.isActive() && typeof isModuleUnlocked === 'function' && !isModuleUnlocked(id));
+    HIDE_IDS.forEach(id => b.classList.toggle('rl-lock-' + id, locked(id)));
+    // Запертая вкладка не должна оставаться активной (редкий кейс: открыли ран
+    // на вкладке, которой в этом ране нет) — уводим на «Проекты»
+    [['port', 'tab-btn-portfolio'], ['ai', 'tab-btn-ai'], ['market', 'tab-btn-market']].forEach(([m, tid]) => {
+      const t = document.getElementById(tid);
+      if (t && b.classList.contains('rl-lock-' + m) && t.classList.contains('active')) {
+        try { if (typeof switchTab === 'function') switchTab('main'); } catch (e) {}
+      }
+    });
+  }
+
   // ── ПЕТЛЯ РАНА (§15.0) — хуки активны только при isActive() ────────
   let _awardedThisRun = false;
 
@@ -272,6 +323,12 @@
     // Кнопка mode-screen — держим актуальной (покупка/начисление/сброс/тумблер DLC)
     EventBus.on('unlocks_changed', () => { try { _refreshModeButton(); } catch (e) {} });
     EventBus.on('unlocks_award',   () => { try { _refreshModeButton(); } catch (e) {} });
+
+    // Скрытие запертых систем: после КАЖДОГО рендера (setTimeout 0 — чтобы
+    // отработать ПОСЛЕ остальных render-слушателей, создающих кнопки/пилюли)
+    EventBus.on('render',          () => { setTimeout(() => { try { applyModuleVisibility(); } catch (e) {} }, 0); });
+    EventBus.on('navigate',        () => { setTimeout(() => { try { applyModuleVisibility(); } catch (e) {} }, 0); });
+    EventBus.on('unlocks_changed', () => { try { applyModuleVisibility(); } catch (e) {} });
   }
 
   // Страховка: закрытие/обновление страницы среди рана = «ручной выход» (база 30 ✦).
@@ -285,13 +342,13 @@
     }
   });
 
-  window.UnlocksUI = { showTree, injectResultsButton, refreshModeButton: _refreshModeButton };
+  window.UnlocksUI = { showTree, injectResultsButton, refreshModeButton: _refreshModeButton, applyModuleVisibility };
 
-  // Инжект кнопки на mode-screen при старте (если режим включён)
+  // Инжект кнопки на mode-screen + первичное скрытие при старте
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { try { _refreshModeButton(); } catch (e) {} });
+    document.addEventListener('DOMContentLoaded', () => { try { _refreshModeButton(); applyModuleVisibility(); } catch (e) {} });
   } else {
-    try { _refreshModeButton(); } catch (e) {}
+    try { _refreshModeButton(); applyModuleVisibility(); } catch (e) {}
   }
 
   try { console.log('[unlocks-ui] Ф.7 петля рана + дерево открытий загружены (активен: ' + (window.Unlocks ? window.Unlocks.isActive() : '—') + ')'); } catch (e) {}

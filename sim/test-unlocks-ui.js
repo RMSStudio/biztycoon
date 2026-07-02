@@ -87,6 +87,32 @@ ok(w.eval(`notifyCalls.some(m => m.indexOf('Открыт модуль') >= 0)`),
 // 5: кнопка mode-screen обновилась
 ok(d.getElementById('unlocks-mode-btn').innerHTML.indexOf('1/13') >= 0, 'кнопка mode-screen показывает 1/13');
 
+// 6: скрытие запертых систем (§15.0 п.1) — body-классы rl-lock-*
+w.eval(`Unlocks.reset()`);
+w.eval(`UnlocksUI.applyModuleVisibility()`);
+const bodyCls = () => Array.from(d.body.classList).filter(c => c.startsWith('rl-lock-')).sort().join(',');
+ok(d.body.classList.contains('rl-lock-scout') && d.body.classList.contains('rl-lock-market') &&
+   d.body.classList.contains('rl-lock-hire') && d.body.classList.contains('rl-lock-sub'),
+   'тир-0: все скрываемые системы под rl-lock (' + bodyCls() + ')');
+ok(!!d.getElementById('unlocks-hide-css'), 'CSS скрытия заинжектирован');
+ok(d.getElementById('unlocks-hide-css').textContent.includes('#btn-scout') &&
+   d.getElementById('unlocks-hide-css').textContent.includes('#cmp-rank-pill') &&
+   d.getElementById('unlocks-hide-css').textContent.includes('#btn-assets'),
+   'CSS покрывает и статические, и динамические элементы');
+
+// открыли scout+hire → классы снялись, остальные держатся
+w.eval(`Unlocks.unlock('scout'); Unlocks.unlock('hire')`);
+ok(!d.body.classList.contains('rl-lock-scout') && !d.body.classList.contains('rl-lock-hire'),
+   'открытие узлов снимает rl-lock (unlocks_changed)');
+ok(d.body.classList.contains('rl-lock-market') && d.body.classList.contains('rl-lock-ai'),
+   'неоткрытые остаются скрытыми');
+
+// вне режима — все классы сняты (обычная игра не меняется)
+w.eval(`localStorage.setItem('bt_enabled_dlcs_v1', '[]')`);
+w.eval(`UnlocksUI.applyModuleVisibility()`);
+ok(bodyCls() === '', 'вне режима rl-lock-классов нет');
+w.eval(`localStorage.setItem('bt_enabled_dlcs_v1', JSON.stringify(['unlocks']))`);
+
 // чистим за собой
 w.eval(`Unlocks.reset()`);
 

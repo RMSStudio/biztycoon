@@ -10,7 +10,13 @@
   if (window.__UNLOCKS_DLC_LOADED) return;
   window.__UNLOCKS_DLC_LOADED = true;
   // Режим только что включили — обновить кнопку «Дерево открытий» на mode-screen
-  try { if (window.UnlocksUI) window.UnlocksUI.refreshModeButton(); } catch (e) {}
+  // и сразу скрыть запертые системы (без перезагрузки страницы)
+  try {
+    if (window.UnlocksUI) {
+      window.UnlocksUI.refreshModeButton();
+      if (window.UnlocksUI.applyModuleVisibility) window.UnlocksUI.applyModuleVisibility();
+    }
+  } catch (e) {}
   try {
     const U = window.Unlocks;
     console.log('[DLC:' + ID + '] v0.2 активирован. ' +
