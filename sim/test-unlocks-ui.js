@@ -22,6 +22,7 @@ catch (e) {
 const dom = new JSDOM(`<!DOCTYPE html><html><body>
   <div id="mode-extra"><div id="dlc-cards"></div></div>
   <div id="screen-results"><div style="text-align:center;display:flex"></div></div>
+  <button id="btn-scout">🔍 Скаутинг проектов <span id="scout-cost-label"></span></button>
 </body></html>`, { runScripts: 'outside-only', url: 'http://localhost/' });
 
 const w = dom.window;
@@ -91,19 +92,21 @@ ok(d.getElementById('unlocks-mode-btn').innerHTML.indexOf('1/13') >= 0, 'кно�
 w.eval(`Unlocks.reset()`);
 w.eval(`UnlocksUI.applyModuleVisibility()`);
 const bodyCls = () => Array.from(d.body.classList).filter(c => c.startsWith('rl-lock-')).sort().join(',');
-ok(d.body.classList.contains('rl-lock-scout') && d.body.classList.contains('rl-lock-market') &&
-   d.body.classList.contains('rl-lock-hire') && d.body.classList.contains('rl-lock-sub'),
-   'тир-0: все скрываемые системы под rl-lock (' + bodyCls() + ')');
+ok(d.body.classList.contains('rl-lock-market') && d.body.classList.contains('rl-lock-hire') &&
+   d.body.classList.contains('rl-lock-sub') && d.body.classList.contains('rl-lock-tree'),
+   'тир-0: скрываемые системы под rl-lock (' + bodyCls() + ')');
+ok(!d.body.classList.contains('rl-lock-scout'), 'scout НЕ скрывается (тир-0 живёт разовым заказом)');
+ok(d.getElementById('btn-scout').textContent.includes('разовый заказ'), 'кнопка скаутинга переодета под тир-0');
 ok(!!d.getElementById('unlocks-hide-css'), 'CSS скрытия заинжектирован');
-ok(d.getElementById('unlocks-hide-css').textContent.includes('#btn-scout') &&
+ok(!d.getElementById('unlocks-hide-css').textContent.includes('#btn-scout') &&
    d.getElementById('unlocks-hide-css').textContent.includes('#cmp-rank-pill') &&
    d.getElementById('unlocks-hide-css').textContent.includes('#btn-assets'),
-   'CSS покрывает и статические, и динамические элементы');
+   'CSS покрывает динамические элементы, но не кнопку скаутинга');
 
-// открыли scout+hire → классы снялись, остальные держатся
+// открыли scout+hire → классы снялись, кнопка вернула обычный лейбл
 w.eval(`Unlocks.unlock('scout'); Unlocks.unlock('hire')`);
-ok(!d.body.classList.contains('rl-lock-scout') && !d.body.classList.contains('rl-lock-hire'),
-   'открытие узлов снимает rl-lock (unlocks_changed)');
+ok(!d.body.classList.contains('rl-lock-hire'), 'открытие узлов снимает rl-lock (unlocks_changed)');
+ok(d.getElementById('btn-scout').textContent.includes('Скаутинг проектов'), 'после открытия B1 кнопка снова «Скаутинг проектов»');
 ok(d.body.classList.contains('rl-lock-market') && d.body.classList.contains('rl-lock-ai'),
    'неоткрытые остаются скрытыми');
 

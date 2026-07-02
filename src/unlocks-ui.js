@@ -242,10 +242,12 @@
   // создаваемых динамически: пилюля рейтинга, виджет рынка, кнопка активов).
   // Вне режима Rogue-lite классы сняты — обычная игра не меняется.
   // v2-слой (index-v2) сознательно НЕ трогаем (решение Романа 2026-07-02).
-  const HIDE_IDS = ['hire', 'scout', 'tree', 'port', 'ai', 'market', 'sub'];
-  // life/nego — фазы внутри проектного флоу (UI-входа нет), season — бейдж сам
-  // гаснет (нейтральный сезон), director — фоновая система без кнопки,
-  // shares/mna — входы внутри рынка (гейтятся его скрытием + своими гейтами).
+  const HIDE_IDS = ['hire', 'tree', 'port', 'ai', 'market', 'sub'];
+  // scout НЕ скрываем: тир-0 живёт «одним разовым заказом руками» (§11.2) —
+  // кнопка остаётся, движок в запертом состоянии даёт 1 oneTime-оффер
+  // (лейбл меняем ниже). life/nego — фазы внутри проектного флоу (UI-входа
+  // нет), season — бейдж сам гаснет (нейтральный сезон), director — фоновая
+  // система без кнопки, shares/mna — входы внутри рынка (свои гейты).
 
   function _injectHideCss() {
     if (document.getElementById('unlocks-hide-css')) return;
@@ -253,7 +255,6 @@
     st.id = 'unlocks-hide-css';
     st.textContent = `
 /* Ф.7: запертые системы скрыты целиком (классы ставит applyModuleVisibility) */
-body.rl-lock-scout  #btn-scout,
 body.rl-lock-hire   #acc-hire,
 body.rl-lock-hire   button[onclick="toggleAcc('hire')"],
 body.rl-lock-tree   .panel:has(button[onclick="openPerkModal()"]),
@@ -276,6 +277,17 @@ body.rl-lock-sub    #btn-assets { display:none !important; }`;
     const U = window.Unlocks;
     const locked = id => !!(U && U.isActive() && typeof isModuleUnlocked === 'function' && !isModuleUnlocked(id));
     HIDE_IDS.forEach(id => b.classList.toggle('rl-lock-' + id, locked(id)));
+    // Скаутинг на тир-0 не скрыт, а ПЕРЕОДЕТ: «один разовый заказ руками» (§11.2)
+    const sb = document.getElementById('btn-scout');
+    if (sb) {
+      const t0 = locked('scout') ? '1' : '';
+      if ((sb.dataset.rlT0 || '') !== t0) {
+        sb.dataset.rlT0 = t0;
+        sb.innerHTML = t0
+          ? `📦 Найти разовый заказ <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label">тир-0 · один за раз</span>`
+          : `🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label"></span>`;
+      }
+    }
     // Запертая вкладка не должна оставаться активной (редкий кейс: открыли ран
     // на вкладке, которой в этом ране нет) — уводим на «Проекты»
     [['port', 'tab-btn-portfolio'], ['ai', 'tab-btn-ai'], ['market', 'tab-btn-market']].forEach(([m, tid]) => {

@@ -982,10 +982,33 @@ function _generateOffers() {
   return offers;
 }
 
+// Ф.7 тир-0 (§11.2): без узла «Скаутинг» ПУЛА офферов нет, но ядро-петля живёт —
+// ОДИН разовый заказ за раз, руками. Узел B1 открывает полноценный пул.
+function _scoutSingleOrderT0() {
+  if ((G.activeClients || []).length >= 1) {
+    notify('Тир-0: один заказ за раз — сначала сдай текущий', 'error');
+    return;
+  }
+  if (G.scoutPool && G.scoutPool.length > 0) { showScoutResults(G.scoutPool); return; }
+  if (G.actions < SCOUT_COST) { notify(`Нужно ≥${SCOUT_COST} дней — осталось ${G.actions}`, 'error'); return; }
+  const taken = id => G.activeClients.find(c => c.id.startsWith(id));
+  const t1 = PROJECT_POOL.filter(p => (p.tier || 1) <= 1 && !taken(p.id) &&
+    !(p.oneTime && p.cooldown && (G.oneTimeCooldown || 0) > 0));
+  const ones = t1.filter(p => p.oneTime);
+  const src  = ones.length ? ones : t1;          // приоритет — разовые заказы
+  const pick = src.length ? src[Math.floor(Math.random() * src.length)] : null;
+  if (!pick) { notify('Заказов сейчас нет — попробуй в следующем месяце', 'error'); return; }
+  G.actions -= SCOUT_COST;
+  addLog(`🔍 Поиск разового заказа (−${SCOUT_COST} дня)`, 'teal');
+  G.scoutPool = [{ ...pick }];
+  showScoutResults(G.scoutPool);
+  _emitRender();
+}
+
 function doScouting() {
-  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  // Ф.7: без узла «Скаутинг» — режим одного разового заказа (§11.2), не блок
   if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('scout')) {
-    if (typeof notify === 'function') notify('🔒 Систематический скаутинг заперт — открой «Скаутинг» в Дереве открытий', 'error');
+    _scoutSingleOrderT0();
     return;
   }
   // Если пул уже есть — просто переоткрываем модал без затрат дней
@@ -1002,6 +1025,12 @@ function doScouting() {
 }
 
 function refreshScoutPool() {
+  // Ф.7 тир-0: обновление пула тоже даёт только один разовый заказ
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('scout')) {
+    G.scoutPool = null;
+    _scoutSingleOrderT0();
+    return;
+  }
   if (G.actions<SCOUT_COST){ notify(`Нужно ≥${SCOUT_COST} дней — осталось ${G.actions}`,'error'); return; }
   G.actions-=SCOUT_COST;
   G.scoutPool=null;
