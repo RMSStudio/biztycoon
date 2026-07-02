@@ -639,6 +639,12 @@ function _ensureSeasonOrder(g = G) {
 
 // Активная тема сезона (текущий квартал текущего года).
 function getActiveSeason(g = G) {
+  // Ф.7: без модуля «Сезоны» (режим Rogue-lite) — НЕЙТРАЛЬНЫЙ сезон: все моды
+  // нулевые, label:null → UI-бейдж скрыт, событий нет. Вне режима не влияет.
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('season')) {
+    return { id: 'neutral', label: null, icon: '', color: '#8593ad', desc: '', atmosphere: '',
+             offerBonus: 0, budgetMult: 1, npsNudge: 0, speedMod: 0, riskMod: 0, pool: null };
+  }
   const order = _ensureSeasonOrder(g);
   const id = order[_seasonQuarter(g)] || order[0];
   return SEASON_THEMES.find(t => t.id === id) || SEASON_THEMES[0];
@@ -699,6 +705,8 @@ const SEASON_EVENTS = {
 // Срабатывает при смене квартала (нового сезона). Возвращает true, если событие показано.
 function _maybeFireSeasonEvent() {
   if (typeof G === 'undefined' || !G) return false;
+  // Ф.7: сезоны заперты → без логов/событий смены квартала
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('season')) return false;
   const key = _seasonYear() * 4 + _seasonQuarter();
   if (G._lastSeasonKey == null) { G._lastSeasonKey = key; return false; }   // инициализация без события
   if (key === G._lastSeasonKey) return false;
@@ -2264,6 +2272,11 @@ function advanceMonth() {
 // ══════════════════════════════════════════════════════
 
 function purchaseAI() {
+  // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+  if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('ai')) {
+    notify('🔒 Нейросеть заперта — открой «Нейросеть» в Дереве открытий', 'error');
+    return;
+  }
   const cfg = SCENARIO.ai;
   if (!cfg) { notify('ИИ-модуль недоступен в этом сценарии', 'error'); return; }
   if (G.ai.purchased) { notify('Нейросеть уже куплена', 'error'); return; }

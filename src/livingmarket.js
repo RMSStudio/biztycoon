@@ -1355,6 +1355,11 @@
   // ── Фаза E: покупка офисов, саббрендов, M&A ──────────────────────────
 
   function purchaseOffice(id) {
+    // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('sub')) {
+      if (typeof notify === 'function') notify('🔒 Офисы заперты — открой «Саббренды/Офисы» в Дереве открытий', 'error');
+      return { ok: false, reason: 'locked' };
+    }
     if (typeof G === 'undefined' || !G || !G.living) return { ok: false, reason: 'no_game' };
     const def = OFFICES.find(o => o.id === id);
     if (!def) return { ok: false, reason: 'unknown_office' };
@@ -1373,6 +1378,11 @@
   }
 
   function createSubBrand(id) {
+    // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('sub')) {
+      if (typeof notify === 'function') notify('🔒 Саббренды заперты — открой «Саббренды/Офисы» в Дереве открытий', 'error');
+      return { ok: false, reason: 'locked' };
+    }
     if (typeof G === 'undefined' || !G || !G.living) return { ok: false, reason: 'no_game' };
     const def = SUB_BRANDS.find(b => b.id === id);
     if (!def) return { ok: false, reason: 'unknown_brand' };
@@ -1628,6 +1638,11 @@
   }
 
   function buyEquity(competitorId, pct) {
+    // Ф.7: гейт режима «Rogue-lite»; продажа НЕ гейтится (ликвидация всегда доступна)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('shares')) {
+      if (typeof notify === 'function') notify('🔒 Доли заперты — открой «Доли/акции» в Дереве открытий', 'error');
+      return { ok: false, reason: 'locked' };
+    }
     if (typeof G === 'undefined' || !G || !G.market) return { ok: false, reason: 'no_game' };
     const comp = (G.market.competitors || []).find(c => c.id === competitorId);
     if (!comp) return { ok: false, reason: 'competitor_not_found' };

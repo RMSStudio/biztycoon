@@ -478,9 +478,10 @@
 
   let _lastAcquireId = null;
   function openAcquire(id) {
-    // Ф.7: гейт режима «Rogue-lite» (вне режима не блокирует)
-    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('mna')) {
-      if (typeof notify === 'function') notify('🔒 Поглощения заперты — открой «Поглощения M&A» в Дереве открытий', 'error');
+    // Ф.7: диалог общий для долей (узел shares) и поглощений (узел mna) —
+    // блокируем, только если заперты ОБА; действия внутри гейтятся по своим узлам
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('mna') && !isModuleUnlocked('shares')) {
+      if (typeof notify === 'function') notify('🔒 Инвест-слой заперт — открой «Доли/акции» или «Поглощения M&A» в Дереве открытий', 'error');
       return;
     }
     const lm   = _LM();
@@ -673,6 +674,11 @@
   function _mnaClose() { const m = document.getElementById('cmp-mna-modal'); if (m) m.style.display = 'none'; _mna = null; }
 
   function startMnA(id) {
+    // Ф.7: ветвистый процесс поглощения — гейт узла mna (вне режима не блокирует)
+    if (typeof isModuleUnlocked === 'function' && !isModuleUnlocked('mna')) {
+      if (typeof notify === 'function') notify('🔒 Поглощения заперты — открой «Поглощения M&A» в Дереве открытий', 'error');
+      return;
+    }
     const comp = (G.market && G.market.competitors || []).find(c => c.id === id);
     if (!comp) return;
     _mna = { id, step: 'approach', costMult: 1, yieldMult: 1, extraDays: 0, approachLabel: '', finding: null };

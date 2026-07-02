@@ -127,6 +127,17 @@ Unlocks.reset();
 _ok(Unlocks.getExp() === 0 && Unlocks.getRuns() === 0, 'reset() чистит эксп. и раны');
 `));
 
+// 5.5 (v3.90, хвосты гейтов §11.5): season/ai/sub/shares в реестре и гейтятся
+add(run('Тест 5.5: хвосты гейтов — season/ai/sub/shares', true, `
+['season','ai','sub','shares'].forEach(function(id){
+  _ok(!isModuleUnlocked(id), 'в режиме на тир-0 «' + id + '» заперт');
+});
+Unlocks.unlock('season'); Unlocks.unlock('shares');
+_ok(isModuleUnlocked('season') && isModuleUnlocked('shares'), 'открытые узлы отпираются');
+_ok(!isModuleUnlocked('ai') && !isModuleUnlocked('sub'), 'остальные остаются запертыми');
+Unlocks.reset();
+`));
+
 // 6 (v2): вне режима awardAtRunEnd — null (обычная игра не трогается)
 add(run('Тест 6: вне режима экспертиза не начисляется', false, `
 _ok(Unlocks.awardAtRunEnd(true, { living: { stage: 5 } }) === null, 'awardAtRunEnd вне режима → null');
