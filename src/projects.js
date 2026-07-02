@@ -285,6 +285,11 @@ const Projects = (() => {
   }
 
   function riskDelta(client, delta) {
+    // Ф.7: риск-трейты (Апсейлер и т.п.) усиливают НЕГАТИВНЫЕ дельты — no-op вне режима
+    if (delta > 0 && typeof TraitEngine !== 'undefined') {
+      const _tr = TraitEngine.mods('calcRisk', { project: client });
+      delta = delta * _tr.mult + _tr.add * 0;   // add зарезервирован (v1 — только множитель)
+    }
     client._lcRisk = Math.max(0, Math.min(100, (client._lcRisk || 0) + delta));
   }
 
@@ -1380,7 +1385,12 @@ const Projects = (() => {
     const quality   = Math.min(100, client._lcQualityBonus || 0);
     const risk      = client._lcRisk || 0;
     const revisions = client._lcRevisionCount || 0;
-    const payout    = Math.round((client._totalBudget || 0) * (1 + (G.perkPayoutMult || 0)));
+    let payout      = Math.round((client._totalBudget || 0) * (1 + (G.perkPayoutMult || 0)));
+    // Ф.7: трейты/синергии выплаты (Апсейлер/Продуктовая команда…) — no-op вне режима
+    if (typeof TraitEngine !== 'undefined') {
+      const _tp = TraitEngine.mods('calcPayout', { project: client });
+      payout = Math.round((payout + _tp.add) * _tp.mult);
+    }
 
     G.money += payout;
     G.clientEarnings = G.clientEarnings || {};
@@ -1442,6 +1452,7 @@ const Projects = (() => {
       terminated: false, failed: false, _cased: false,
     });
 
+    const _trTeamIds = (client._assignedStaff || []).slice();   // Ф.7: слепок команды до release
     if (typeof releaseProjectTeam === 'function') releaseProjectTeam(client.id); // Б.9
     G.activeClients = G.activeClients.filter(a => a.id !== client.id);
     delete G.clientNPS[client.id];
@@ -1450,7 +1461,7 @@ const Projects = (() => {
     addLog(`🏁 ${client.name}: сдан! +${fmtK(payout)}${bonusStr} · оценка клиента ${finalNPS}`, 'green');
     notify(`${client.icon} ${client.name} — сдан! +${fmtK(payout)}${bonusStr}`, 'success');
     rd(`Завершён: ${client.name} (LC) оценка клиента ${finalNPS}`, 'client');
-    try { EventBus.emit('project_delivered', { id: client.id, tier: client.tier || 1, lc: true }); } catch (_) {}   // сигнал движка (Ф.7)
+    try { EventBus.emit('project_delivered', { id: client.id, tier: client.tier || 1, lc: true, team: _trTeamIds }); } catch (_) {}   // сигнал движка (Ф.7)
     _emitRender();
   }
 

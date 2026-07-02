@@ -318,6 +318,8 @@ function scoutCandidates(tier) {
     : _pick(_weighted);
 
   const pool = cfg.grades.map((g, i) => generateCandidate(_pickRole(i), g));
+  // Ф.7: скаут-хук — трейты/пулы могут модифицировать кандидатов (no-op вне режима)
+  if (typeof TraitEngine !== 'undefined') pool.forEach(c => TraitEngine.fire('scoutCandidate', { candidate: c }));
   G.candidatePool = [...(G.candidatePool || []), ...pool];
 
   _renderCandidatePool();

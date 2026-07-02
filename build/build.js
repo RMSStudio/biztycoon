@@ -106,6 +106,8 @@ const postEngineBlocks = [
   read('src/meta.js'),
   read('src/unlocks.js'),
   read('src/unlocks-ui.js'),
+  read('src/traits-data.js'),
+  read('src/traits.js'),
   read('src/livingmarket.js'),
   read('src/competitors.js'),
   read('dlc/loader.js'),

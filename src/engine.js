@@ -265,7 +265,13 @@ function getProjectQualityGain(c) {
   assigned.forEach(s => { qSum += (s.qStat != null ? s.qStat : (s.quality ? s.quality / 10 : 5)); });
   const ai = (G.ai && G.ai.aiQBonus) ? G.ai.aiQBonus * 0.2 : 0;
   // 1.5 (фаундер курирует) + 0.6 за каждую единицу qStat команды + пассив ИИ
-  return 1.5 + qSum * 0.6 + ai;
+  let base = 1.5 + qSum * 0.6 + ai;
+  // Ф.7: трейты/синергии (no-op вне режима Rogue-lite / при пустом каталоге)
+  if (typeof TraitEngine !== 'undefined') {
+    const _tq = TraitEngine.mods('calcQuality', { project: c });
+    base = (base + _tq.add * 0.1) * _tq.mult;   // qAdd в «очках Q» ≈ 0.1 gain/мес
+  }
+  return base;
 }
 
 // Назначить сотрудника на проект (один сотрудник — один проект)
@@ -413,6 +419,11 @@ function getTotalStaffCost(g=G) {
   if (SPECS[g.spec].bonus==='staff_cost') t=Math.round(t*(1+SPECS[g.spec].bonusVal));
   // п.13: бонус второй специализации
   if (g.secondSpec && SPECS[g.secondSpec]?.bonus==='staff_cost') t=Math.round(t*(1+SPECS[g.secondSpec].bonusVal));
+  // Ф.7: трейты/синергии ФОТ («Здоровая студия» −5% и т.п.) — no-op вне режима
+  if (typeof TraitEngine !== 'undefined') {
+    const _tu = TraitEngine.mods('calcUpkeep', { G: g });
+    t = Math.round((t + _tu.add) * _tu.mult);
+  }
   return t;
 }
 
@@ -958,6 +969,8 @@ function _generateOffers() {
   if (offers.length < themedQuota) _pick(shTheme, themedQuota, false);   // гарантируем наплыв
   _pick(shReg, offerCount, true);
   if (offers.length < offerCount) { _pick(shTheme, offerCount, false); _pick(shReg, offerCount, false); }
+  // Ф.7: мета/скаут-трейты могут модифицировать пул офферов — no-op вне режима
+  if (typeof TraitEngine !== 'undefined') TraitEngine.fire('filterOffers', { offers });
   return offers;
 }
 
@@ -1724,6 +1737,13 @@ function completeProject(cid) {
   const _qNpsBoost = _avgQ > 70 ? Math.min(8, Math.round((_avgQ - 70) / 5)) : 0;
   if (_qNpsBoost > 0) nudgeClientRating(c, _qNpsBoost);
 
+  // Ф.7: трейты/синергии выплаты (Апсейлер/Продуктовая команда…) — no-op вне режима
+  const _trTeamIds = (c._assignedStaff || []).slice();   // слепок команды до release
+  if (typeof TraitEngine !== 'undefined') {
+    const _tp = TraitEngine.mods('calcPayout', { project: c });
+    payout = Math.round((payout + _tp.add) * _tp.mult);
+  }
+
   // payment_delay: шанс задержать часть выплаты на месяц
   let immediatePayment = payout;
   if (c.modifier?.type === 'payment_delay' && Math.random() < c.modifier.val) {
@@ -1759,7 +1779,7 @@ function completeProject(cid) {
   addLog(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}${penTag}${_specTag}${_qPayoutTag} | NPS ${finalNPS} | Порт. +${pfBonus}${repGain>0?' | Реп +'+repGain:''}`, onTime ? 'green' : 'amber');
   notify(`🏁 «${c.name}» ${timeTag} → +${fmtK(immediatePayment)}`, onTime ? 'success' : 'info');
   rd(`Завершён: ${c.name} → +${fmtK(immediatePayment)} ${timeTag}`, 'event');
-  EventBus.emit('project_delivered', { id: c.id, tier: c.tier || 1, lc: false });   // сигнал движка (Ф.7)
+  EventBus.emit('project_delivered', { id: c.id, tier: c.tier || 1, lc: false, team: _trTeamIds });   // сигнал движка (Ф.7)
 
   renderPortfolioTab();
   _emitRender();
@@ -1847,6 +1867,7 @@ function scheduleCalendarEvent({ inMonths, label, money = 0, icon = '📌' }) {
 function advanceMonth() {
   // ① Счётчик месяцев у каждого клиента + декремент кулдаунов
   G.activeClients.forEach(c=>{ c._monthsSigned=(c._monthsSigned||0)+1; });
+  EventBus.emit('month_advanced', { month: G.month });   // сигнал движка (Ф.7 onMonth и др.)
   if ((G.oneTimeCooldown||0) > 0) G.oneTimeCooldown--;
   // Декремент кулдаунов действий восстановления усталости
   if (G.fatigueActionCooldowns) {
@@ -1938,7 +1959,9 @@ function advanceMonth() {
     // Обычные проекты: _lcChain отсутствует → workPhaseCnt=1 → поведение прежнее
     const workPhaseCnt = c._lcChain ? c._lcChain.filter(p => p.startsWith('work_')).length : 1;
     const phaseDur     = (c._duration || 3) / Math.max(1, workPhaseCnt);
-    const monthProg    = (100 / phaseDur) * efficiency * fatigueMult * speedMult;
+    // Ф.7: трейты скорости (Одиночка/Марафонец/Кранчер/Дирижёр…) — no-op вне режима
+    const _tSpd        = (typeof TraitEngine !== 'undefined') ? TraitEngine.mods('calcSpeed', { project: c }) : { add: 0, mult: 1 };
+    const monthProg    = (100 / phaseDur) * efficiency * fatigueMult * speedMult * _tSpd.mult + _tSpd.add;
     // Округляем до 2 знаков — устраняет накопление float-погрешности (баг П.13)
     c._progress = Math.min(100, Math.round(((c._progress||0) + monthProg) * 100) / 100);
     // Пассивное накопление качества от команды (масштаб от эффективности проекта)

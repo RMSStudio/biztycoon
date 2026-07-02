@@ -1,5 +1,24 @@
 # BizTycoon — Changelog
 
+## v3.88 — Ф.7 трейт-слой: TraitEngine + стартовый каталог (§14.9 шаги 1–3) (2026-07-02)
+
+**Контекст:** ядро реиграбельности Ф.7 (§12) — трейты-«джокеры» и синергии состава как ДАННЫЕ. Три слоя §14.1: каталог (`src/traits-data.js`) → интерпретатор (`src/traits.js`) → тонкие хуки в системах. Вне режима «Rogue-lite» и при пустом каталоге — полный no-op.
+
+**Движок (`src/traits.js`, DOM-free):**
+- `TraitEngine.mods(hook, ctx)` → `{add, mult}` для числовых хуков (`calcQuality`/`calcSpeed`/`calcPayout`/`calcUpkeep`/`calcRisk`); `fire(hook, ctx)` — событийные (`onDeliver`/`onHire`/`onMonth`/`onStageUp`/`scoutCandidate`/`filterOffers`).
+- Словари §14.3/§14.4: **17 предикатов** (role/grade/projectTier/soloOnProject/countRoleOnProject/countRoleInStaff/countGradeInStaff/countGradeOnProject/distinctRolesOnProject/teamSize/teamMood/monthsOnProject/overdue/companyStage/teamHasGrade/moduleOpen/projectType) + **15 глаголов** (qAdd/qMult/speed*/payout*/upkeep*/risk*/moodAdd/fatigueAdd/statAdd/money/rep/stackPer). Расширение — `Predicates.register`/`Effects.register` (§14.0: 90% нового контента = запись в данные).
+- Stateful-скейлеры `stackPer:{event, ownProject, cap}` — движок копит счётчик на спеце (`_rlStacks`), величина в do через `stackOf`.
+- Проектные хуки требуют носителя НА проекте (ось расстановки §13.4); глобальные — весь штат. Трейты живут в `staff.rlTraits[]` (выдача в скауте — шаг 5). `activeSynergies()` — для будущего экрана «Билд команды» (шаг 4).
+- Событийные хуки подписаны на сигналы движка (`project_delivered`/`staff_hired`/`month_advanced`/`stage_reached`) — врезок для них не нужно.
+
+**Каталог (`src/traits-data.js`, чистые данные §14.5/§14.6):** 12 трейтов по категориям §13.2 (Перфекционист-скейлер, Нишевый/Одиночка/Марафонец/Кранчер-условные, Ментор/Финишер-триггеры, Тимлид/Дирижёр-синерго, Апсейлер-эконом, HR-душа-энейблер, Звезда-drawback) + 5 синергий §13.3/§13.4 (Дизайн-бутик, Тех-шоп, Здоровая студия-пирамида, Продуктовая команда (project-scope), Парное ревью). Поле `pool` — привязка к узлам дерева (§13.6, активируется шагом 5). Числа — заглушки.
+
+**Врезки (шаг 2, все под `typeof TraitEngine`):** `getProjectQualityGain` (Q), `monthProg` (скорость), `completeProject`+LC-сдача (выплата), `getTotalStaffCost` (ФОТ), `riskDelta` (усиление негативных дельт риска), `scoutCandidates` (хук кандидатов), `_generateOffers` (хук офферов). Новый сигнал `month_advanced` в `advanceMonth`. Сигнал `project_delivered` теперь несёт слепок команды `team[]` (снимается до `releaseProjectTeam`).
+
+**Тесты:** новый `sim/test-traits.js` **26/26** (no-op вне режима; предикаты/эффекты; каждый стартовый трейт/синергия; stackPer с капом и ownProject; расширение через register-API; мусорная запись не роняет движок — контракт §14.8). Регрессий нет: unlocks 42/42, unlocks-ui 16/16, meta 231/231, runmap 60/60, seasons 27/27, director 24/24, ma 31/31, storyarcs 67/67; полный LC-прогон `sim2-lc.js` — 0 ошибок/софтлоков. Сборка OK (1363.3 KB).
+
+**Остаётся по Ф.7:** шаг 4 — экран «Билд команды» (UI поверх `activeSynergies`); шаг 5 — выдача трейтов кандидатам в скауте из пулов открытых узлов (§13.6, `pool`); расширение каталога до полного §13; хвосты гейтов; balance-pass §15.6.
+
 ## v3.87 — Ф.7 петля рана: экономика экспертизы + экран «Дерево открытий» (2026-07-02)
 
 **Контекст:** §11.7 шаг 3 — режим «Rogue-lite» стал играбельной петлёй (§15.0): ран → экспертиза за исход/стадию/«первые разы» → трата на узлы дерева → новый ран. Вне режима всё по-прежнему не затрагивается.
