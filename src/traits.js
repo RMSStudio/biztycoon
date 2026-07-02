@@ -128,6 +128,17 @@
   Predicates.register('moduleOpen', (ctx, arg) => {
     try { return typeof isModuleUnlocked === 'function' ? isModuleUnlocked(arg) : true; } catch (e) { return true; }
   });
+  // v2-словарь (расширение под каталог §13):
+  Predicates.register('onSchedule', (ctx) =>                          // проект идёт В срок (антоним overdue)
+    ctx.project && (ctx.project._monthsSigned || 0) <= (ctx.project._duration || 99));
+  Predicates.register('sameRoleOnProject', (ctx, arg) => {            // коллег ТОЙ ЖЕ роли, что у носителя (без него)
+    if (!ctx.staff) return false;
+    return _team(ctx).filter(s => s.role === ctx.staff.role && _sid(s) !== _sid(ctx.staff)).length >= ((arg && arg.min) || 1);
+  });
+  Predicates.register('traitInStaff', (ctx, arg) =>                   // в штате есть носитель трейта id
+    _staffAll(ctx).some(s => (s.rlTraits || []).includes(typeof arg === 'string' ? arg : arg.id)));
+  Predicates.register('traitFamilyInStaff', (ctx, arg) =>             // носителей трейтов семейства ≥ min
+    _staffAll(ctx).filter(s => (s.rlTraits || []).some(tid => { const t = _byId['t:' + tid]; return t && t.family === arg.family; })).length >= (arg.min || 1));
 
   // ── Словарь ЭФФЕКТОВ (§14.4): имя → { home, calc | apply } ──────────
   //  calc-глаголы возвращают дельту {add, mult} для числовых хуков;
@@ -370,8 +381,47 @@
     EventBus.on('stage_reached',  (p) => { const g = (typeof G !== 'undefined') ? G : {}; fire('onStageUp', { G: g, stage: p && p.stage }); });
   }
 
+  // ── Валидатор каталога (§14.8 контракт «данные не ломают движок») ────
+  // Возвращает список проблем []; пустой = каталог корректен. Дёргается
+  // тестами и редактором каталога; движок мусор и так игнорирует.
+  function validateCatalog() {
+    const issues = [];
+    const ids = {};
+    const KNOWN_HOOKS = { calcQuality:1, calcSpeed:1, calcPayout:1, calcUpkeep:1, calcRisk:1,
+                          onDeliver:1, onHire:1, onMonth:1, onStageUp:1, onAssign:1, scoutCandidate:1, filterOffers:1 };
+    const checkWhen = (when, where) => (when || []).forEach(cond => Object.keys(cond).forEach(k => {
+      if (!Predicates._m[k]) issues.push(where + ': неизвестный предикат «' + k + '»');
+    }));
+    const checkDo = (dos, where) => (dos || []).forEach(op => {
+      const verbs = Object.keys(op).filter(k => k !== 'when' && k !== 'target' && k !== 'on' && k !== 'stackOf');
+      if (!verbs.some(k => Effects.get(k))) issues.push(where + ': нет известного глагола среди ' + verbs.join('/'));
+      checkWhen(op.when, where + '.do.when');
+    });
+    _traits.forEach(t => {
+      const w = 'трейт ' + t.id;
+      if (ids['t:' + t.id]) issues.push(w + ': дубль id'); ids['t:' + t.id] = 1;
+      if (!t.name || !t.desc) issues.push(w + ': нет name/desc');
+      if (t.pool && !(t.pool in POOL_NODE)) issues.push(w + ': неизвестный pool «' + t.pool + '»');
+      Object.keys(t.hooks || {}).forEach(h => {
+        if (!KNOWN_HOOKS[h]) issues.push(w + ': неизвестный хук «' + h + '»');
+        (t.hooks[h] || []).forEach(r => { checkWhen(r.when, w + '.' + h); checkDo(r.do, w + '.' + h); });
+      });
+      if (t.stackPer && !t.stackPer.event) issues.push(w + ': stackPer без event');
+    });
+    _synergies.forEach(sy => {
+      const w = 'синергия ' + sy.id;
+      if (ids['s:' + sy.id]) issues.push(w + ': дубль id'); ids['s:' + sy.id] = 1;
+      if (!sy.name || !sy.desc) issues.push(w + ': нет name/desc');
+      if (sy.scope && sy.scope !== 'staff' && sy.scope !== 'project') issues.push(w + ': scope не staff/project');
+      checkWhen(sy.when, w);
+      checkDo(sy.do, w);
+      (sy.do || []).forEach(op => { if (op.on && !KNOWN_HOOKS[op.on]) issues.push(w + ': неизвестный on «' + op.on + '»'); });
+    });
+    return issues;
+  }
+
   W.TraitEngine = { mods, fire, activeSynergies, synergiesOverview, synergyStatus,
-                    load, registerTrait, registerSynergy, catalog, get,
+                    load, registerTrait, registerSynergy, catalog, get, validateCatalog,
                     poolOpen, availableTraitPool, assignScoutTraits, POOL_NODE,
                     isActive: _active, Predicates, Effects, _onStackEvent };
 

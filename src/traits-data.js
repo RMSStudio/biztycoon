@@ -1,108 +1,287 @@
-// ══════════════════════════════════════════════════════
-//  Ф.7 — Стартовый каталог трейтов/синергий (§13 → данные, §14.5/§14.6)
+// ══════════════════════════════════════════════════════════════════════
+//  Ф.7 — КАТАЛОГ ТРЕЙТОВ И СИНЕРГИЙ (§13 → данные, §14.5/§14.6)
 //
-//  Слой 1 из трёх (§14.1): ЧИСТЫЕ ДАННЫЕ, без DOM/логики/замыканий
-//  (Godot-portable). Исполняет src/traits.js (TraitEngine).
+//  Чистые данные без DOM/логики (Godot-portable). Исполняет src/traits.js.
+//  Проверка корректности: TraitEngine.validateCatalog() → список проблем.
 //
-//  Добавить новый трейт/синергию = дописать объект сюда (§14.7).
-//  pool — узел «Дерева открытий», при котором трейт попадает в скаут-пул
-//  (§13.6; привязка к скауту — шаг 5, до этого поле информационное).
-//  Все числа — заглушки под плейтест (§15.6).
+// ┌─────────────────────── ФОРМУЛА ТРЕЙТА ────────────────────────────────┐
+// │  КТО:    id · name · icon · family · pool · weight/rarity            │
+// │  КОГДА:  хук — момент, в который трейт «просыпается»                 │
+// │  ЕСЛИ:   when-предикаты — все условия должны совпасть (AND)          │
+// │  ТО:     do-глаголы — что меняется (числа/события)                   │
+// │  ТЕКСТ:  desc — одна строка, понятная игроку с первого взгляда       │
+// └───────────────────────────────────────────────────────────────────────┘
 //
-//  12 трейтов (по категориям §13.2) + 5 синергий (§13.3/§13.4).
-// ══════════════════════════════════════════════════════
+//  ── КОГДА (хуки) ──────────────────────────────────────────────────────
+//  calcQuality  Q проекта (ежемесячный вклад)   calcSpeed   темп проекта
+//  calcPayout   выплата при сдаче               calcUpkeep  ФОТ/мес
+//  calcRisk     усиление/гашение риск-событий   onDeliver   в момент сдачи
+//  onMonth      каждый месяц                    onHire      при найме
+//  onStageUp    смена стадии компании           scoutCandidate/filterOffers — скаут
+//  ⚠ проектные хуки (Q/скорость/выплата/риск/onDeliver) работают, только
+//    если НОСИТЕЛЬ трейта назначен на этот проект (ось расстановки §13.4)
+//
+//  ── ЕСЛИ (предикаты; аргумент после двоеточия) ────────────────────────
+//  role:'designer'                  grade:'junior|middle|senior|lead|star'
+//  projectTier:{min,max}            projectType:'small|corp|store'
+//  soloOnProject:true               sameRoleOnProject:{min}   ← коллеги ЕГО роли
+//  countRoleOnProject:{role,min}    countGradeOnProject:{grade,min}
+//  countRoleInStaff:{role,min}      countGradeInStaff:{grade,min}
+//  distinctRolesOnProject:{min}     teamSize:{min,max}        teamMood:{min}
+//  monthsOnProject:{min}            overdue:true | onSchedule:true
+//  companyStage:{min}               teamHasGrade:'junior'     moduleOpen:'market'
+//  traitInStaff:'mentor'            traitFamilyInStaff:{family,min}
+//
+//  ── ТО (глаголы) ──────────────────────────────────────────────────────
+//  числа:   qAdd/qMult · speedAdd/speedMult · payoutAdd/payoutMult
+//           upkeepAdd/upkeepMult · riskAdd/riskMult   (Mult: 0.15 = +15%)
+//  события: money:N · rep:N · moodAdd:N · fatigueAdd:N
+//           statAdd:{stat,v} (перманентный рост стата)
+//  цели:    target:'self|team|staff_all|role:<id>|grade:<id>'
+//  скейлер: stackPer:{event,ownProject,cap} на трейте + stackOf:'<id>' в do —
+//           величина глагола умножается на накопленный счётчик
+//
+//  ── ПУЛЫ (§13.6): трейт приходит в скаут, когда узел дерева ОТКРЫТ ────
+//  A1 Найм        A2 Lifecycle   A3 Портфолио   A4 Древо перков  A5 Саббренды
+//  B1 Скаутинг    B2 Переговоры  B3 Живой рынок B4 Доли/акции    B5 M&A
+//  C1 Нейросеть   C2 Сезоны      C3 Директор
+//
+//  ── СЕМЕЙСТВА (теги на экране «Билд команды») ─────────────────────────
+//  scaler скейл · conditional услов. · trigger триггер · synergy синерг.
+//  economic эконом. · enabler энейблер · drawback цена
+//
+// ┌──────────────── ШАБЛОН (скопируй и заполни) ──────────────────────────
+// │ { id:'', name:'', icon:'', family:'', pool:'', weight:2, rarity:'common',
+// │   hooks:{ ХУК:[ { when:[ {ПРЕДИКАТ:АРГ} ], do:[ {ГЛАГОЛ:ЧИСЛО} ] } ] },
+// │   desc:'Что делает — одной строкой.' },
+// └───────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
 
 /* eslint-disable no-unused-vars */
 var STAFF_TRAITS = [
 
-  // ── Скейлеры (§13.2.1) — snowball за ран ─────────────────────────────
+  // ════ СКЕЙЛЕРЫ (§13.2.1) — копят силу за ран, snowball ═══════════════
+
+  // 💎 [копит: свои сдачи, до 10] → +1 Q за каждую
   { id:'perfectionist', name:'Перфекционист', icon:'💎', family:'scaler', pool:'A3',
     weight:3, rarity:'common',
     stackPer:{ event:'project_delivered', ownProject:true, cap:10 },
     hooks:{ calcQuality:[ { when:[], do:[ { qAdd:1, stackOf:'perfectionist' } ] } ] },
     desc:'+1 Q проекта за каждую свою сдачу в этом ране (до +10).' },
 
-  // ── Условные множители (§13.2.2) — подбирай проект под трейт ────────
+  // 🗃 [копит: свои сдачи, до 10] → +4К к выплате за каждую
+  { id:'collector', name:'Коллекционер', icon:'🗃', family:'scaler', pool:'A3',
+    weight:2, rarity:'uncommon',
+    stackPer:{ event:'project_delivered', ownProject:true, cap:10 },
+    hooks:{ calcPayout:[ { when:[], do:[ { payoutAdd:4000, stackOf:'collector' } ] } ] },
+    desc:'Каждая его сдача добавляет +4К к выплатам всех следующих проектов (до +40К).' },
+
+  // 🎖 [копит: прожитые месяцы, до 20] → +0.15 Q за каждый
+  { id:'veteran', name:'Ветеран', icon:'🎖', family:'scaler', pool:'A4',
+    weight:2, rarity:'uncommon',
+    stackPer:{ event:'month_advanced', cap:20 },
+    hooks:{ calcQuality:[ { when:[], do:[ { qAdd:0.15, stackOf:'veteran' } ] } ] },
+    desc:'Матереет со временем: +0.15 Q за каждый месяц в ране (до +3).' },
+
+  // ════ УСЛОВНЫЕ (§13.2.2) — подбирай проект/момент под трейт ══════════
+
+  // 🎯 [если проект T3+] → ×1.5 вклад качества
   { id:'niche_expert', name:'Нишевый', icon:'🎯', family:'conditional', pool:'A1',
     weight:3, rarity:'common',
     hooks:{ calcQuality:[ { when:[ { projectTier:{ min:3 } } ], do:[ { qMult:0.5 } ] } ] },
     desc:'×1.5 к вкладу качества на проектах T3+.' },
 
+  // 🐺 [если один на проекте] → +40% скорость
   { id:'loner', name:'Одиночка', icon:'🐺', family:'conditional', pool:'A1',
     weight:2, rarity:'common',
     hooks:{ calcSpeed:[ { when:[ { soloOnProject:true } ], do:[ { speedMult:0.4 } ] } ] },
     desc:'+40% скорость проекта, если работает на нём один.' },
 
+  // 🏃 [если проект идёт 4+ мес] → +20% скорость
   { id:'marathoner', name:'Марафонец', icon:'🏃', family:'conditional', pool:'A2',
     weight:2, rarity:'common',
     hooks:{ calcSpeed:[ { when:[ { monthsOnProject:{ min:4 } } ], do:[ { speedMult:0.2 } ] } ] },
     desc:'+20% скорость на проектах длиннее 3 месяцев (раскачивается).' },
 
+  // 🔥 [если просрочка] → +25% скорость, но команда устаёт
   { id:'cruncher', name:'Кранчер', icon:'🔥', family:'conditional', pool:'A2',
     weight:2, rarity:'uncommon',
     hooks:{ calcSpeed:[ { when:[ { overdue:true } ], do:[ { speedMult:0.25 } ] } ],
             onMonth:  [ { when:[], do:[ { fatigueAdd:1 } ] } ] },
     desc:'+25% скорость на просроченных проектах, но команда устаёт быстрее.' },
 
-  // ── Триггеры (§13.2.3) — разовый импульс on-event ────────────────────
+  // ⏱ [если проект В срок] → +8% выплата
+  { id:'deadliner', name:'Дедлайнер', icon:'⏱', family:'conditional', pool:'B2',
+    weight:2, rarity:'common',
+    hooks:{ calcPayout:[ { when:[ { onSchedule:true } ], do:[ { payoutMult:0.08 } ] } ] },
+    desc:'+8% выплата, если проект сдаётся без просрочки (ставка на дисциплину).' },
+
+  // 🏦 [если проект-корпорат] → +12% выплата
+  { id:'corp_wolf', name:'Корпорат-волк', icon:'🏦', family:'conditional', pool:'B3',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcPayout:[ { when:[ { projectType:'corp' } ], do:[ { payoutMult:0.12 } ] } ] },
+    desc:'Знает язык корпораций: +12% выплата на корпоративных проектах.' },
+
+  // 🐣 [если проект T1] → +35% скорость
+  { id:'underdog', name:'Мастер мелочей', icon:'🐣', family:'conditional', pool:'B1',
+    weight:2, rarity:'common',
+    hooks:{ calcSpeed:[ { when:[ { projectTier:{ max:1 } } ], do:[ { speedMult:0.35 } ] } ] },
+    desc:'+35% скорость на мелких проектах T1 (анти-Нишевый: любит конвейер).' },
+
+  // 🧘 [если мораль штата 75+] → +2 Q
+  { id:'stoic', name:'Стоик', icon:'🧘', family:'conditional', pool:'C2',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcQuality:[ { when:[ { teamMood:{ min:75 } } ], do:[ { qAdd:2 } ] } ] },
+    desc:'+2 Q его проектам, пока средняя мораль штата 75+ (нужна атмосфера).' },
+
+  // ════ ТРИГГЕРЫ (§13.2.3) — разовый импульс on-event ══════════════════
+
+  // 🎓 [при сдаче, если в команде джун] → джуны навсегда +1 качеству
   { id:'mentor', name:'Ментор', icon:'🎓', family:'trigger', pool:'A2',
     weight:2, rarity:'uncommon',
     hooks:{ onDeliver:[ { when:[ { teamHasGrade:'junior' } ],
                           do:[ { statAdd:{ stat:'qStat', v:1 }, target:'grade:junior' } ] } ] },
     desc:'При сдаче — все джуны команды навсегда +1 к качеству.' },
 
+  // 🏁 [при сдаче T3+] → +40К в кассу
   { id:'finisher', name:'Финишер', icon:'🏁', family:'trigger', pool:'B2',
     weight:2, rarity:'uncommon',
     hooks:{ onDeliver:[ { when:[ { projectTier:{ min:3 } } ], do:[ { money:40000 } ] } ] },
     desc:'При сдаче T3+ — разовый бонус 40 000 в кассу.' },
 
-  // ── Синерго-трейты (§13.2.4) — масштаб от ДРУГИХ ─────────────────────
+  // 🌧 [при каждой его сдаче] → +1 репутация
+  { id:'rainmaker', name:'Рейнмейкер', icon:'🌧', family:'trigger', pool:'B3',
+    weight:2, rarity:'uncommon',
+    hooks:{ onDeliver:[ { when:[], do:[ { rep:1 } ] } ] },
+    desc:'Каждая его сдача — +1 к репутации агентства (имя на рынке).' },
+
+  // ════ СИНЕРГО-ТРЕЙТЫ (§13.2.4) — масштаб от ДРУГИХ ═══════════════════
+
+  // 🧭 [если рядом 2+ разработчика] → +3 Q
   { id:'teamlead', name:'Тимлид', icon:'🧭', family:'synergy', pool:'A1',
     weight:2, rarity:'uncommon',
     hooks:{ calcQuality:[ { when:[ { countRoleOnProject:{ role:'developer', min:2 } } ],
                             do:[ { qAdd:3 } ] } ] },
     desc:'+3 Q проекта, если рядом на проекте 2+ разработчика.' },
 
+  // 🎼 [если на проекте 3+ разные роли] → +15% скорость
   { id:'conductor', name:'Дирижёр', icon:'🎼', family:'synergy', pool:'A5',
     weight:1, rarity:'rare',
     hooks:{ calcSpeed:[ { when:[ { distinctRolesOnProject:{ min:3 } } ], do:[ { speedMult:0.15 } ] } ] },
     desc:'+15% скорость, если на проекте 3+ разные роли (награда за диверсити).' },
 
-  // ── Экономические (§13.2.5) ──────────────────────────────────────────
+  // 🪞 [если рядом 2+ коллеги ЕГО роли] → +20% скорость (анти-Дирижёр)
+  { id:'clone_master', name:'Клон-мастер', icon:'🪞', family:'synergy', pool:'A5',
+    weight:1, rarity:'rare',
+    hooks:{ calcSpeed:[ { when:[ { sameRoleOnProject:{ min:2 } } ], do:[ { speedMult:0.2 } ] } ] },
+    desc:'+20% скорость в моно-стеке: рядом 2+ коллеги его же роли (противоположность Дирижёру).' },
+
+  // ════ ЭКОНОМИЧЕСКИЕ (§13.2.5) — меняют «сколько заработал/потратил» ═══
+
+  // 💼 [на T2+] → +12% выплата, но риск-события бьют сильнее
   { id:'upseller', name:'Апсейлер', icon:'💼', family:'economic', pool:'B2',
     weight:2, rarity:'uncommon',
     hooks:{ calcPayout:[ { when:[ { projectTier:{ min:2 } } ], do:[ { payoutMult:0.12 } ] } ],
             calcRisk:  [ { when:[], do:[ { riskMult:0.3 } ] } ] },
     desc:'+12% выплата на T2+, но риск-события бьют его проекты на 30% сильнее.' },
 
-  // ── Мораль-движки / энейблеры (§13.2.6) ──────────────────────────────
+  // 🦈 [каждый его проект] → +15К к выплате (жёсткая переговорка)
+  { id:'shark', name:'Акула', icon:'🦈', family:'economic', pool:'B4',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcPayout:[ { when:[], do:[ { payoutAdd:15000 } ] } ] },
+    desc:'Дожимает условия: +15К к выплате любого своего проекта.' },
+
+  // 🌿 [если мораль штата 80+] → −10% ФОТ
+  { id:'frugal', name:'Бережливый', icon:'🌿', family:'economic', pool:'A3',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcUpkeep:[ { when:[ { teamMood:{ min:80 } } ], do:[ { upkeepMult:-0.10 } ] } ] },
+    desc:'−10% ФОТ всей студии, пока мораль 80+ (люди работают не за деньги).' },
+
+  // 🏷 [всегда] → +25% скорость, но −8% выплата (конвейер со скидкой)
+  { id:'discounter', name:'Дискаунтер', icon:'🏷', family:'economic', pool:'B1',
+    weight:2, rarity:'common',
+    hooks:{ calcSpeed: [ { when:[], do:[ { speedMult:0.25 } ] } ],
+            calcPayout:[ { when:[], do:[ { payoutMult:-0.08 } ] } ] },
+    desc:'Гонит объём: +25% скорость его проектов, но −8% выплата (маржа тает).' },
+
+  // ════ ЭНЕЙБЛЕРЫ / МОРАЛЬ (§13.2.6) — снимают лимиты ══════════════════
+
+  // 🤗 [каждый месяц] → +2 морали всем
   { id:'hr_soul', name:'HR-душа', icon:'🤗', family:'enabler', pool:'A5',
     weight:2, rarity:'uncommon',
     hooks:{ onMonth:[ { when:[], do:[ { moodAdd:2, target:'staff_all' } ] } ] },
     desc:'+2 морали всей команде каждый месяц (снимает потолок размера штата).' },
 
-  // ── Drawbacks (§13.2.9) — сильные, но с ценой ────────────────────────
+  // 🤖 [каждый месяц] → −2 усталости команды
+  { id:'automator', name:'Автоматизатор', icon:'🤖', family:'enabler', pool:'C1',
+    weight:2, rarity:'uncommon',
+    hooks:{ onMonth:[ { when:[], do:[ { fatigueAdd:-2 } ] } ] },
+    desc:'Скрипты и пайплайны: −2 усталости команды каждый месяц.' },
+
+  // 🛡 [риск-события его проектов] → бьют на 25% слабее
+  { id:'insurer', name:'Страховщик', icon:'🛡', family:'enabler', pool:'C3',
+    weight:1, rarity:'rare',
+    hooks:{ calcRisk:[ { when:[], do:[ { riskMult:-0.25 } ] } ] },
+    desc:'Риск-события бьют его проекты на 25% слабее (превращает хаос в план).' },
+
+  // ════ DRAWBACKS (§13.2.9) — сильные, но с ценой ══════════════════════
+
+  // 👑 [+5 Q его проектам] ↔ [−1 мораль всем каждый месяц]
   { id:'star_ego', name:'Звезда', icon:'👑', family:'drawback', pool:'B3',
     weight:1, rarity:'rare',
     hooks:{ calcQuality:[ { when:[], do:[ { qAdd:5 } ] } ],
             onMonth:    [ { when:[], do:[ { moodAdd:-1, target:'staff_all' } ] } ] },
     desc:'+5 Q любому своему проекту, но −1 морали всем каждый месяц (эго).' },
+
+  // ⚡ [+30% скорость] ↔ [+2 усталости каждый месяц]
+  { id:'burnout', name:'Выгораемый', icon:'⚡', family:'drawback', pool:'C3',
+    weight:1, rarity:'rare',
+    hooks:{ calcSpeed:[ { when:[], do:[ { speedMult:0.3 } ] } ],
+            onMonth:  [ { when:[], do:[ { fatigueAdd:2 } ] } ] },
+    desc:'+30% скорость его проектов, но выжигает команду: +2 усталости/мес.' },
+
+  // 🥇 [+6 Q его проектам] ↔ [+25К к ФОТ]
+  { id:'expensive_genius', name:'Дорогой гений', icon:'🥇', family:'drawback', pool:'B5',
+    weight:1, rarity:'rare',
+    hooks:{ calcQuality:[ { when:[], do:[ { qAdd:6 } ] } ],
+            calcUpkeep: [ { when:[], do:[ { upkeepAdd:25000 } ] } ] },
+    desc:'+6 Q любому своему проекту, но контракт +25К/мес к ФОТ.' },
 ];
+
+// ┌─────────────────────── ФОРМУЛА СИНЕРГИИ ──────────────────────────────┐
+// │  КТО:    id · name · icon · scope ('staff' = весь штат,              │
+// │          'project' = состав на ОДНОМ проекте — ось расстановки Ф.4)  │
+// │  ЕСЛИ:   when — условия на СОСТАВ (все AND)                          │
+// │  ТО:     do — глаголы; хук берётся из глагола автоматически          │
+// │          (событийным можно указать on:'onMonth' и target)            │
+// │  ТЕКСТ:  desc — «условие → эффект» одной строкой                     │
+// └───────────────────────────────────────────────────────────────────────┘
 
 var TEAM_SYNERGIES = [
 
   // ── Роле-стек «цех» (§13.3, scope: штат) ─────────────────────────────
+
+  // 🎨 [3+ дизайнера в штате] → +4 Q всем проектам
   { id:'design_boutique', name:'Дизайн-бутик', icon:'🎨', scope:'staff',
     when:[ { countRoleInStaff:{ role:'designer', min:3 } } ],
     do:[ { qAdd:4 } ],
     desc:'3+ дизайнера в штате → +4 Q всем проектам.' },
 
+  // 💻 [3+ разработчика в штате] → +10% скорость всех проектов
   { id:'tech_shop', name:'Тех-шоп', icon:'💻', scope:'staff',
     when:[ { countRoleInStaff:{ role:'developer', min:3 } } ],
     do:[ { speedMult:0.10 } ],
     desc:'3+ разработчика в штате → +10% скорость всех проектов.' },
 
-  // ── Грейд-архетип «пирамида» (§13.3) ─────────────────────────────────
+  // 📡 [3+ SMM в штате] → +10К/мес входящего потока
+  { id:'media_machine', name:'Медиа-машина', icon:'📡', scope:'staff',
+    when:[ { countRoleInStaff:{ role:'smm', min:3 } } ],
+    do:[ { money:10000, on:'onMonth' } ],
+    desc:'3+ SMM в штате → медийный поток приносит +10К каждый месяц.' },
+
+  // ── Грейд-архетипы (§13.3) ───────────────────────────────────────────
+
+  // 🏛 [пирамида 1 sr / 2+ md / 3+ jr] → −5% ФОТ и +1 мораль/мес
   { id:'healthy_studio', name:'Здоровая студия', icon:'🏛', scope:'staff',
     when:[ { countGradeInStaff:{ grade:'senior', min:1 } },
            { countGradeInStaff:{ grade:'middle', min:2 } },
@@ -111,7 +290,42 @@ var TEAM_SYNERGIES = [
          { moodAdd:1, on:'onMonth', target:'staff_all' } ],
     desc:'Пирамида 1 sr / 2+ md / 3+ jr → −5% ФОТ и +1 мораль/мес.' },
 
-  // ── Роле-комбо (§13.3, scope: проект — ось расстановки §13.4) ────────
+  // 🌱 [3+ джуна + Ментор в штате] → +3 Q всем (менторский конвейер)
+  { id:'jun_rush', name:'Джун-раш', icon:'🌱', scope:'staff',
+    when:[ { countGradeInStaff:{ grade:'junior', min:3 } },
+           { traitInStaff:'mentor' } ],
+    do:[ { qAdd:3 }, { upkeepMult:-0.05 } ],
+    desc:'3+ джуна под крылом Ментора → +3 Q всем проектам и −5% ФОТ (дёшево и растёт).' },
+
+  // 🕰 [3+ senior и штат ≤5] → +12% выплата (мало и премиум)
+  { id:'boutique', name:'Бутик', icon:'🕰', scope:'staff',
+    when:[ { countGradeInStaff:{ grade:'senior', min:3 } },
+           { teamSize:{ max:5 } } ],
+    do:[ { payoutMult:0.12 } ],
+    desc:'3+ senior в компактном штате (≤5) → +12% выплата: редкие дорогие сдачи.' },
+
+  // ── Трейт-семейные (§13.3) ───────────────────────────────────────────
+
+  // ❄️ [3+ носителя скейлер-трейтов] → +2 Q всем (снежный ком)
+  { id:'snowball', name:'Снежный ком', icon:'❄️', scope:'staff',
+    when:[ { traitFamilyInStaff:{ family:'scaler', min:3 } } ],
+    do:[ { qAdd:2 } ],
+    desc:'3+ скейлера в штате → +2 Q всем: слаб на старте, имба к концу рана.' },
+
+  // ── Роле-комбо (§13.3) ───────────────────────────────────────────────
+
+  // ⚖️ [дизайнер+разработчик+копирайтер+юрист в штате] → +8% выплата на T4+
+  { id:'enterprise_ready', name:'Энтерпрайз-готовность', icon:'⚖️', scope:'staff',
+    when:[ { countRoleInStaff:{ role:'designer',   min:1 } },
+           { countRoleInStaff:{ role:'developer',  min:1 } },
+           { countRoleInStaff:{ role:'copywriter', min:1 } },
+           { countRoleInStaff:{ role:'lawyer',     min:1 } } ],
+    do:[ { payoutMult:0.08, when:[ { projectTier:{ min:4 } } ] } ],
+    desc:'Полное покрытие + юрист → +8% выплата на крупных тендерах T4+.' },
+
+  // ── Проект-локальные (§13.4, scope: проект — решает РАССТАНОВКА) ─────
+
+  // 🚀 [дизайнер+разработчик+копирайтер на ОДНОМ проекте] → +10% выплата на T3+
   { id:'product_team', name:'Продуктовая команда', icon:'🚀', scope:'project',
     when:[ { countRoleOnProject:{ role:'designer',   min:1 } },
            { countRoleOnProject:{ role:'developer',  min:1 } },
@@ -119,10 +333,18 @@ var TEAM_SYNERGIES = [
     do:[ { payoutMult:0.10, when:[ { projectTier:{ min:3 } } ] } ],
     desc:'Дизайнер+разработчик+копирайтер на одном проекте → +10% выплата на T3+.' },
 
+  // 🔍 [2+ senior на ОДНОМ проекте] → +3 Q (ревьюят друг друга)
   { id:'pair_review', name:'Парное ревью', icon:'🔍', scope:'project',
     when:[ { countGradeOnProject:{ grade:'senior', min:2 } } ],
     do:[ { qAdd:3 } ],
     desc:'2+ senior на одном проекте → +3 Q (ревьюят друг друга).' },
+
+  // 🚒 [просрочка + менеджер на проекте] → +20% скорость (спасение горящего)
+  { id:'fire_brigade', name:'Пожарная команда', icon:'🚒', scope:'project',
+    when:[ { overdue:true },
+           { countRoleOnProject:{ role:'manager', min:1 } } ],
+    do:[ { speedMult:0.20 } ],
+    desc:'Менеджер на просроченном проекте → +20% скорость: антикризисный режим.' },
 ];
 
 // Автозагрузка в движок (если TraitEngine уже поднят; иначе он сам подберёт)

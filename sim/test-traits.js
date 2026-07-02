@@ -228,5 +228,78 @@ _ok(over.tech_shop === 'near',       'Тех-шоп: почти (2/3 разра�
 _ok(over.healthy_studio === 'off',   'Здоровая студия: нет (грейды не собраны)');
 `));
 
+// 8 (v3.91): валидатор каталога + весь расширенный каталог корректен
+add(run('Тест 8: validateCatalog — каталог чист, мусор ловится', true, `
+var issues = TraitEngine.validateCatalog();
+_ok(issues.length === 0, 'весь каталог валиден (' + TraitEngine.catalog().traits.length + ' трейтов, ' +
+  TraitEngine.catalog().synergies.length + ' синергий)' + (issues.length ? ' → ' + issues.join('; ') : ''));
+_ok(TraitEngine.catalog().traits.length === 27, '27 трейтов (12 + 15 новых)');
+_ok(TraitEngine.catalog().synergies.length === 11, '11 синергий (5 + 6 новых)');
+// у каждого узла-пула теперь есть трейты (все 13 пулов покрыты)
+var pools = {};
+TraitEngine.catalog().traits.forEach(function(t){ if(t.pool) pools[t.pool]=1; });
+_ok(Object.keys(pools).length === 13, 'покрыты все 13 пулов дерева: ' + Object.keys(pools).sort().join(','));
+// мусорные записи ловятся
+TraitEngine.registerTrait({ id:'bad1', name:'x', desc:'x', pool:'Z9',
+  hooks:{ noSuchHook:[ { when:[ { fakePred:1 } ], do:[ { fakeVerb:1 } ] } ] } });
+var bad = TraitEngine.validateCatalog();
+_ok(bad.length >= 3, 'валидатор поймал неизвестные pool/хук/предикат/глагол (' + bad.length + ' проблемы)');
+`));
+
+// 9 (v3.91): функциональность новых записей
+add(run('Тест 9: новые трейты и синергии работают', true, `
+// Дедлайнер: в срок +8%, при просрочке — нет
+var dl = _staff({ _iid:'dl', rlTraits:['deadliner'] });
+var G = { staff:[dl], activeClients:[] };
+var pOk  = _proj({ _assignedStaff:['dl'], _monthsSigned:2, _duration:5 });
+var pBad = _proj({ id:'p2', _assignedStaff:['dl'], _monthsSigned:9, _duration:5 });
+_ok(Math.abs(TraitEngine.mods('calcPayout', { G:G, project:pOk }).mult - 1.08) < 1e-9, 'Дедлайнер в срок: ×1.08');
+_ok(TraitEngine.mods('calcPayout', { G:G, project:pBad }).mult === 1, 'Дедлайнер на просрочке: без бонуса');
+
+// Клон-мастер: 2+ коллеги ЕГО роли
+var cm = _staff({ _iid:'cm', role:'developer', rlTraits:['clone_master'] });
+var d1 = _staff({ _iid:'d1', role:'developer' }), d2 = _staff({ _iid:'d2', role:'developer' });
+var G2 = { staff:[cm,d1,d2], activeClients:[] };
+var pMono = _proj({ id:'pm', _assignedStaff:['cm','d1','d2'] });
+// 3 разработчика в штате заодно включают «Тех-шоп» (+10%) → 1.2 × 1.1
+_ok(Math.abs(TraitEngine.mods('calcSpeed', { G:G2, project:pMono }).mult - 1.2 * 1.1) < 1e-9, 'Клон-мастер в моно-стеке: ×1.2 (× Тех-шоп 1.1)');
+
+// Страховщик: гасит риск ×0.75
+var ins = _staff({ _iid:'in', rlTraits:['insurer'] });
+var G3 = { staff:[ins], activeClients:[] };
+_ok(Math.abs(TraitEngine.mods('calcRisk', { G:G3, project:_proj({ _assignedStaff:['in'] }) }).mult - 0.75) < 1e-9,
+  'Страховщик: риск-события ×0.75');
+
+// Коллекционер: стек сдач → +4К×стек к выплате
+var col = _staff({ _iid:'co', rlTraits:['collector'] });
+var G4 = { staff:[col], activeClients:[] }; window.G = G4;
+EventBus.emit('project_delivered', { id:'x1', tier:1, team:['co'] });
+EventBus.emit('project_delivered', { id:'x2', tier:1, team:['co'] });
+_ok(TraitEngine.mods('calcPayout', { G:G4, project:_proj({ _assignedStaff:['co'] }) }).add === 8000,
+  'Коллекционер: 2 сдачи → +8К к выплате');
+
+// Снежный ком: 3 носителя скейлеров (роли РАЗНЫЕ — иначе включится «Дизайн-бутик»)
+var s1 = _staff({ role:'developer', rlTraits:['perfectionist'] }),
+    s2 = _staff({ role:'manager',   rlTraits:['collector'] }),
+    s3 = _staff({ role:'smm',       rlTraits:['veteran'] });
+var G5 = { staff:[s1,s2,s3], activeClients:[] };
+_ok(TraitEngine.mods('calcQuality', { G:G5, project:_proj() }).add === 2, 'Снежный ком: +2 Q при 3 скейлерах');
+var st5 = {}; TraitEngine.synergiesOverview({ G:G5 }).forEach(function(s){ st5[s.id]=s.status; });
+_ok(st5.snowball === 'on', 'Снежный ком виден как актив в overview');
+
+// Пожарная команда (project): просрочка + менеджер
+var mg = _staff({ _iid:'mg', role:'manager' });
+var G6 = { staff:[mg], activeClients:[] };
+var pFire = _proj({ id:'pf', _assignedStaff:['mg'], _monthsSigned:9, _duration:5 });
+_ok(Math.abs(TraitEngine.mods('calcSpeed', { G:G6, project:pFire }).mult - 1.2) < 1e-9, 'Пожарная команда: ×1.2 на просрочке');
+
+// Джун-раш: 3 джуна + Ментор (traitInStaff); роли разные — без «Дизайн-бутика»
+var men = _staff({ role:'manager', rlTraits:['mentor'] });
+var j1 = _staff({ grade:'junior', role:'developer' }), j2 = _staff({ grade:'junior', role:'smm' }),
+    j3 = _staff({ grade:'junior', role:'copywriter' });
+var G7 = { staff:[men,j1,j2,j3], activeClients:[] };
+_ok(TraitEngine.mods('calcQuality', { G:G7, project:_proj() }).add === 3, 'Джун-раш: +3 Q (джуны+Ментор)');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);
