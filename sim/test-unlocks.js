@@ -164,6 +164,23 @@ _ok(!Unlocks.scriptedIntroDue({ month: D+9, living:{stage:0}, _scriptedIntroFire
 // 7b: вне режима вступительное поражение не наступает (обычная игра/«Прокачка»)
 add(run('Тест 7b: scriptedIntroDue вне режима → false', false, `
 _ok(!Unlocks.scriptedIntroDue({ month: 99, living:{stage:0} }), 'вне режима — обычная игра, поражение не форсится');
+_ok(Unlocks.introBleed({ month: 10, living:{stage:0} }) === 0, 'вне режима утечки бюджета нет');
+`));
+
+// 7c (§Ф.7): introBleed / isBareIntro — растущая утечка голого рана, отключение после найма
+add(run('Тест 7c: introBleed — утечка бюджета голого рана', true, `
+var S = Unlocks.TUNING.INTRO_STRAIN;
+_ok(typeof S === 'number' && S > 0, 'INTRO_STRAIN задан (' + S + ')');
+_ok(Unlocks.isBareIntro({ month: 3, living:{stage:0} }), 'тир-0, стадия 0 → голый ран');
+_ok(Unlocks.introBleed({ month: 3, living:{stage:0} }) === S * 3, 'утечка растёт линейно (мес×' + S + ')');
+_ok(Unlocks.introBleed({ month: 10, living:{stage:0} }) > Unlocks.introBleed({ month: 4, living:{stage:0} }), 'позже — списание больше');
+_ok(!Unlocks.isBareIntro({ month: 3, living:{stage:1} }), 'стадия 1 (прогресс) → не голый ран');
+_ok(Unlocks.introBleed({ month: 9, living:{stage:1} }) === 0, 'стадия 1 → утечки нет');
+Unlocks.unlock('hire');
+_ok(!Unlocks.isBareIntro({ month: 3, living:{stage:0} }), 'после открытия найма → уже «настоящая» попытка, не голый ран');
+_ok(Unlocks.introBleed({ month: 12, living:{stage:0} }) === 0, 'найм открыт → утечки нет');
+_ok(!Unlocks.scriptedIntroDue({ month: 99, living:{stage:0} }), 'найм открыт → и скриптовый потолок не срабатывает');
+Unlocks.reset();
 `));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');

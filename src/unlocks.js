@@ -76,6 +76,12 @@
   // принудительно завершается поражением к INTRO_DEADLINE месяцу — как вступительная
   // миссия / очень сильный «босс» в начале. Оформляется ободряюще (это начало пути).
   const INTRO_DEADLINE = 14;   // мес. — потолок голого рана (тюнинг §15.6)
+  // §Ф.7 — «операционная перегрузка» голого рана: чтобы бюджет не полз в плюс
+  // по чуть-чуть, каждый месяц голого тир-0 списывается растущая сумма (нет
+  // команды → фаундер не тянет объём: срывы, штрафы, простой). Ран закономерно
+  // уходит в минус к ~10–13 месяцу (банкротство движка), а таймер INTRO_DEADLINE
+  // остаётся страховкой. Ручка §15.6.
+  const INTRO_STRAIN = 5000;   // ₽/мес × номер месяца (линейный рост)
 
   function _lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
   function _lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -221,15 +227,30 @@
     return summary;
   }
 
-  // ── §Ф.7: заскриптованное вступительное поражение голого рана ─────────
-  // «Голый» ран = режим активен и компания застряла на стадии 0 (Гараж):
-  // без открытых систем её не вывести дальше. По достижении INTRO_DEADLINE
-  // такой ран принудительно проигрывается (чистая функция — решает движок).
-  function scriptedIntroDue(g) {
-    if (!isActive()) return false;
-    if (!g || g._endGameFired || g._scriptedIntroFired) return false;
+  // ── §Ф.7: «голый» вступительный ран ──────────────────────────────────
+  // Голый ран = режим активен, найм команды ещё не открыт (тир-0) и компания
+  // застряла на стадии 0 (Гараж). Такой ран нельзя вывести — это вступительная
+  // «миссия». Признак единый для утечки бюджета, скриптового потолка и фрейминга.
+  function isBareIntro(g) {
+    if (!isActive() || !g) return false;
+    if (isModuleUnlocked('hire')) return false;              // найм открыт → это уже «настоящая» попытка
     const stage = (g.living && typeof g.living.stage === 'number') ? g.living.stage : 0;
-    return (g.month || 0) >= INTRO_DEADLINE && stage <= 0;
+    return stage <= 0;
+  }
+
+  // Операционная перегрузка голого рана: растущее ежемесячное списание,
+  // чтобы бюджет закономерно уходил в минус (а не полз в плюс). Чистая функция.
+  function introBleed(g) {
+    if (!isBareIntro(g)) return 0;
+    const month = Math.max(1, (g.month || 0));
+    return INTRO_STRAIN * month;                             // линейный рост нагрузки
+  }
+
+  // Заскриптованный потолок (страховка): голый ран, доживший до INTRO_DEADLINE,
+  // принудительно проигрывается — чтобы поражение не тянулось, если утечки не хватило.
+  function scriptedIntroDue(g) {
+    if (!g || g._endGameFired || g._scriptedIntroFired) return false;
+    return isBareIntro(g) && (g.month || 0) >= INTRO_DEADLINE;
   }
 
   // Обёртка advanceMonth: после месяца проверяем дедлайн голого рана.
@@ -255,10 +276,10 @@
 
   window.Unlocks = {
     MODE_ID, MODULE_UNLOCKS, FIRSTS,
-    TUNING: { BASE_WIN, BASE_LOSS, STAGE_EXP, FIRST_WIN_EXP, INTRO_DEADLINE },   // ручки §15.6 (для тестов/сима)
+    TUNING: { BASE_WIN, BASE_LOSS, STAGE_EXP, FIRST_WIN_EXP, INTRO_DEADLINE, INTRO_STRAIN },   // ручки §15.6 (для тестов/сима)
     isActive, isModuleUnlocked, available,
     unlock, buy, getOpened, getExp, getRuns, reset, list,
-    awardAtRunEnd, scriptedIntroDue,
+    awardAtRunEnd, scriptedIntroDue, isBareIntro, introBleed,
     _noteFirst,   // для тестов/отладки
   };
   // Глобальный шорткат — на него навешивают гейты системы (staff/projects/…):

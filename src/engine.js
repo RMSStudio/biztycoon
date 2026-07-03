@@ -2168,6 +2168,17 @@ function advanceMonth() {
 
   addLog(`расходы −${fmt(staffCost+OVERHEAD+dirOver)}${dirOver>0?` (вкл. кризис +${fmtK(dirOver)})`:''} → баланс ${fmt(G.money)}`, 'red');
 
+  // Ф.7 «вступительный ран»: операционная перегрузка голого тир-0 (без команды
+  // фаундер не тянет объём). Растущее списание уводит бюджет в закономерный минус.
+  // no-op вне режима и после открытия найма — см. Unlocks.isBareIntro/introBleed.
+  if (typeof Unlocks !== 'undefined' && typeof Unlocks.introBleed === 'function') {
+    const _bleed = Unlocks.introBleed(G);
+    if (_bleed > 0) {
+      G.money -= _bleed;
+      addLog(`🩸 Перегрузка без команды: −${fmt(_bleed)} → баланс ${fmt(G.money)}`, 'red');
+    }
+  }
+
   // ⑦ (v3.0) Завершение разовых перенесено в lifecycle-флоу:
   // instant-цепочка → work_0 → delivery → finishDelivery платит бюджет
 
@@ -2279,7 +2290,13 @@ function advanceMonth() {
   //   Триггер живёт в runmap.js (_showMilestoneModal → fn(g)) чтобы win-экран
   //   появлялся ПОСЛЕ закрытия модала выбора бонуса, а не посреди него.
   //   Здесь только банкротство.
-  if (G.money<=0) { _emitRender(); _emitEndGame(false); return; }
+  if (G.money<=0) {
+    // Ф.7: банкротство голого рана оформляем как «вступительный ран» (ободряющий экран)
+    if (typeof Unlocks !== 'undefined' && typeof Unlocks.isBareIntro === 'function' && Unlocks.isBareIntro(G)) {
+      G._scriptedIntro = true; G._scriptedIntroFired = true;
+    }
+    _emitRender(); _emitEndGame(false); return;
+  }
 
   // Случайное событие (40%, пропуск 1-го месяца; не когда идёт событие ИИ)
   if (G.monthsPlayed>1 && Math.random()<0.40){
