@@ -277,15 +277,18 @@ body.rl-lock-sub    #btn-assets { display:none !important; }`;
     const U = window.Unlocks;
     const locked = id => !!(U && U.isActive() && typeof isModuleUnlocked === 'function' && !isModuleUnlocked(id));
     HIDE_IDS.forEach(id => b.classList.toggle('rl-lock-' + id, locked(id)));
-    // Скаутинг на тир-0 не скрыт, а ПЕРЕОДЕТ: «один разовый заказ руками» (§11.2)
+    // Скаутинг на тир-0 не скрыт, а ПЕРЕОДЕТ: «один разовый заказ руками» (§11.2).
+    // Основную наклейку рендерит сам ui.js (единый источник правды). Здесь —
+    // страховка: ui.js перерисовывает кнопку на каждый render и мог затереть
+    // наклейку до нашего setTimeout(0); проверяем по СОДЕРЖИМОМУ (не по dataset —
+    // прежний guard клоббился, т.к. ui.js менял innerHTML, а dataset оставался).
     const sb = document.getElementById('btn-scout');
     if (sb) {
-      const t0 = locked('scout') ? '1' : '';
-      if ((sb.dataset.rlT0 || '') !== t0) {
-        sb.dataset.rlT0 = t0;
-        sb.innerHTML = t0
-          ? `📦 Найти разовый заказ <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label">тир-0 · один за раз</span>`
-          : `🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label"></span>`;
+      const wantT0 = locked('scout');
+      const hasT0  = sb.innerHTML.indexOf('Найти разовый заказ') !== -1;
+      const hasPool = sb.innerHTML.indexOf('Открыть пул') !== -1;
+      if (wantT0 && !hasT0 && !hasPool) {
+        sb.innerHTML = `📦 Найти разовый заказ <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label">тир-0 · один за раз</span>`;
       }
     }
     // Запертая вкладка не должна оставаться активной (редкий кейс: открыли ран

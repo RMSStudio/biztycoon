@@ -761,9 +761,16 @@ function renderGame() {
     } }
   const scoutBtn=document.getElementById('btn-scout');
   scoutBtn.disabled=!hasPool && G.actions<SCOUT_COST;
+  // Ф.7: на голом тир-0 (scout заперт) скаутинг ПЕРЕОДЕТ в «один разовый заказ
+  // руками» (§11.2). Рендерим наклейку прямо здесь — единый источник правды,
+  // чтобы applyModuleVisibility не гонялся за перерисовкой (баг клоббера).
+  const _scoutT0 = (typeof Unlocks!=='undefined' && Unlocks.isActive && Unlocks.isActive()
+    && typeof isModuleUnlocked==='function' && !isModuleUnlocked('scout'));
   scoutBtn.innerHTML=hasPool
     ? `📋 Открыть пул <span style="color:rgba(255,255,255,.6);font-size:11px">${G.scoutPool.length} ${G.scoutPool.length===1?'проект':'проекта'}</span>`
-    : `🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px">−${SCOUT_COST} дн.</span>`;
+    : _scoutT0
+      ? `📦 Найти разовый заказ <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label">тир-0 · один за раз</span>`
+      : `🔍 Скаутинг проектов <span style="color:rgba(255,255,255,.5);font-size:11px" id="scout-cost-label">−${SCOUT_COST} дн.</span>`;
 
   // ── Active clients ──
   document.getElementById('g-client-count').textContent=G.activeClients.length+'/'+getCapacity();
