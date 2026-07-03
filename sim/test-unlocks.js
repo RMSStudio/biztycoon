@@ -149,5 +149,22 @@ _ok(Unlocks.awardAtRunEnd(true, { living: { stage: 5 } }) === null, 'awardAtRunE
 _ok(Unlocks.getExp() === 0, 'экспертиза не появилась');
 `));
 
+// 7 (§Ф.7): scriptedIntroDue — заскриптованное вступительное поражение голого рана
+add(run('Тест 7: scriptedIntroDue — вступительный ран', true, `
+var D = Unlocks.TUNING.INTRO_DEADLINE;
+_ok(typeof D === 'number' && D > 0, 'INTRO_DEADLINE задан (' + D + ')');
+_ok(Unlocks.scriptedIntroDue({ month: D, living:{stage:0} }), 'месяц дедлайна + стадия 0 (Гараж) → поражение');
+_ok(Unlocks.scriptedIntroDue({ month: D+5, living:{stage:0} }), 'позже дедлайна на стадии 0 → тоже поражение');
+_ok(!Unlocks.scriptedIntroDue({ month: D, living:{stage:1} }), 'стадия 1 (прогресс) → НЕ срабатывает');
+_ok(!Unlocks.scriptedIntroDue({ month: D-1, living:{stage:0} }), 'до дедлайна → НЕ срабатывает');
+_ok(!Unlocks.scriptedIntroDue({ month: D, living:{stage:0}, _endGameFired:true }), 'ран уже завершён → НЕ срабатывает');
+_ok(!Unlocks.scriptedIntroDue({ month: D+9, living:{stage:0}, _scriptedIntroFired:true }), 'уже фаернуто → не повторяется');
+`));
+
+// 7b: вне режима вступительное поражение не наступает (обычная игра/«Прокачка»)
+add(run('Тест 7b: scriptedIntroDue вне режима → false', false, `
+_ok(!Unlocks.scriptedIntroDue({ month: 99, living:{stage:0} }), 'вне режима — обычная игра, поражение не форсится');
+`));
+
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');
 if (totals.fail > 0) process.exit(1);

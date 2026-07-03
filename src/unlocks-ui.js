@@ -301,28 +301,33 @@ body.rl-lock-sub    #btn-assets { display:none !important; }`;
   // ── ПЕТЛЯ РАНА (§15.0) — хуки активны только при isActive() ────────
   let _awardedThisRun = false;
 
-  function _announce(s) {
+  function _announce(s, scriptedIntro) {
     if (!s) return;
     if (typeof addLog === 'function') {
+      if (scriptedIntro) addLog('🌱 Вступительный ран — так и должно быть. Без команды студию не удержать; это начало пути. Открой первый модуль в «Дереве открытий» — следующий заход будет глубже.', 'amber');
       addLog(`🌐 Экспертиза за ран: +${s.award} ✦ (исход ${s.base}${s.stageBonus ? ' + стадия ' + s.stageBonus : ''}${s.firstsExp ? ' + первые разы ' + s.firstsExp : ''}). Всего ${s.exp} ✦.`, 'purple');
       (s.firsts || []).forEach(f => addLog(`${f.ico} Впервые: «${f.name}» · +${f.exp} ✦`, 'green'));
     }
     if (typeof notify === 'function') {
       const extra = (s.firsts && s.firsts.length) ? ` · ${s.firsts.length} «первых раз»` : '';
-      notify(`🌐 +${s.award} ✦ экспертизы${extra} — открой Дерево открытий`, 'success');
+      notify(scriptedIntro
+        ? `🌱 Вступительный ран пройден · +${s.award} ✦ — открой Дерево открытий`
+        : `🌐 +${s.award} ✦ экспертизы${extra} — открой Дерево открытий`, 'success');
     }
   }
 
   if (typeof EventBus !== 'undefined' && EventBus.on) {
     // Конец рана: победа / банкротство / ручной выход (через end_game)
-    EventBus.on('end_game', ({ won }) => {
+    EventBus.on('end_game', (ev) => {
+      const won = ev && ev.won;
+      const scriptedIntro = !!((ev && ev.scriptedIntro) || (typeof G !== 'undefined' && G && G._scriptedIntro));
       const U = window.Unlocks;
       if (!U || !U.isActive() || _awardedThisRun) return;
       _awardedThisRun = true;
       let summary = null;
       try {
         summary = U.awardAtRunEnd(!!won, (typeof G !== 'undefined') ? G : null);
-        _announce(summary);
+        _announce(summary, scriptedIntro);
       } catch (e) { console.warn('[unlocks-ui] award error:', e); }
       try { injectResultsButton(summary ? `+${summary.award} ✦` : null); } catch (e) {}
     });

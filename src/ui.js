@@ -1589,6 +1589,16 @@ function buildDashboard(won) {
     :G.monthsPlayed<4?'Кассовый разрыв: расходы съели стартовый капитал до появления стабильных проектов.'
     :'Рынок суров. Оценка клиентов деградировала, клиенты ушли раньше, чем выросла выручка.';
 
+  // Ф.7: «вступительный ран» — заскриптованное поражение подаётся как начало пути.
+  if (!won && typeof G !== 'undefined' && G._scriptedIntro) {
+    document.getElementById('r-icon').textContent = '🌱';
+    const _rt = document.getElementById('r-title');
+    _rt.textContent = 'Вступительный ран пройден'; _rt.style.color = 'var(--amber)';
+    document.getElementById('r-sub').textContent =
+      'Так и должно быть. Без команды и инструментов студию пока не удержать — это начало пути, а не провал. ' +
+      'Ты нащупал, как всё устроено, и заработал экспертизу — открой первый модуль в «Дереве открытий», и следующий ран будет глубже.';
+  }
+
   const peak=Math.max(...G.history.map(h=>h.money));
   const churned=DECISIONS.filter(d=>d.type==='churn').length;
   const scouts=DECISIONS.filter(d=>d.type==='client').length;

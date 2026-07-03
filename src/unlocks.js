@@ -70,6 +70,12 @@
   const STAGE_EXP     = 50;    // × стадия компании (0..5) — главный «поздний» доход
   const BASE_WIN      = 150;
   const BASE_LOSS     = 40;
+  // §Ф.7 — «Вступительный ран» (заскриптованное поражение). Голый тир-0 нельзя
+  // выиграть: без команды/инструментов студию не удержать. Чтобы это не тянулось
+  // (и не «уходило в плюс по чуть-чуть»), ран, застрявший на стадии 0 (Гараж),
+  // принудительно завершается поражением к INTRO_DEADLINE месяцу — как вступительная
+  // миссия / очень сильный «босс» в начале. Оформляется ободряюще (это начало пути).
+  const INTRO_DEADLINE = 14;   // мес. — потолок голого рана (тюнинг §15.6)
 
   function _lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
   function _lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -215,12 +221,44 @@
     return summary;
   }
 
+  // ── §Ф.7: заскриптованное вступительное поражение голого рана ─────────
+  // «Голый» ран = режим активен и компания застряла на стадии 0 (Гараж):
+  // без открытых систем её не вывести дальше. По достижении INTRO_DEADLINE
+  // такой ран принудительно проигрывается (чистая функция — решает движок).
+  function scriptedIntroDue(g) {
+    if (!isActive()) return false;
+    if (!g || g._endGameFired || g._scriptedIntroFired) return false;
+    const stage = (g.living && typeof g.living.stage === 'number') ? g.living.stage : 0;
+    return (g.month || 0) >= INTRO_DEADLINE && stage <= 0;
+  }
+
+  // Обёртка advanceMonth: после месяца проверяем дедлайн голого рана.
+  // unlocks.js грузится после engine.js → advanceMonth уже определён.
+  if (typeof window.advanceMonth === 'function' && !window.advanceMonth.__unlWrapped) {
+    const _origAdvance = window.advanceMonth;
+    window.advanceMonth = function () {
+      const r = _origAdvance.apply(this, arguments);
+      try {
+        if (typeof G !== 'undefined' && G && scriptedIntroDue(G)) {
+          G._scriptedIntroFired = true;
+          G._scriptedIntro = true;                          // флаг для фрейминга экрана
+          if (typeof G._endGameFired !== 'undefined') G._endGameFired = true;
+          setTimeout(() => {
+            try { if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('end_game', { won: false, scriptedIntro: true }); } catch (e) {}
+          }, 300);
+        }
+      } catch (e) {}
+      return r;
+    };
+    window.advanceMonth.__unlWrapped = true;
+  }
+
   window.Unlocks = {
     MODE_ID, MODULE_UNLOCKS, FIRSTS,
-    TUNING: { BASE_WIN, BASE_LOSS, STAGE_EXP, FIRST_WIN_EXP },   // ручки §15.6 (для тестов/сима)
+    TUNING: { BASE_WIN, BASE_LOSS, STAGE_EXP, FIRST_WIN_EXP, INTRO_DEADLINE },   // ручки §15.6 (для тестов/сима)
     isActive, isModuleUnlocked, available,
     unlock, buy, getOpened, getExp, getRuns, reset, list,
-    awardAtRunEnd,
+    awardAtRunEnd, scriptedIntroDue,
     _noteFirst,   // для тестов/отладки
   };
   // Глобальный шорткат — на него навешивают гейты системы (staff/projects/…):

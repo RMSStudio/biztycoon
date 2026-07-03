@@ -157,6 +157,7 @@ function startGame() {
   if (typeof startRun === 'function') startRun(); // saves.js: открыть новый ран
   G.money=SCENARIO.settings.startMoney; G.month=0; G.staff=[]; G.activeClients=[]; G.log=[]; G.candidatePool=[];
   G.tempDiscount=0; G.monthsPlayed=0; G._endGameFired=false; G._wonAlreadyCelebrated=false;
+  G._scriptedIntro=false; G._scriptedIntroFired=false;   // Ф.7 вступительный ран
   G.actions=getWorkdays(0); G.reputation=SCENARIO.settings.startReputation ?? 100;
   G.clientNPS={}; G.clientEarnings={}; G.delayedIncome=0; G.history=[];
   G.upgrades={}; G.qualityBonus=0; G.tempQBonus=0; G.portfolio=0;
