@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BizTycoon — Сборка основателя (макет драфт-старта)</title>
+<style>
+  :root{
+    --bg:#0a0c12; --panel:#12151f; --panel2:#171b28; --line:rgba(255,255,255,.08);
+    --t:#e2e7f3; --tm:#8593ad; --td:#454f6b;
+    --acc:#e1456a; --exp:#f5c451;
+    --cap:#f5a451; --know:#17b8a6;      /* оси: капитал / ноу-хау */
+    --A:#17b8a6; --B:#4f7bf0; --C:#9a6cf0;
+    --ok:#2fbd6e;
+  }
+  *{box-sizing:border-box}
+  body{background:radial-gradient(1200px 600px at 50% -10%,#141827,#0a0c12);color:var(--t);
+    font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;margin:0;padding:22px 26px 48px}
+  .num{font-family:'Archivo Black','Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.02em}
+  header{display:flex;align-items:center;gap:14px;max-width:1180px;margin:0 auto 6px}
+  header h1{font-size:18px;font-weight:800;margin:0} header h1 b{color:var(--acc)}
+  header .sub{font-size:11px;color:var(--tm)}
+  .exp-pill{margin-left:auto;display:flex;align-items:center;gap:8px;background:rgba(245,196,81,.10);
+    border:1px solid rgba(245,196,81,.32);padding:7px 14px;border-radius:11px}
+  .exp-pill .v{font-size:20px;color:var(--exp)} .exp-pill .l{font-size:10px;color:var(--tm);
+    text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--tm);cursor:pointer;user-select:none;
+    background:var(--panel2);border:1px solid var(--line);padding:7px 12px;border-radius:10px}
+  .toggle .sw{width:34px;height:19px;border-radius:11px;background:rgba(255,255,255,.12);position:relative;transition:.2s}
+  .toggle .sw>i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:.2s}
+  .toggle.on .sw{background:var(--know)} .toggle.on .sw>i{left:17px}
+
+  .wrap{max-width:1180px;margin:14px auto 0;display:grid;grid-template-columns:1fr 372px;gap:20px}
+
+  /* steps */
+  .steps{display:flex;gap:6px;margin-bottom:16px}
+  .step{flex:1;text-align:center;font-size:11px;font-weight:800;color:var(--td);padding:9px 4px;border-radius:10px;
+    border:1px solid var(--line);background:var(--panel);cursor:pointer;letter-spacing:.03em;text-transform:uppercase;position:relative}
+  .step.active{color:var(--t);border-color:rgba(225,69,106,.5);background:linear-gradient(180deg,rgba(225,69,106,.10),transparent)}
+  .step.done{color:var(--ok)} .step .n{opacity:.5;margin-right:5px}
+  .stagehead{font-size:13px;font-weight:800;margin:0 0 4px} .stagehead b{color:var(--acc)}
+  .stagesub{font-size:11.5px;color:var(--tm);margin:0 0 14px;line-height:1.5}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;
+    cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s}
+  .card:hover{transform:translateY(-2px)}
+  .card.sel{border-color:rgba(225,69,106,.6);box-shadow:0 0 0 1px rgba(225,69,106,.4),0 10px 30px -14px rgba(225,69,106,.6);
+    background:linear-gradient(180deg,rgba(225,69,106,.07),transparent)}
+  .card .top{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .card .av{width:42px;height:42px;border-radius:11px;background:rgba(255,255,255,.05);display:flex;align-items:center;
+    justify-content:center;font-size:22px;flex-shrink:0}
+  .card .nm{font-size:13.5px;font-weight:800;line-height:1.15} .card .nm small{display:block;font-size:10px;color:var(--td);font-weight:700;margin-top:2px}
+  .card .bio{font-size:11px;color:var(--tm);line-height:1.45;margin-bottom:11px;min-height:46px}
+  .axes{display:flex;flex-direction:column;gap:6px}
+  .axis{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--tm);font-weight:700}
+  .axis .lab{width:56px;flex-shrink:0;text-transform:uppercase;letter-spacing:.04em}
+  .axis .track{flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
+  .axis .track>i{display:block;height:100%;border-radius:4px}
+  .axis.cap .track>i{background:var(--cap)} .axis.know .track>i{background:var(--know)}
+  .card .rew{position:absolute;top:12px;right:13px;font-size:10px;font-weight:800;color:var(--exp)}
+  .card.locked{cursor:not-allowed;opacity:.86}
+  .card.locked:hover{transform:none}
+  .card .lock{position:absolute;inset:0;border-radius:14px;background:rgba(10,12,18,.62);backdrop-filter:blur(1.5px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center;padding:10px}
+  .card .lock .ic{font-size:20px} .card .lock .m{font-size:10.5px;color:var(--exp);font-weight:800}
+  .card .lock .h{font-size:9.5px;color:var(--tm)}
+
+  .paths .card,.runes .card{padding:12px 13px}
+  .paths .bio,.runes .bio{min-height:34px}
+  .chipset{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
+  .chip{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:7px;background:rgba(255,255,255,.05);color:var(--tm);border:1px solid var(--line)}
+  .chip.pos{color:var(--ok);border-color:rgba(47,189,110,.3);background:rgba(47,189,110,.08)}
+
+  /* dossier */
+  .dossier{position:sticky;top:18px;align-self:start;background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--panel2);
+    border:1px solid var(--line);border-radius:18px;padding:18px 17px;overflow:hidden}
+  .dossier::before{content:"ДОСЬЕ ОСНОВАТЕЛЯ";position:absolute;top:12px;right:14px;font-size:9px;letter-spacing:.14em;
+    color:var(--td);font-weight:800}
+  .dhead{display:flex;align-items:center;gap:13px;margin-bottom:14px}
+  .dhead .port{width:62px;height:62px;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:33px;flex-shrink:0}
+  .dhead .who .arc{font-size:15px;font-weight:800} .dhead .who .role{font-size:11px;color:var(--tm);margin-top:2px}
+  .dbio{font-size:11.5px;color:var(--tm);line-height:1.5;font-style:italic;border-left:2px solid var(--line);
+    padding:2px 0 2px 11px;margin-bottom:15px;min-height:34px}
+  .daxes{display:flex;flex-direction:column;gap:9px;margin-bottom:15px}
+  .daxis .r{display:flex;justify-content:space-between;font-size:10px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--tm);margin-bottom:4px}
+  .daxis .track{height:8px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden}
+  .daxis .track>i{display:block;height:100%;border-radius:5px;transition:width .35s cubic-bezier(.3,1,.4,1)}
+  .daxis.cap .track>i{background:linear-gradient(90deg,var(--cap),#f5c451)} .daxis.cap .r span:last-child{color:var(--cap)}
+  .daxis.know .track>i{background:linear-gradient(90deg,#0f8a7c,var(--know))} .daxis.know .r span:last-child{color:var(--know)}
+  .dsec{font-size:9.5px;letter-spacing:.1em;color:var(--td);font-weight:800;text-transform:uppercase;margin:0 0 7px}
+  .dsys{margin-bottom:15px}
+  .dpath,.drune{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--t);background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin-bottom:8px}
+  .dpath .e,.drune .e{font-size:16px} .dpath.empty,.drune.empty{color:var(--td);font-style:italic}
+  .readout{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px 14px;margin-bottom:14px}
+  .readout .r1{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .readout .chal{font-size:17px;font-weight:900}
+  .readout .rew2{margin-left:auto;font-size:12px;font-weight:800;color:var(--exp)}
+  .readout .expl{font-size:10.5px;color:var(--tm);line-height:1.45}
+  .start{width:100%;border:0;border-radius:13px;padding:14px;font-size:14px;font-weight:800;color:#fff;cursor:pointer;
+    background:linear-gradient(180deg,#ec5578,var(--acc));box-shadow:0 10px 26px -12px rgba(225,69,106,.8)}
+  .start:disabled{background:rgba(255,255,255,.06);color:var(--td);box-shadow:none;cursor:not-allowed}
+  .foot{max-width:1180px;margin:16px auto 0;font-size:10.5px;color:var(--td);text-align:center;line-height:1.6}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}.dossier{position:static}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Сборка <b>основателя</b></h1>
+    <div class="sub">Макет драфт-старта · вместо ползунка сложности — собери стартовую позицию из карт</div>
+  </div>
+  <div class="exp-pill"><span class="l">Экспертиза</span><span class="v num" id="expVal">0</span><span>✦</span></div>
+  <div class="toggle" id="modeToggle" title="Показать мету на разных стадиях">
+    <div class="sw"><i></i></div><span id="modeLbl">первый запуск</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <main>
+    <div class="steps" id="steps">
+      <div class="step active" data-step="0"><span class="n num">1</span>Прототип</div>
+      <div class="step" data-step="1"><span class="n num">2</span>Путь</div>
+      <div class="step" data-step="2"><span class="n num">3</span>Руна</div>
+      <div class="step" data-step="3"><span class="n num">4</span>Старт</div>
+    </div>
+    <h2 class="stagehead" id="stHead"></h2>
+    <p class="stagesub" id="stSub"></p>
+    <div id="stageBody"></div>
+  </main>
+
+  <aside class="dossier">
+    <div class="dhead">
+      <div class="port" id="dPort">👤</div>
+      <div class="who"><div class="arc" id="dArc">Основатель не выбран</div><div class="role" id="dRole">— выбери прототип —</div></div>
+    </div>
+    <div class="dbio" id="dBio">Кем ты входишь в эту историю?</div>
+
+    <div class="daxes">
+      <div class="daxis cap"><div class="r"><span>Капитал</span><span id="dCapT">—</span></div><div class="track"><i id="dCap" style="width:0"></i></div></div>
+      <div class="daxis know"><div class="r"><span>Ноу-хау</span><span id="dKnowT">—</span></div><div class="track"><i id="dKnow" style="width:0"></i></div></div>
+    </div>
+
+    <div class="dsys">
+      <p class="dsec">Открыто на старте</p>
+      <div class="chipset" id="dSys"><span class="chip">— ничего —</span></div>
+    </div>
+
+    <p class="dsec">Путь и руна</p>
+    <div class="dpath empty" id="dPath"><span class="e">🎯</span><span>Путь не выбран</span></div>
+    <div class="drune empty" id="dRune"><span class="e">🔹</span><span>Руна не выбрана</span></div>
+
+    <div class="readout" style="margin-top:14px">
+      <div class="r1"><span class="chal num" id="chalT" style="color:var(--td)">—</span><span class="rew2" id="rewT"></span></div>
+      <div class="expl" id="chalX">Сложность соберётся из твоего драфта — её не выбирают напрямую.</div>
+    </div>
+    <button class="start" id="startBtn" disabled>Собери прототип →</button>
+  </aside>
+</div>
+
+<div class="foot">
+  Концепт-макет к <b>design_roguelite_narrative.md</b> · §7-bis / §7-quater. Оси старта: капитал × ноу-хау.<br>
+  Тумблер «первый запуск / всё открыто» показывает мету на разных стадиях. Числа и тексты — черновые.
+</div>
+
+<script>
+const PROTOS=[
+  {id:'student',emoji:'🎓',name:'Студент-новичок',tag:'старт всей меты',cap:1,know:0,rew:'×2.2',
+   bio:'Вчера защитил диплом. Денег — на метро и дошик. Зато уверен, что уже всё умеет.',
+   sys:[], firstRun:true},
+  {id:'richkid',emoji:'💼',name:'Сын богатого папы',tag:'капитал без школы',cap:4,know:0,rew:'×1.3',
+   bio:'Папа выделил на «своё дело». Процессов не знает — привык, что решают другие. Деньги есть, понимания нет.',
+   sys:[], firstRun:false},
+  {id:'senior',emoji:'🎨',name:'Senior-дизайнер',tag:'6+ лет в найме',cap:2,know:2,rew:'×1.6',
+   bio:'Ремесло — на зубок, руку набил. А бизнес, продажи, найм — тёмный лес. Раньше это решал кто-то другой.',
+   sys:['Процесс','Кейсы'], firstRun:false},
+  {id:'serial',emoji:'🚀',name:'Хронический предприниматель',tag:'третья компания',cap:3,know:4,rew:'×1.0',
+   bio:'Две первые студии закрыл — но понял КАК. Заходит уже с командой в голове и картой на руках.',
+   sys:['Найм','Скаутинг','Процесс','Переговоры','Кейсы'], firstRun:false},
+];
+const PATHS=[
+  {id:'smm',emoji:'📱',name:'SMM-агентство',bio:'Много мелких клиентов, быстрый оборот.',perks:['+20% выплата small','+1 оффер']},
+  {id:'seo',emoji:'🔍',name:'SEO-агентство',bio:'Долгие стабильные клиенты.',perks:['−10% на команду','+5 к оценке']},
+  {id:'web',emoji:'💻',name:'Web-разработка',bio:'Технически сильная команда.',perks:['+25% корп','+10% скорость']},
+  {id:'brand',emoji:'✨',name:'Брендинг',bio:'От малого бизнеса до ритейлеров.',perks:['+40% брендинг','+10 к оценке']},
+];
+const RUNES=[
+  {id:'work',emoji:'🔥',name:'Трудоголик',bio:'+скорость, но быстрее устаёшь.',firstRun:false},
+  {id:'net',emoji:'🤝',name:'Нетворкер',bio:'Больше входящих офферов.',firstRun:false},
+  {id:'save',emoji:'🪙',name:'Скряга',bio:'−overhead, но −репутация.',firstRun:false},
+];
+
+let firstRun=true, step=0, sel={proto:null,path:null,rune:null};
+const $=id=>document.getElementById(id);
+const pct=v=>Math.round(v/4*100)+'%';
+
+function challenge(){
+  if(!sel.proto) return {t:'—',c:'var(--td)',x:'Сложность соберётся из твоего драфта — её не выбирают напрямую.',rew:''};
+  const s=sel.proto.cap+sel.proto.know; // 0..8
+  let t,c,x;
+  if(s<=1){t='Брутальный старт';c='var(--acc)';x='Ни денег, ни школы. Первый ран почти наверняка провалишь — и это часть пути.';}
+  else if(s<=3){t='Крутой подъём';c='#ec7a55';x='Есть за что зацепиться, но студию придётся тащить на себе.';}
+  else if(s<=5){t='Уверенный старт';c='var(--exp)';x='База собрана — можно думать не о выживании, а о росте.';}
+  else {t='Мягкий вход';c='var(--know)';x='Ты заходишь с позиции силы. Вызов ниже — и награда за ран тоже.';}
+  return {t,c,x,rew:'награда '+sel.proto.rew+' ✦'};
+}
+
+function renderStage(){
+  document.querySelectorAll('.step').forEach(s=>{
+    const i=+s.dataset.step; s.classList.toggle('active',i===step);
+    s.classList.toggle('done', (i===0&&sel.proto)||(i===1&&sel.path)||(i===2&&sel.rune));
+  });
+  const body=$('stageBody');
+  if(step===0){
+    $('stHead').innerHTML='Кто ты? <b>Выбери прототип</b>';
+    $('stSub').textContent='Прототип задаёт стартовый капитал и что ты уже умеешь (открытые системы). Чем беднее вход — тем выше награда экспертизой за ран.';
+    body.className=''; body.innerHTML='<div class="grid">'+PROTOS.map(p=>protoCard(p)).join('')+'</div>';
+  } else if(step===1){
+    $('stHead').innerHTML='Куда бьём? <b>Выбери путь</b>';
+    $('stSub').textContent='Специализация агентства — красит выплаты и даёт пассив на весь ран.';
+    body.className=''; body.innerHTML='<div class="grid paths">'+PATHS.map(p=>pathCard(p)).join('')+'</div>';
+  } else if(step===2){
+    $('stHead').innerHTML='Чем усилишься? <b>Выбери руну</b>';
+    $('stSub').textContent='Стартовый перк-модификатор. На первом запуске меты руны ещё заперты — откроются прогрессом.';
+    body.className=''; body.innerHTML='<div class="grid runes">'+RUNES.map(r=>runeCard(r)).join('')+'</div>';
+  } else {
+    $('stHead').innerHTML='Готов? <b>Итоговое досье</b>';
+    $('stSub').textContent='Всё справа. Сложность — производная от драфта, не выбор. Нажми «Начать путь».';
+    body.className=''; body.innerHTML='<div style="font-size:12px;color:var(--tm);line-height:1.6;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px">Проверь досье справа. Хочешь легче — открывай в прогрессе богатые прототипы и руны. Хочешь вызова и больше ✦ — заходи налегке.</div>';
+  }
+}
+function locked(p){ return firstRun && !p.firstRun; }
+function protoCard(p){
+  const L=locked(p);
+  return `<div class="card ${sel.proto&&sel.proto.id===p.id?'sel':''} ${L?'locked':''}" onclick="pick('proto','${p.id}')">
+    <div class="rew">${p.rew} ✦</div>
+    <div class="top"><div class="av">${p.emoji}</div><div class="nm">${p.name}<small>${p.tag}</small></div></div>
+    <div class="bio">${p.bio}</div>
+    <div class="axes">
+      <div class="axis cap"><span class="lab">Капитал</span><div class="track"><i style="width:${pct(p.cap)}"></i></div></div>
+      <div class="axis know"><span class="lab">Ноу-хау</span><div class="track"><i style="width:${pct(p.know)}"></i></div></div>
+    </div>
+    ${L?`<div class="lock"><div class="ic">🔒</div><div class="m">Откроется в прогрессе</div><div class="h">заслужи право стартовать сильнее</div></div>`:''}
+  </div>`;
+}
+function pathCard(p){
+  return `<div class="card ${sel.path&&sel.path.id===p.id?'sel':''}" onclick="pick('path','${p.id}')">
+    <div class="top"><div class="av">${p.emoji}</div><div class="nm">${p.name}</div></div>
+    <div class="bio">${p.bio}</div>
+    <div class="chipset">${p.perks.map(x=>`<span class="chip pos">${x}</span>`).join('')}</div>
+  </div>`;
+}
+function runeCard(r){
+  const L=firstRun; // на первом запуске все руны заперты
+  return `<div class="card ${sel.rune&&sel.rune.id===r.id?'sel':''} ${L?'locked':''}" onclick="pick('rune','${r.id}')">
+    <div class="top"><div class="av">${r.emoji}</div><div class="nm">${r.name}</div></div>
+    <div class="bio">${r.bio}</div>
+    ${L?`<div class="lock"><div class="ic">🔒</div><div class="m">Откроется в прогрессе</div><div class="h">первый ран — без руны</div></div>`:''}
+  </div>`;
+}
+
+function pick(kind,id){
+  if(kind==='proto'){const p=PROTOS.find(x=>x.id===id); if(locked(p))return; sel.proto=p; step=1;}
+  if(kind==='path'){sel.path=PATHS.find(x=>x.id===id); step=2;}
+  if(kind==='rune'){if(firstRun)return; sel.rune=RUNES.find(x=>x.id===id); step=3;}
+  renderAll();
+}
+function goStep(i){ step=i; renderAll(); }
+
+function renderDossier(){
+  const p=sel.proto;
+  $('dPort').textContent=p?p.emoji:'👤';
+  $('dArc').textContent=p?p.name:'Основатель не выбран';
+  $('dRole').textContent=p?p.tag:'— выбери прототип —';
+  $('dBio').textContent=p?p.bio:'Кем ты входишь в эту историю?';
+  $('dCap').style.width=p?pct(p.cap):'0'; $('dCapT').textContent=p?p.cap+'/4':'—';
+  $('dKnow').style.width=p?pct(p.know):'0'; $('dKnowT').textContent=p?p.know+'/4':'—';
+  $('dSys').innerHTML = (p&&p.sys.length)?p.sys.map(s=>`<span class="chip pos">${s}</span>`).join('')
+    : `<span class="chip">${p?'— ничего, учишься с нуля —':'— ничего —'}</span>`;
+  const dp=$('dPath'); if(sel.path){dp.className='dpath';dp.innerHTML=`<span class="e">${sel.path.emoji}</span><span>${sel.path.name}</span>`;}
+    else{dp.className='dpath empty';dp.innerHTML=`<span class="e">🎯</span><span>Путь не выбран</span>`;}
+  const dr=$('dRune'); if(sel.rune){dr.className='drune';dr.innerHTML=`<span class="e">${sel.rune.emoji}</span><span>${sel.rune.name}</span>`;}
+    else{dr.className='drune empty';dr.innerHTML=`<span class="e">🔹</span><span>${firstRun?'Заперта (первый ран)':'Руна не выбрана'}</span>`;}
+  const ch=challenge();
+  $('chalT').textContent=ch.t; $('chalT').style.color=ch.c; $('chalX').textContent=ch.x;
+  $('rewT').textContent=ch.rew;
+  const ready=sel.proto&&sel.path;
+  const sb=$('startBtn'); sb.disabled=!ready;
+  sb.textContent = ready ? 'Начать путь →' : (!sel.proto?'Собери прототип →':'Выбери путь →');
+}
+function renderAll(){ $('modeLbl').textContent=firstRun?'первый запуск':'всё открыто';
+  $('expVal').textContent=firstRun?'0':'1 240';
+  document.getElementById('modeToggle').classList.toggle('on',!firstRun);
+  renderStage(); renderDossier(); }
+
+document.querySelectorAll('.step').forEach(s=>s.addEventListener('click',()=>goStep(+s.dataset.step)));
+$('modeToggle').addEventListener('click',()=>{firstRun=!firstRun; sel={proto:null,path:null,rune:null}; step=0; renderAll();});
+$('startBtn').addEventListener('click',()=>{ if(!$('startBtn').disabled) alert('→ Старт рана: '+sel.proto.name+' · '+sel.path.name+(sel.rune?' · '+sel.rune.name:'')+'\\n(в игре здесь начинается ран с собранной позицией)'); });
+renderAll();
+</script>
+</body>
+</html>
