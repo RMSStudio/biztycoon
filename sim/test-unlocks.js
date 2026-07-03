@@ -150,15 +150,18 @@ _ok(Unlocks.getExp() === 0, 'экспертиза не появилась');
 `));
 
 // 7 (§Ф.7): scriptedIntroDue — заскриптованное вступительное поражение голого рана
+// Голый ран = opened пуст (стадию НЕ проверяем: фреш-ран стартует со стадии 1).
 add(run('Тест 7: scriptedIntroDue — вступительный ран', true, `
 var D = Unlocks.TUNING.INTRO_DEADLINE;
 _ok(typeof D === 'number' && D > 0, 'INTRO_DEADLINE задан (' + D + ')');
-_ok(Unlocks.scriptedIntroDue({ month: D, living:{stage:0} }), 'месяц дедлайна + стадия 0 (Гараж) → поражение');
-_ok(Unlocks.scriptedIntroDue({ month: D+5, living:{stage:0} }), 'позже дедлайна на стадии 0 → тоже поражение');
-_ok(!Unlocks.scriptedIntroDue({ month: D, living:{stage:1} }), 'стадия 1 (прогресс) → НЕ срабатывает');
-_ok(!Unlocks.scriptedIntroDue({ month: D-1, living:{stage:0} }), 'до дедлайна → НЕ срабатывает');
-_ok(!Unlocks.scriptedIntroDue({ month: D, living:{stage:0}, _endGameFired:true }), 'ран уже завершён → НЕ срабатывает');
-_ok(!Unlocks.scriptedIntroDue({ month: D+9, living:{stage:0}, _scriptedIntroFired:true }), 'уже фаернуто → не повторяется');
+_ok(Unlocks.scriptedIntroDue({ month: D, living:{stage:1} }), 'месяц дедлайна, ничего не открыто → поражение (даже со стадии 1)');
+_ok(Unlocks.scriptedIntroDue({ month: D+5, living:{stage:1} }), 'позже дедлайна → тоже поражение');
+_ok(!Unlocks.scriptedIntroDue({ month: D-1, living:{stage:1} }), 'до дедлайна → НЕ срабатывает');
+_ok(!Unlocks.scriptedIntroDue({ month: D, _endGameFired:true }), 'ран уже завершён → НЕ срабатывает');
+_ok(!Unlocks.scriptedIntroDue({ month: D+9, _scriptedIntroFired:true }), 'уже фаернуто → не повторяется');
+Unlocks.unlock('scout');
+_ok(!Unlocks.scriptedIntroDue({ month: D+9, living:{stage:1} }), 'открыт хоть один узел → НЕ поражение (настоящая попытка)');
+Unlocks.reset();
 `));
 
 // 7b: вне режима вступительное поражение не наступает (обычная игра/«Прокачка»)
@@ -167,19 +170,17 @@ _ok(!Unlocks.scriptedIntroDue({ month: 99, living:{stage:0} }), 'вне режи
 _ok(Unlocks.introBleed({ month: 10, living:{stage:0} }) === 0, 'вне режима утечки бюджета нет');
 `));
 
-// 7c (§Ф.7): introBleed / isBareIntro — растущая утечка голого рана, отключение после найма
+// 7c (§Ф.7): introBleed / isBareIntro — растущая утечка голого рана, отключение после первого открытия
 add(run('Тест 7c: introBleed — утечка бюджета голого рана', true, `
 var S = Unlocks.TUNING.INTRO_STRAIN;
 _ok(typeof S === 'number' && S > 0, 'INTRO_STRAIN задан (' + S + ')');
-_ok(Unlocks.isBareIntro({ month: 3, living:{stage:0} }), 'тир-0, стадия 0 → голый ран');
-_ok(Unlocks.introBleed({ month: 3, living:{stage:0} }) === S * 3, 'утечка растёт линейно (мес×' + S + ')');
-_ok(Unlocks.introBleed({ month: 10, living:{stage:0} }) > Unlocks.introBleed({ month: 4, living:{stage:0} }), 'позже — списание больше');
-_ok(!Unlocks.isBareIntro({ month: 3, living:{stage:1} }), 'стадия 1 (прогресс) → не голый ран');
-_ok(Unlocks.introBleed({ month: 9, living:{stage:1} }) === 0, 'стадия 1 → утечки нет');
+_ok(Unlocks.isBareIntro({ month: 3, living:{stage:1} }), 'ничего не открыто → голый ран (даже стадия 1)');
+_ok(Unlocks.introBleed({ month: 3, living:{stage:1} }) === S * 3, 'утечка растёт линейно (мес×' + S + ')');
+_ok(Unlocks.introBleed({ month: 10 }) > Unlocks.introBleed({ month: 4 }), 'позже — списание больше');
 Unlocks.unlock('hire');
-_ok(!Unlocks.isBareIntro({ month: 3, living:{stage:0} }), 'после открытия найма → уже «настоящая» попытка, не голый ран');
-_ok(Unlocks.introBleed({ month: 12, living:{stage:0} }) === 0, 'найм открыт → утечки нет');
-_ok(!Unlocks.scriptedIntroDue({ month: 99, living:{stage:0} }), 'найм открыт → и скриптовый потолок не срабатывает');
+_ok(!Unlocks.isBareIntro({ month: 3, living:{stage:1} }), 'открыт узел → уже «настоящая» попытка, не голый ран');
+_ok(Unlocks.introBleed({ month: 12 }) === 0, 'узел открыт → утечки нет');
+_ok(!Unlocks.scriptedIntroDue({ month: 99 }), 'узел открыт → и скриптовый потолок не срабатывает');
 Unlocks.reset();
 `));
 
