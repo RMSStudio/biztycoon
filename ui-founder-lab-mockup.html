@@ -46,8 +46,14 @@
   .fx b{color:var(--know);font-weight:700}
   .axes-edit{display:flex;gap:16px}
   .axed{flex:1}
-  .dots{display:flex;gap:4px;margin-top:5px}
-  .dot{width:22px;height:10px;border-radius:3px;background:rgba(255,255,255,.08);cursor:pointer;transition:.1s}
+  .stepper{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .sbtn{width:24px;height:22px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--t);
+    font-size:15px;font-weight:800;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;transition:.1s}
+  .sbtn:hover{border-color:var(--know);color:#fff}
+  .sval{font-size:11px;color:var(--tm);font-weight:800;min-width:26px}
+  .dots{display:flex;gap:4px}
+  .dot{width:20px;height:10px;border-radius:3px;background:rgba(255,255,255,.08);cursor:pointer;transition:.1s}
+  .dot:hover{filter:brightness(1.4)}
   .axed.cap .dot.f{background:var(--cap)} .axed.know .dot.f{background:var(--know)}
   /* dossier */
   .dossier{position:sticky;top:16px;align-self:start}
@@ -103,8 +109,14 @@
     <div class="sec">
       <h2>Сборка вручную (пулы)</h2>
       <div class="axes-edit" style="margin-bottom:12px">
-        <div class="axed cap"><label>Капитал</label><div class="dots" id="capDots"></div></div>
-        <div class="axed know"><label>Ноу-хау</label><div class="dots" id="knowDots"></div></div>
+        <div class="axed cap"><label>Капитал</label>
+          <div class="stepper"><button class="sbtn" data-ax="cap" data-d="-1">−</button>
+            <div class="dots" id="capDots"></div>
+            <button class="sbtn" data-ax="cap" data-d="1">+</button><span class="sval" id="capVal"></span></div></div>
+        <div class="axed know"><label>Ноу-хау</label>
+          <div class="stepper"><button class="sbtn" data-ax="know" data-d="-1">−</button>
+            <div class="dots" id="knowDots"></div>
+            <button class="sbtn" data-ax="know" data-d="1">+</button><span class="sval" id="knowVal"></span></div></div>
       </div>
       <div class="pool"><label>Черта</label><div class="optgrid" id="optTrait"></div><div class="fx" id="fxTrait"></div></div>
       <div class="pool"><label>Порок</label><div class="optgrid" id="optVice"></div><div class="fx" id="fxVice"></div></div>
@@ -261,6 +273,7 @@ function renderPresets(){
 function renderDots(){
   $('capDots').innerHTML=[0,1,2,3].map(i=>`<div class="dot ${i<S.cap?'f':''}" data-ax="cap" data-v="${i+1}"></div>`).join('');
   $('knowDots').innerHTML=[0,1,2,3].map(i=>`<div class="dot ${i<S.know?'f':''}" data-ax="know" data-v="${i+1}"></div>`).join('');
+  $('capVal').textContent=S.cap+'/4'; $('knowVal').textContent=S.know+'/4';
 }
 function challenge(){
   const s=S.cap+S.know;
@@ -312,7 +325,12 @@ function loadPreset(id){ const p=PRESETS.find(x=>x.id===id); if(!p)return;
 
 // listeners
 $('presets').addEventListener('click',e=>{const c=e.target.closest('.pchip'); if(c) loadPreset(c.dataset.id);});
-document.addEventListener('click',e=>{const d=e.target.closest('.dot'); if(d){ S[d.dataset.ax]=+d.dataset.v; S.preset=null; S.n='Основатель'; S.e='👤'; renderAll(); }});
+document.addEventListener('click',e=>{
+  const b=e.target.closest('.sbtn');
+  if(b){ const ax=b.dataset.ax; S[ax]=Math.max(0,Math.min(4,S[ax]+(+b.dataset.d))); S.preset=null; S.n='Основатель'; S.e='👤'; renderAll(); return; }
+  const d=e.target.closest('.dot');
+  if(d){ S[d.dataset.ax]=+d.dataset.v; S.preset=null; S.n='Основатель'; S.e='👤'; renderAll(); }
+});
 ['optTrait','optVice','optDrive','optBond'].forEach(cid=>$(cid).addEventListener('click',e=>{
   const o=e.target.closest('.opt'); if(!o) return;
   S[o.dataset.key]=o.dataset.val; S.preset=null; S.n='Основатель'; S.e='👤'; renderAll();
