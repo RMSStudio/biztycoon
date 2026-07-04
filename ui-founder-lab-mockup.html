@@ -217,16 +217,27 @@ const BONDS = {
   hometown_tie:{n:'Земляк',fx:'первый заказ, вход в город'}, market_insider:{n:'Инсайд рынка',fx:'эмпатия-бонус к продажам'},
 };
 // ── ВКЛАДЫ: капитал (Σ по всем категориям) + пред-открытые системы ──────
-const TRAIT_CAP={charismatic:1,strategist:1,taste:1,mediagenic:1,principled:-1};
-const TRAIT_OPENS={perfectionist:'port',charismatic:'nego',empath:'hire',strategist:'market',pusher:'scout',
-  systematic:'life',composed:'life',deep_focus:'ai',taste:'port',principled:'port',mediagenic:'scout',
-  team_player:'hire',hungry:'scout',client_eye:'nego'};
-const VICE_CAP={spender:-2,inflexible:-1};
-const DRIVE_CAP={money:1,fame:1,change_world:-1};
-const BOND_CAP={dad_network:2,mercenaries:1,own_audience:1,community:-1,shady_partner:1,loyal_client:1,cofounder:1};
-const BOND_OPENS={mercenaries:'hire',market_insider:'market',own_audience:'scout',cofounder:'hire'};
-// Мотивации тоже слегка открывают систему-«аптитюд» (три валюты §дизайн)
+// ═══ ПОЛНОЕ РАСПРЕДЕЛЕНИЕ ВЕСОВ (3 валюты: капитал c / системы opens / события e) ═══
+// Тангибл (возраст/опыт/происхождение/связь) — крен в капитал+системы, e низкий.
+// Личность (черта/порок/мотивация) — крен в события (e высокий), c/opens слабее.
+// ── ЧЕРТЫ ──
+const TRAIT_CAP={perfectionist:0,charismatic:1,empath:0,strategist:1,pusher:0,systematic:1,composed:1,deep_focus:0,taste:1,principled:-1,mediagenic:1,team_player:0,hungry:0,client_eye:0};
+const TRAIT_OPENS={perfectionist:'port',charismatic:'nego',empath:'hire',strategist:'market',pusher:'scout',systematic:'life',composed:'life',deep_focus:'ai',taste:'port',principled:'port',mediagenic:'scout',team_player:'hire',hungry:'scout',client_eye:'nego'};
+const TRAIT_EVT={perfectionist:3,charismatic:2,empath:3,strategist:1,pusher:2,systematic:1,composed:1,deep_focus:2,taste:2,principled:3,mediagenic:3,team_player:2,hungry:2,client_eye:2};
+// ── ПОРОКИ (событий больше всего; системы не открывают) ──
+const VICE_CAP={procrastinator:-1,spender:-2,burnout:0,detached:0,corner_cutter:1,analysis_paralysis:0,outdated:-1,social_anxiety:0,disillusioned:0,inflexible:-1,hype_addict:0,conflict_avoidant:0,outsider:-1,craft_underestimator:0,control_freak:1,messiah:0,smother:0};
+const VICE_EVT={procrastinator:3,spender:2,burnout:3,detached:2,corner_cutter:3,analysis_paralysis:2,outdated:2,social_anxiety:3,disillusioned:3,inflexible:3,hype_addict:3,conflict_avoidant:3,outsider:2,craft_underestimator:2,control_freak:2,messiah:3,smother:2};
+// ── МОТИВАЦИИ ──
+const DRIVE_CAP={prove:0,freedom:0,legacy:1,builder_thrill:1,money:1,balance:1,make_great:0,my_way:0,change_world:-1,fame:1,together:0,escape:0,do_it_right:0};
 const DRIVE_OPENS={make_great:'port',fame:'scout',money:'market',builder_thrill:'market',do_it_right:'nego'};
+const DRIVE_EVT={prove:2,freedom:2,legacy:1,builder_thrill:2,money:1,balance:1,make_great:2,my_way:2,change_world:2,fame:3,together:2,escape:2,do_it_right:2};
+// ── СВЯЗИ (тангибл-актив: капитал+система, e ниже, кроме драматичных) ──
+const BOND_CAP={dev_friend:0,dad_network:2,loyal_client:1,mercenaries:1,shady_partner:1,ex_colleague:1,word_of_mouth:0,fan_client:0,old_contacts:1,community:-1,own_audience:1,cofounder:1,hometown_tie:0,market_insider:1};
+const BOND_OPENS={dev_friend:'hire',mercenaries:'hire',market_insider:'market',own_audience:'scout',cofounder:'hire',ex_colleague:'nego',old_contacts:'market'};
+const BOND_EVT={dev_friend:1,dad_network:2,loyal_client:1,mercenaries:1,shady_partner:3,ex_colleague:1,word_of_mouth:0,fan_client:1,old_contacts:1,community:2,own_audience:2,cofounder:3,hometown_tie:1,market_insider:1};
+// ── ПРОИСХОЖДЕНИЕ / ВОЗРАСТ — событийный вес (капитал+системы уже в ORIGINS/AGES) ──
+const ORIGIN_EVT={student:1,selfmade:1,savings:0,returner:1,senior:0,severance:0,brand:1,wealthy:1,operator:0,serial:1,impact:1};
+const AGE_EVT={young:1,adult:0,mature:0};
 // ── ПРЕСЕТЫ (origin + 4 пула; капитал/ноу-хау — производные) ────────────
 const PRESETS=[
   {id:'mark',n:'Марк',e:'🎓',tier:'Струггер',age:'young',exp:1,o:'student',trait:'perfectionist',vice:'procrastinator',drive:'prove',bond:'dev_friend'},
@@ -302,8 +313,8 @@ function openedSet(){ const s=new Set(ORIGINS[S.origin].opens);
   if(BOND_OPENS[S.bond])s.add(BOND_OPENS[S.bond]);
   if(TRAIT_OPENS[S.trait])s.add(TRAIT_OPENS[S.trait]);
   if(DRIVE_OPENS[S.drive])s.add(DRIVE_OPENS[S.drive]); return s; }
-// Событийность (3-я валюта): сколько событий тянет билд. Личность (черта/порок/
-// мотивация) — event-heavy; тангибл — event-light.
+// Событийность (3-я валюта) = Σ event-веса всех категорий. Личность — heavy, тангибл — light.
+const evtSum=()=>(AGE_EVT[S.age]||0)+(ORIGIN_EVT[S.origin]||0)+(TRAIT_EVT[S.trait]||0)+(VICE_EVT[S.vice]||0)+(DRIVE_EVT[S.drive]||0)+(BOND_EVT[S.bond]||0);
 
 function renderPresets(){
   $('presets').innerHTML=PRESETS.map(p=>`<div class="pchip ${S.preset===p.id?'on':''}" data-id="${p.id}"><span class="e">${p.e}</span>${p.n}</div>`).join('');
@@ -311,19 +322,23 @@ function renderPresets(){
 }
 function renderOpts(cid,pool,key){ $(cid).innerHTML=Object.keys(pool).map(k=>`<div class="opt ${S[key]===k?'on':''}" data-key="${key}" data-val="${k}">${pool[k].n}</div>`).join(''); }
 function renderPools(){ renderOpts('optAge',AGES,'age'); renderOpts('optOrigin',ORIGINS,'origin'); renderOpts('optTrait',TRAITS,'trait'); renderOpts('optVice',VICES,'vice'); renderOpts('optDrive',DRIVES,'drive'); renderOpts('optBond',BONDS,'bond'); }
+const nodeName=id=>id?TREE.find(n=>n.id===id).n:'';
+function triple(cap, openList, evt){
+  const parts=[];
+  parts.push(`<span class="cap">кап ${cap>0?'+':''}${cap}</span>`);
+  parts.push(`сист: <b>${openList&&openList.length?openList.map(nodeName).join(', '):'—'}</b>`);
+  parts.push(`<span style="color:var(--C)">события +${evt}</span>`);
+  return parts.join(' · ');
+}
 function renderFx(){
   $('expSlider').value=S.exp; $('expLab').textContent=yrsWord(S.exp);
-  const eo=expOpens(S.exp); const eon=eo.length?eo.map(id=>TREE.find(n=>n.id===id).n).join(', '):'ничего';
-  $('fxExp').innerHTML=`<span class="cap">капитал +${expCap(S.exp)}</span> · открывает: <b>${eon}</b>`;
-  const o=ORIGINS[S.origin]; const oo=o.opens.length?o.opens.map(id=>TREE.find(n=>n.id===id).n).join(', '):'ничего';
-  $('fxOrigin').innerHTML=`<span class="cap">капитал +${o.cap}</span> · открывает: <b>${oo}</b>`;
-  const t=TRAITS[S.trait]; const to=TRAIT_OPENS[S.trait]?TREE.find(n=>n.id===TRAIT_OPENS[S.trait]).n:'';
-  $('fxTrait').innerHTML=`${t.fx}${to?` · аптитюд: <b>${to}</b>`:''}${TRAIT_CAP[S.trait]?` · <span class="cap">капитал ${TRAIT_CAP[S.trait]>0?'+':''}${TRAIT_CAP[S.trait]}</span>`:''} · <span style="color:var(--C)">события ↑</span> · класс ${t.cls}`;
-  $('fxVice').innerHTML=`${VICES[S.vice].fx} · тень: «${VICES[S.vice].sh}»${VICE_CAP[S.vice]?` · <span class="cap">капитал ${VICE_CAP[S.vice]}</span>`:''} · <span style="color:var(--C)">события ↑↑</span>`;
-  const dro=DRIVE_OPENS[S.drive]?TREE.find(n=>n.id===DRIVE_OPENS[S.drive]).n:'';
-  $('fxDrive').innerHTML=`${DRIVES[S.drive].fx}${dro?` · аптитюд: <b>${dro}</b>`:''}${DRIVE_CAP[S.drive]?` · <span class="cap">капитал ${DRIVE_CAP[S.drive]>0?'+':''}${DRIVE_CAP[S.drive]}</span>`:''} · <span style="color:var(--C)">события ↑</span>`;
-  const b=BONDS[S.bond]; const bo=BOND_OPENS[S.bond]?TREE.find(n=>n.id===BOND_OPENS[S.bond]).n:'';
-  $('fxBond').innerHTML=`${b.fx}${bo?` · открывает: <b>${bo}</b>`:''}${BOND_CAP[S.bond]?` · <span class="cap">капитал ${BOND_CAP[S.bond]>0?'+':''}${BOND_CAP[S.bond]}</span>`:''}`;
+  $('fxExp').innerHTML=triple(expCap(S.exp), expOpens(S.exp), 0);
+  $('fxOrigin').innerHTML=triple(ORIGINS[S.origin].cap, ORIGINS[S.origin].opens, ORIGIN_EVT[S.origin]||0);
+  const t=TRAITS[S.trait];
+  $('fxTrait').innerHTML=`${t.fx} · ${triple(TRAIT_CAP[S.trait]||0, TRAIT_OPENS[S.trait]?[TRAIT_OPENS[S.trait]]:[], TRAIT_EVT[S.trait]||0)} · ${t.cls}`;
+  $('fxVice').innerHTML=`тень «${VICES[S.vice].sh}» · ${triple(VICE_CAP[S.vice]||0, [], VICE_EVT[S.vice]||0)}`;
+  $('fxDrive').innerHTML=`${DRIVES[S.drive].fx} · ${triple(DRIVE_CAP[S.drive]||0, DRIVE_OPENS[S.drive]?[DRIVE_OPENS[S.drive]]:[], DRIVE_EVT[S.drive]||0)}`;
+  $('fxBond').innerHTML=`${BONDS[S.bond].fx} · ${triple(BOND_CAP[S.bond]||0, BOND_OPENS[S.bond]?[BOND_OPENS[S.bond]]:[], BOND_EVT[S.bond]||0)}`;
 }
 function renderTree(){
   const op=openedSet();
@@ -342,7 +357,7 @@ function renderDossier(){
   $('dPort').textContent=S.e; $('dArc').textContent=S.n;
   $('dRole').innerHTML=`<span class="cls">${classOf()}</span> · ${S.tier}`;
   const cap=capSum(); $('dCap').style.width=Math.max(0,Math.min(100,cap/12*100))+'%'; $('dCapT').textContent=cap+' / 12';
-  const evt=eligible().length; $('dEvt').style.width=Math.min(100,evt/8*100)+'%'; $('dEvtT').textContent=evt+' событий';
+  const evt=evtSum(); $('dEvt').style.width=Math.min(100,evt/12*100)+'%'; $('dEvtT').textContent=evt+' / 12';
   $('eOrigin').innerHTML=`${ORIGINS[S.origin].n} <small>· капитал +${ORIGINS[S.origin].cap}</small>`;
   $('eTrait').innerHTML=`${TRAITS[S.trait].n} <small>· ${TRAITS[S.trait].fx}</small>`;
   $('eVice').innerHTML=`${VICES[S.vice].n} <small>· ${VICES[S.vice].fx}</small>`;
