@@ -345,6 +345,75 @@ var TEAM_SYNERGIES = [
            { countRoleOnProject:{ role:'manager', min:1 } } ],
     do:[ { speedMult:0.20 } ],
     desc:'Менеджер на просроченном проекте → +20% скорость: антикризисный режим.' },
+
+  // ── НОВЫЕ ПРОЕКТНЫЕ СИНЕРГИИ (позитив, решает расстановка) ───────────
+  // ⚖️ [3+ разные роли на проекте] → +12% скорость, +2 Q (сбалансированная команда)
+  { id:'balanced_trio', name:'Сбалансированное трио', icon:'⚖️', scope:'project',
+    when:[ { distinctRolesOnProject:{ min:3 } } ],
+    do:[ { speedMult:0.12 }, { qAdd:2 } ],
+    desc:'3+ разные роли на проекте → +12% скорость и +2 Q: разносторонний взгляд.' },
+
+  // 🎓 [senior + junior на проекте] → +2 Q (наставничество прямо в бою)
+  { id:'mentor_pair', name:'Менторская связка', icon:'🎓', scope:'project',
+    when:[ { countGradeOnProject:{ grade:'senior', min:1 } },
+           { countGradeOnProject:{ grade:'junior', min:1 } } ],
+    do:[ { qAdd:2 } ],
+    desc:'Senior + junior на одном проекте → +2 Q: наставничество в бою.' },
+
+  // 🧩 [дизайнер+разработчик+smm на проекте] → +12% выплата T2+, +2 Q
+  { id:'cross_pod', name:'Кросс-функциональный под', icon:'🧩', scope:'project',
+    when:[ { countRoleOnProject:{ role:'designer',  min:1 } },
+           { countRoleOnProject:{ role:'developer', min:1 } },
+           { countRoleOnProject:{ role:'smm',       min:1 } } ],
+    do:[ { payoutMult:0.12, when:[ { projectTier:{ min:2 } } ] }, { qAdd:2 } ],
+    desc:'Дизайнер+разработчик+SMM на проекте → +12% выплата (T2+) и +2 Q.' },
+
+  // 🎯 [3+ одной роли на проекте] → +15% скорость (профильный десант)
+  { id:'specialist_strike', name:'Спец-страйк', icon:'🎯', scope:'project',
+    when:[ { roleStackOnProject:{ min:3 } } ],
+    do:[ { speedMult:0.15 } ],
+    desc:'3+ спеца одной роли на проекте → +15% скорость: узкий профиль давит массой.' },
+
+  // ── НАПРЯЖЕНИЯ / АНТИ-СИНЕРГИИ (штраф за плохой состав; kind:'tension') ─
+  // 👑👑 [2+ «Звезда» на проекте] → эго-война: −5 Q, −10% скорость
+  { id:'ego_clash', name:'Битва эго', icon:'⚔️', scope:'project', kind:'tension',
+    when:[ { countTraitOnProject:{ trait:'star_ego', min:2 } } ],
+    do:[ { qAdd:-5 }, { speedMult:-0.10 } ],
+    desc:'2+ «Звезды» на одном проекте → эго-война: −5 Q и −10% скорость.' },
+
+  // 🍲 [3+ senior на проекте] → «слишком много поваров»: −15% скорость (споры)
+  { id:'too_many_cooks', name:'Слишком много поваров', icon:'🍲', scope:'project', kind:'tension',
+    when:[ { countGradeOnProject:{ grade:'senior', min:3 } } ],
+    do:[ { speedMult:-0.15 } ],
+    desc:'3+ senior на одном проекте → бесконечные споры: −15% скорость (2 — ещё ревью, 3 — уже базар).' },
+
+  // 🧱 [моно-роль 3+ на сложном T3+] → однобокость: −4 Q (нет второго взгляда)
+  { id:'monoculture', name:'Монокультура', icon:'🧱', scope:'project', kind:'tension',
+    when:[ { roleStackOnProject:{ min:3 } },
+           { distinctRolesOnProject:{ max:1 } },
+           { projectTier:{ min:3 } } ],
+    do:[ { qAdd:-4 } ],
+    desc:'Только одна роль (3+) на сложном T3+ проекте → однобоко: −4 Q. (Скорость от Спец-страйка остаётся — быстро, но криво.)' },
+
+  // 🐣 [3+ junior и НИ одного senior на проекте] → без присмотра: −4 Q
+  { id:'unsupervised_juniors', name:'Джуны без присмотра', icon:'🐣', scope:'project', kind:'tension',
+    when:[ { countGradeOnProject:{ grade:'junior', min:3 } },
+           { countGradeOnProject:{ grade:'senior', max:0 } } ],
+    do:[ { qAdd:-4 } ],
+    desc:'3+ джуна и ни одного senior на проекте → некому проверить: −4 Q.' },
+
+  // 🥇🥇 [2+ «Дорогой гений» на проекте] → раздутый ФОТ: +30К upkeep
+  { id:'costly_bench', name:'Дорогая скамейка', icon:'💸', scope:'project', kind:'tension',
+    when:[ { countTraitOnProject:{ trait:'expensive_genius', min:2 } } ],
+    do:[ { upkeepAdd:30000 } ],
+    desc:'2+ «Дорогих гения» на одном проекте → раздутый ФОТ: +30К upkeep.' },
+
+  // 🥵 [1 человек на сложном T3+] → перегруз-одиночка: −3 Q, +25% риск
+  { id:'solo_on_complex', name:'Одиночка на сложном', icon:'🥵', scope:'project', kind:'tension',
+    when:[ { projectTeamSize:{ max:1 } },
+           { projectTier:{ min:3 } } ],
+    do:[ { qAdd:-3 }, { riskMult:0.25 } ],
+    desc:'Один человек на сложном T3+ проекте → не вывозит: −3 Q и +25% риск.' },
 ];
 
 // Автозагрузка в движок (если TraitEngine уже поднят; иначе он сам подберёт)

@@ -234,7 +234,7 @@ var issues = TraitEngine.validateCatalog();
 _ok(issues.length === 0, 'весь каталог валиден (' + TraitEngine.catalog().traits.length + ' трейтов, ' +
   TraitEngine.catalog().synergies.length + ' синергий)' + (issues.length ? ' → ' + issues.join('; ') : ''));
 _ok(TraitEngine.catalog().traits.length === 27, '27 трейтов (12 + 15 новых)');
-_ok(TraitEngine.catalog().synergies.length === 11, '11 синергий (5 + 6 новых)');
+_ok(TraitEngine.catalog().synergies.length === 21, '21 синергия (11 позит. + 6 напряжений + 4 новые проектные)');
 // у каждого узла-пула теперь есть трейты (все 13 пулов покрыты)
 var pools = {};
 TraitEngine.catalog().traits.forEach(function(t){ if(t.pool) pools[t.pool]=1; });
@@ -261,8 +261,8 @@ var cm = _staff({ _iid:'cm', role:'developer', rlTraits:['clone_master'] });
 var d1 = _staff({ _iid:'d1', role:'developer' }), d2 = _staff({ _iid:'d2', role:'developer' });
 var G2 = { staff:[cm,d1,d2], activeClients:[] };
 var pMono = _proj({ id:'pm', _assignedStaff:['cm','d1','d2'] });
-// 3 разработчика в штате заодно включают «Тех-шоп» (+10%) → 1.2 × 1.1
-_ok(Math.abs(TraitEngine.mods('calcSpeed', { G:G2, project:pMono }).mult - 1.2 * 1.1) < 1e-9, 'Клон-мастер в моно-стеке: ×1.2 (× Тех-шоп 1.1)');
+// 3 разработчика: Клон-мастер ×1.2 × Тех-шоп (штат) ×1.1 × Спец-страйк (3 одной роли на проекте) ×1.15
+_ok(Math.abs(TraitEngine.mods('calcSpeed', { G:G2, project:pMono }).mult - 1.2 * 1.1 * 1.15) < 1e-9, 'Клон-мастер в моно-стеке: ×1.2 × Тех-шоп ×1.1 × Спец-страйк ×1.15');
 
 // Страховщик: гасит риск ×0.75
 var ins = _staff({ _iid:'in', rlTraits:['insurer'] });
@@ -299,6 +299,43 @@ var j1 = _staff({ grade:'junior', role:'developer' }), j2 = _staff({ grade:'juni
     j3 = _staff({ grade:'junior', role:'copywriter' });
 var G7 = { staff:[men,j1,j2,j3], activeClients:[] };
 _ok(TraitEngine.mods('calcQuality', { G:G7, project:_proj() }).add === 3, 'Джун-раш: +3 Q (джуны+Ментор)');
+
+// ── НАПРЯЖЕНИЯ / НОВЫЕ ПРОЕКТНЫЕ СИНЕРГИИ ──────────────────────────────
+// Битва эго: 2 «Звезды» на проекте (роли разные — без прочих спид-синергий) → −10% скорость
+var eg1=_staff({_iid:'g1',role:'designer',rlTraits:['star_ego']}), eg2=_staff({_iid:'g2',role:'developer',rlTraits:['star_ego']});
+var Geg={staff:[eg1,eg2],activeClients:[]};
+_ok(Math.abs(TraitEngine.mods('calcSpeed',{G:Geg,project:_proj({_assignedStaff:['g1','g2']})}).mult - 0.9) < 1e-9, 'Битва эго: 2 Звезды → −10% скорость');
+
+// Менторская связка: senior + junior одной роли → +2 Q (без трио/страйка/парного ревью)
+var mp1=_staff({_iid:'m1',role:'developer',grade:'senior'}), mp2=_staff({_iid:'m2',role:'developer',grade:'junior'});
+var Gmp={staff:[mp1,mp2],activeClients:[]};
+_ok(TraitEngine.mods('calcQuality',{G:Gmp,project:_proj({_assignedStaff:['m1','m2']})}).add === 2, 'Менторская связка: senior+junior → +2 Q');
+
+// Спец-страйк: 3 копирайтера (нет цехового бонуса) → +15% скорость
+var cw1=_staff({_iid:'w1',role:'copywriter'}),cw2=_staff({_iid:'w2',role:'copywriter'}),cw3=_staff({_iid:'w3',role:'copywriter'});
+var Gcw={staff:[cw1,cw2,cw3],activeClients:[]};
+_ok(Math.abs(TraitEngine.mods('calcSpeed',{G:Gcw,project:_proj({_assignedStaff:['w1','w2','w3'],tier:2})}).mult - 1.15) < 1e-9, 'Спец-страйк: 3 одной роли → +15% скорость');
+
+// Монокультура: те же 3 копирайтера на T3+ → −4 Q (страйк по скорости остаётся)
+_ok(TraitEngine.mods('calcQuality',{G:Gcw,project:_proj({_assignedStaff:['w1','w2','w3'],tier:4})}).add === -4, 'Монокультура на T4: −4 Q');
+
+// Джуны без присмотра: 3 джуна-копирайтера, ни одного senior, T2 → −4 Q
+var uj1=_staff({_iid:'u1',role:'copywriter',grade:'junior'}),uj2=_staff({_iid:'u2',role:'copywriter',grade:'junior'}),uj3=_staff({_iid:'u3',role:'copywriter',grade:'junior'});
+var Guj={staff:[uj1,uj2,uj3],activeClients:[]};
+_ok(TraitEngine.mods('calcQuality',{G:Guj,project:_proj({_assignedStaff:['u1','u2','u3'],tier:2})}).add === -4, 'Джуны без присмотра: −4 Q');
+
+// Дорогая скамейка: 2 «Дорогих гения» на проекте → upkeep 2×25К (инд.) + 30К (напряж.) = 80К
+var xg1=_staff({_iid:'x1',role:'designer',rlTraits:['expensive_genius']}), xg2=_staff({_iid:'x2',role:'developer',rlTraits:['expensive_genius']});
+var Gxg={staff:[xg1,xg2],activeClients:[]};
+_ok(TraitEngine.mods('calcUpkeep',{G:Gxg,project:_proj({_assignedStaff:['x1','x2']})}).add === 80000, 'Дорогая скамейка: upkeep +80К');
+
+// Одиночка на сложном: 1 человек на T3+ → −3 Q и +25% риск
+var so1=_staff({_iid:'o1',role:'developer'});
+var Gso={staff:[so1],activeClients:[]};
+_ok(TraitEngine.mods('calcQuality',{G:Gso,project:_proj({_assignedStaff:['o1'],tier:3})}).add === -3, 'Одиночка на сложном: −3 Q');
+_ok(Math.abs(TraitEngine.mods('calcRisk',{G:Gso,project:_proj({_assignedStaff:['o1'],tier:3})}).mult - 1.25) < 1e-9, 'Одиночка на сложном: +25% риск');
+
+// Напряжения не срабатывают вне режима (no-op) — общий контракт уже проверен выше для трейтов
 `));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');

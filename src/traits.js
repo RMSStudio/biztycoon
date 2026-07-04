@@ -95,16 +95,25 @@
     const team = _team(ctx);
     return team.length === 1 && _sid(team[0]) === _sid(ctx.staff);
   });
-  Predicates.register('countRoleOnProject', (ctx, arg) =>
-    _team(ctx).filter(s => s.role === arg.role && (!arg.excludeSelf || _sid(s) !== _sid(ctx.staff))).length >= (arg.min || 1));
+  Predicates.register('countRoleOnProject', (ctx, arg) => {
+    const c = _team(ctx).filter(s => s.role === arg.role && (!arg.excludeSelf || _sid(s) !== _sid(ctx.staff))).length;
+    if (arg.max != null && c > arg.max) return false;
+    return c >= (arg.min != null ? arg.min : (arg.max != null ? 0 : 1));
+  });
   Predicates.register('countRoleInStaff', (ctx, arg) =>
     _staffAll(ctx).filter(s => s.role === arg.role).length >= (arg.min || 1));
   Predicates.register('countGradeInStaff', (ctx, arg) =>
     _staffAll(ctx).filter(s => s.grade === arg.grade).length >= (arg.min || 1));
-  Predicates.register('countGradeOnProject', (ctx, arg) =>
-    _team(ctx).filter(s => s.grade === arg.grade && (!arg.excludeSelf || _sid(s) !== _sid(ctx.staff))).length >= (arg.min || 1));
-  Predicates.register('distinctRolesOnProject', (ctx, arg) =>
-    new Set(_team(ctx).map(s => s.role)).size >= (arg.min || 2));
+  Predicates.register('countGradeOnProject', (ctx, arg) => {
+    const c = _team(ctx).filter(s => s.grade === arg.grade && (!arg.excludeSelf || _sid(s) !== _sid(ctx.staff))).length;
+    if (arg.max != null && c > arg.max) return false;
+    return c >= (arg.min != null ? arg.min : (arg.max != null ? 0 : 1));
+  });
+  Predicates.register('distinctRolesOnProject', (ctx, arg) => {
+    const n = new Set(_team(ctx).map(s => s.role)).size;
+    if (arg && arg.max != null && n > arg.max) return false;
+    return n >= ((arg && arg.min) != null ? arg.min : (arg && arg.max != null ? 0 : 2));
+  });
   Predicates.register('teamSize', (ctx, arg) => {
     const n = _staffAll(ctx).length;
     if (arg.min != null && n < arg.min) return false;
@@ -139,6 +148,25 @@
     _staffAll(ctx).some(s => (s.rlTraits || []).includes(typeof arg === 'string' ? arg : arg.id)));
   Predicates.register('traitFamilyInStaff', (ctx, arg) =>             // носителей трейтов семейства ≥ min
     _staffAll(ctx).filter(s => (s.rlTraits || []).some(tid => { const t = _byId['t:' + tid]; return t && t.family === arg.family; })).length >= (arg.min || 1));
+  Predicates.register('countTraitOnProject', (ctx, arg) => {          // носителей трейта НА проекте (min/max) — для напряжений
+    const id = typeof arg === 'string' ? arg : arg.trait;
+    const c = _team(ctx).filter(s => (s.rlTraits || []).includes(id)).length;
+    if (arg.max != null && c > arg.max) return false;
+    return c >= (arg.min != null ? arg.min : 1);
+  });
+  Predicates.register('roleStackOnProject', (ctx, arg) => {           // макс. кол-во ОДНОЙ роли на проекте ≥ min (спец-страйк)
+    const counts = {};
+    _team(ctx).forEach(s => { counts[s.role] = (counts[s.role] || 0) + 1; });
+    const mx = Object.keys(counts).reduce((m, r) => Math.max(m, counts[r]), 0);
+    return mx >= (arg.min || 3);
+  });
+  Predicates.register('projectTeamSize', (ctx, arg) => {              // размер команды НА проекте (min/max)
+    if (!ctx.project) return false;
+    const n = _team(ctx).length;
+    if (arg.min != null && n < arg.min) return false;
+    if (arg.max != null && n > arg.max) return false;
+    return true;
+  });
 
   // ── Словарь ЭФФЕКТОВ (§14.4): имя → { home, calc | apply } ──────────
   //  calc-глаголы возвращают дельту {add, mult} для числовых хуков;
@@ -336,7 +364,7 @@
     ctx = ctx || {};
     return _synergies
       .filter(sy => (sy.scope !== 'project' || ctx.project) && Predicates.check(sy.when, ctx))
-      .map(sy => ({ id: sy.id, name: sy.name, icon: sy.icon, desc: sy.desc, scope: sy.scope || 'staff' }));
+      .map(sy => ({ id: sy.id, name: sy.name, icon: sy.icon, desc: sy.desc, scope: sy.scope || 'staff', kind: sy.kind || 'synergy' }));
   }
 
   // Статус синергии для UI: 'on' | 'near' (не хватает 1 по count-условию) | 'off'
@@ -361,7 +389,7 @@
     return _synergies
       .filter(sy => sy.scope !== 'project' || ctx.project)
       .map(sy => ({ id: sy.id, name: sy.name, icon: sy.icon, desc: sy.desc,
-                    scope: sy.scope || 'staff', status: synergyStatus(sy, ctx) }));
+                    scope: sy.scope || 'staff', kind: sy.kind || 'synergy', status: synergyStatus(sy, ctx) }));
   }
 
   // ── Подписка на сигналы движка (событийные хуки без врезок) ─────────

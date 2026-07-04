@@ -76,6 +76,7 @@
 .tbuild .plocal .ph{display:flex;justify-content:space-between;font-size:10.5px;font-weight:800;margin-bottom:5px}
 .tbuild .plocal .ph .pt{color:var(--tm);font-weight:700;font-size:9.5px}
 .tbuild .plocal .fire{font-size:10px;color:#2fbd6e;font-weight:700}
+.tbuild .plocal .fire.tension{color:#e1456a}
 .tbuild .lockcard{border:1px dashed rgba(255,255,255,.14);border-radius:10px;padding:9px 10px;font-size:10px;color:var(--tm);line-height:1.4}
 .tbuild .lockcard b{color:var(--t)}`;
     document.head.appendChild(st);
@@ -152,7 +153,9 @@
       if (!active.length) return '';
       return `<div class="plocal"><div class="ph"><span>${c.icon || '📂'} ${c.name || c.id}</span>
           <span class="pt">T${c.tier || 1}</span></div>
-        ${active.map(sy => `<div class="fire">✦ ${sy.icon || ''} ${sy.name} — ${sy.desc || ''}</div>`).join('')}</div>`;
+        ${active.map(sy => sy.kind === 'tension'
+          ? `<div class="fire tension">⚠ ${sy.icon || ''} ${sy.name} — ${sy.desc || ''}</div>`
+          : `<div class="fire">✦ ${sy.icon || ''} ${sy.name} — ${sy.desc || ''}</div>`).join('')}</div>`;
     }).join('') || '<div class="syn-d" style="font-size:10px;color:#4a5470">Нет активных локальных синергий — они включаются расстановкой спецов по проектам.</div>';
 
     return `
