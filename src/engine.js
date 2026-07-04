@@ -245,13 +245,24 @@ function getTeamThroughput(g=G) {
   return 2 + g.staff.reduce((s,x) => s + calcStaffWorkUnit(x), 0);
 }
 
-// Мощность конкретного проекта: 2 (фаундер) + мощн. назначенных сотрудников
+// Ф.7 opportunity-cost: «разгон» после перевода спеца на проект (только rogue-lite).
+// Перевёл человека на ДРУГОЙ проект → он _rampMo мес не в полную силу (адаптация);
+// сидит на одном — набирает момент. Делает расстановку выбором с ценой переключения.
+//   мес 0 → ×0.5 · мес 1 → ×0.75 · мес 2+ → ×1.0
+const RAMP_MIN = 0.5, RAMP_STEP = 0.25, RAMP_CAP = 2;
+function _rampActive() { return (typeof Unlocks !== 'undefined' && Unlocks.isActive && Unlocks.isActive()); }
+function rampMult(s) {
+  if (!_rampActive() || !s) return 1;
+  return Math.min(1, RAMP_MIN + RAMP_STEP * (s._rampMo || 0));
+}
+
+// Мощность конкретного проекта: 2 (фаундер) + мощн. назначенных сотрудников (× разгон)
 function getProjectThroughput(c) {
   const assigned = (G.staff || []).filter(s =>
     s.status !== 'fired' &&
     (c._assignedStaff || []).includes(s._iid || s.id)
   );
-  return 2 + assigned.reduce((sum, s) => sum + calcStaffWorkUnit(s), 0);
+  return 2 + assigned.reduce((sum, s) => sum + calcStaffWorkUnit(s) * rampMult(s), 0);
 }
 
 // Пассивный прирост качества проекта/мес от назначенной команды (+ Нейросеть).
@@ -277,6 +288,10 @@ function getProjectQualityGain(c) {
 
 // Назначить сотрудника на проект (один сотрудник — один проект)
 function assignStaffToProject(staffId, projectId) {
+  // Ф.7 opportunity-cost: запомнить прежний проект и разгон ДО снятия
+  const s0 = (G.staff || []).find(s => (s._iid || s.id) === staffId);
+  const prevPid  = s0 ? s0._assignedProjectId : null;
+  const prevRamp = s0 ? (s0._rampMo || 0) : 0;
   unassignStaff(staffId);
   const project = (G.activeClients || []).find(c => c.id === projectId);
   const staff   = (G.staff || []).find(s => (s._iid || s.id) === staffId);
@@ -284,13 +299,16 @@ function assignStaffToProject(staffId, projectId) {
   project._assignedStaff = project._assignedStaff || [];
   project._assignedStaff.push(staffId);
   staff._assignedProjectId = projectId;
+  // тот же проект (перерисовка/повторное назначение) → разгон сохраняется;
+  // другой проект → сброс в 0 (заново адаптируется). Вне режима rampMult=1, эффекта нет.
+  staff._rampMo = (prevPid === projectId) ? prevRamp : 0;
   _emitRender();
 }
 
 // Снять сотрудника со всех проектов
 function unassignStaff(staffId) {
   const staff = (G.staff || []).find(s => (s._iid || s.id) === staffId);
-  if (staff) staff._assignedProjectId = null;
+  if (staff) { staff._assignedProjectId = null; staff._rampMo = 0; }
   (G.activeClients || []).forEach(c => {
     if (c._assignedStaff) c._assignedStaff = c._assignedStaff.filter(id => id !== staffId);
   });
@@ -2011,6 +2029,12 @@ function advanceMonth() {
 
   if (overloaded && G.activeClients.length > 0) {
     addLog(`⚠️ Команда перегружена (нужно ${Math.round(totalLoad)} мощн., есть ${Math.round(throughput)}) — недоукомплектованные проекты идут медленно`, 'amber');
+  }
+
+  // Ф.7 opportunity-cost: разгон назначенных растёт на 1/мес (прогресс этого месяца
+  // уже посчитан выше по ТЕКУЩЕМУ разгону). Вне режима — no-op.
+  if (_rampActive()) {
+    G.staff.forEach(s => { if (s._assignedProjectId && s.status !== 'fired') s._rampMo = Math.min(RAMP_CAP, (s._rampMo || 0) + 1); });
   }
 
   // ② в) LC work-фазы: work-события + авто-переход при 100%

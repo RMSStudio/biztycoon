@@ -2187,6 +2187,8 @@ function _renderAssignModal() {
           <div style="font-size:13px;font-weight:600">${s.name}</div>
           <div style="font-size:11px;color:var(--sub)">${s.roleLabel || s.role} · ${s.gradeLabel || s.grade}
             <span style="color:var(--teal);margin-left:4px">⚙ ${wu} мощн.</span>
+            ${(typeof _rampActive === 'function' && _rampActive() && isAssigned && (s._rampMo || 0) < 2)
+              ? `<span style="color:var(--amber);margin-left:4px" title="После перевода спец набирает мощность 2 мес (×0.5→×0.75→×1.0). Переключение сбрасывает разгон.">🔥 разгон ${(s._rampMo || 0)}/2</span>` : ''}
             ${otherClient ? `<span style="color:var(--amber);margin-left:4px">→ ${otherClient.name}</span>` : ''}
           </div>
         </div>
