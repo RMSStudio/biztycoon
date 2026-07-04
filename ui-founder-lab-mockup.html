@@ -56,6 +56,8 @@
   .daxis .track{height:9px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden}
   .daxis.cap .track>i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--cap),#f5c451);transition:width .3s}
   .daxis.cap .r span:last-child{color:var(--cap)}
+  .daxis.evt .track>i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#7d54d8,var(--C));transition:width .3s}
+  .daxis.evt .r span:last-child{color:var(--C)}
   /* mini-tree */
   .treelab{font-size:9.5px;letter-spacing:.09em;color:var(--td);font-weight:800;text-transform:uppercase;margin:12px 0 7px;display:flex}
   .treelab .kh{margin-left:auto;color:var(--know)}
@@ -97,7 +99,7 @@
 <body>
 <header>
   <h1>Лаборатория <b>основателя</b></h1>
-  <div class="sub">Testbed контента · капитал — производный (сумма всех вводных), ноу-хау — живая мини-карта дерева. Собери — увидь, что открыто и что выпадет.</div>
+  <div class="sub">Testbed · 3 валюты: капитал / системы (мини-дерево) / события. Каждый параметр вкладывается во все три, но с креном: тангибл (возраст/опыт/происхождение) — капитал+системы, личность (черта/порок/мотивация) — события. Показатели внутренние (в реале скрыты).</div>
 </header>
 
 <div class="wrap">
@@ -119,7 +121,9 @@
   <aside>
     <div class="sec dossier">
       <div class="dhead"><div class="port" id="dPort">👤</div><div><div class="arc" id="dArc">Основатель</div><div class="role" id="dRole"></div></div></div>
-      <div class="daxis cap"><div class="r"><span>Капитал (производный)</span><span id="dCapT"></span></div><div class="track"><i id="dCap"></i></div></div>
+      <div class="daxis cap"><div class="r"><span>Капитал (Σ всех)</span><span id="dCapT"></span></div><div class="track"><i id="dCap"></i></div></div>
+      <div class="daxis evt"><div class="r"><span>Событийность (драма)</span><span id="dEvtT"></span></div><div class="track"><i id="dEvt"></i></div></div>
+      <div style="font-size:9px;color:var(--td);margin:-2px 0 8px">внутр. индикаторы — в реальном создании скрыты (расчёт под капотом)</div>
       <div class="treelab">Ноу-хау — что открыто на старте <span class="kh" id="khCnt"></span></div>
       <div class="minitree" id="miniTree"></div>
       <div style="margin-top:12px">
@@ -221,6 +225,8 @@ const VICE_CAP={spender:-2,inflexible:-1};
 const DRIVE_CAP={money:1,fame:1,change_world:-1};
 const BOND_CAP={dad_network:2,mercenaries:1,own_audience:1,community:-1,shady_partner:1,loyal_client:1,cofounder:1};
 const BOND_OPENS={mercenaries:'hire',market_insider:'market',own_audience:'scout',cofounder:'hire'};
+// Мотивации тоже слегка открывают систему-«аптитюд» (три валюты §дизайн)
+const DRIVE_OPENS={make_great:'port',fame:'scout',money:'market',builder_thrill:'market',do_it_right:'nego'};
 // ── ПРЕСЕТЫ (origin + 4 пула; капитал/ноу-хау — производные) ────────────
 const PRESETS=[
   {id:'mark',n:'Марк',e:'🎓',tier:'Струггер',age:'young',exp:1,o:'student',trait:'perfectionist',vice:'procrastinator',drive:'prove',bond:'dev_friend'},
@@ -287,11 +293,17 @@ const $=id=>document.getElementById(id);
 const classOf=()=>TRAITS[S.trait]?TRAITS[S.trait].cls:'—';
 // Капитал = Σ по ВСЕМ категориям
 const capSum=()=>AGES[S.age].cap+expCap(S.exp)+ORIGINS[S.origin].cap+(TRAIT_CAP[S.trait]||0)+(VICE_CAP[S.vice]||0)+(DRIVE_CAP[S.drive]||0)+(BOND_CAP[S.bond]||0);
-// Ноу-хау (открытые узлы) = ТАНГИБЛ-фон: возраст + опыт + происхождение + связь-актив.
-// Характер (черта/порок/мотивация) систем НЕ открывает — он про то, КАК играешь.
+// Ноу-хау (открытые узлы) = вклад ВСЕХ категорий, но с разным весом (3 валюты:
+// капитал / системы / события). Тангибл-фон (возраст/опыт/происхождение/связь)
+// открывает СИЛЬНО; личность (черта + часть мотиваций) — слабее (аптитюд), зато
+// даёт больше СОБЫТИЙ вместо капитала/систем.
 function openedSet(){ const s=new Set(ORIGINS[S.origin].opens);
   AGES[S.age].opens.forEach(x=>s.add(x)); expOpens(S.exp).forEach(x=>s.add(x));
-  if(BOND_OPENS[S.bond])s.add(BOND_OPENS[S.bond]); return s; }
+  if(BOND_OPENS[S.bond])s.add(BOND_OPENS[S.bond]);
+  if(TRAIT_OPENS[S.trait])s.add(TRAIT_OPENS[S.trait]);
+  if(DRIVE_OPENS[S.drive])s.add(DRIVE_OPENS[S.drive]); return s; }
+// Событийность (3-я валюта): сколько событий тянет билд. Личность (черта/порок/
+// мотивация) — event-heavy; тангибл — event-light.
 
 function renderPresets(){
   $('presets').innerHTML=PRESETS.map(p=>`<div class="pchip ${S.preset===p.id?'on':''}" data-id="${p.id}"><span class="e">${p.e}</span>${p.n}</div>`).join('');
@@ -305,10 +317,11 @@ function renderFx(){
   $('fxExp').innerHTML=`<span class="cap">капитал +${expCap(S.exp)}</span> · открывает: <b>${eon}</b>`;
   const o=ORIGINS[S.origin]; const oo=o.opens.length?o.opens.map(id=>TREE.find(n=>n.id===id).n).join(', '):'ничего';
   $('fxOrigin').innerHTML=`<span class="cap">капитал +${o.cap}</span> · открывает: <b>${oo}</b>`;
-  const t=TRAITS[S.trait];
-  $('fxTrait').innerHTML=`${t.fx}${TRAIT_CAP[S.trait]?` · <span class="cap">капитал ${TRAIT_CAP[S.trait]>0?'+':''}${TRAIT_CAP[S.trait]}</span>`:''} · синергия: <b>${t.syn}</b> · класс ${t.cls}`;
-  $('fxVice').innerHTML=`${VICES[S.vice].fx} · тень: «${VICES[S.vice].sh}»${VICE_CAP[S.vice]?` · <span class="cap">капитал ${VICE_CAP[S.vice]}</span>`:''}`;
-  $('fxDrive').innerHTML=`${DRIVES[S.drive].fx}${DRIVE_CAP[S.drive]?` · <span class="cap">капитал ${DRIVE_CAP[S.drive]>0?'+':''}${DRIVE_CAP[S.drive]}</span>`:''}`;
+  const t=TRAITS[S.trait]; const to=TRAIT_OPENS[S.trait]?TREE.find(n=>n.id===TRAIT_OPENS[S.trait]).n:'';
+  $('fxTrait').innerHTML=`${t.fx}${to?` · аптитюд: <b>${to}</b>`:''}${TRAIT_CAP[S.trait]?` · <span class="cap">капитал ${TRAIT_CAP[S.trait]>0?'+':''}${TRAIT_CAP[S.trait]}</span>`:''} · <span style="color:var(--C)">события ↑</span> · класс ${t.cls}`;
+  $('fxVice').innerHTML=`${VICES[S.vice].fx} · тень: «${VICES[S.vice].sh}»${VICE_CAP[S.vice]?` · <span class="cap">капитал ${VICE_CAP[S.vice]}</span>`:''} · <span style="color:var(--C)">события ↑↑</span>`;
+  const dro=DRIVE_OPENS[S.drive]?TREE.find(n=>n.id===DRIVE_OPENS[S.drive]).n:'';
+  $('fxDrive').innerHTML=`${DRIVES[S.drive].fx}${dro?` · аптитюд: <b>${dro}</b>`:''}${DRIVE_CAP[S.drive]?` · <span class="cap">капитал ${DRIVE_CAP[S.drive]>0?'+':''}${DRIVE_CAP[S.drive]}</span>`:''} · <span style="color:var(--C)">события ↑</span>`;
   const b=BONDS[S.bond]; const bo=BOND_OPENS[S.bond]?TREE.find(n=>n.id===BOND_OPENS[S.bond]).n:'';
   $('fxBond').innerHTML=`${b.fx}${bo?` · открывает: <b>${bo}</b>`:''}${BOND_CAP[S.bond]?` · <span class="cap">капитал ${BOND_CAP[S.bond]>0?'+':''}${BOND_CAP[S.bond]}</span>`:''}`;
 }
@@ -329,6 +342,7 @@ function renderDossier(){
   $('dPort').textContent=S.e; $('dArc').textContent=S.n;
   $('dRole').innerHTML=`<span class="cls">${classOf()}</span> · ${S.tier}`;
   const cap=capSum(); $('dCap').style.width=Math.max(0,Math.min(100,cap/12*100))+'%'; $('dCapT').textContent=cap+' / 12';
+  const evt=eligible().length; $('dEvt').style.width=Math.min(100,evt/8*100)+'%'; $('dEvtT').textContent=evt+' событий';
   $('eOrigin').innerHTML=`${ORIGINS[S.origin].n} <small>· капитал +${ORIGINS[S.origin].cap}</small>`;
   $('eTrait').innerHTML=`${TRAITS[S.trait].n} <small>· ${TRAITS[S.trait].fx}</small>`;
   $('eVice').innerHTML=`${VICES[S.vice].n} <small>· ${VICES[S.vice].fx}</small>`;
