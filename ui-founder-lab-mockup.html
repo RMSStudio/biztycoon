@@ -29,6 +29,13 @@
   .pchip:hover{color:var(--t);border-color:rgba(225,69,106,.4)}
   .pchip.on{color:#fff;border-color:var(--acc);background:linear-gradient(180deg,rgba(225,69,106,.14),transparent)}
   .pchip .e{margin-right:4px}
+  /* option cards (пулы как переключаемые карточки) */
+  .optgrid{display:flex;flex-wrap:wrap;gap:6px}
+  .opt{font-size:11px;font-weight:700;padding:6px 11px;border-radius:9px;background:var(--panel);
+    border:1px solid var(--line);color:var(--tm);cursor:pointer;transition:.12s;user-select:none}
+  .opt:hover{color:var(--t);border-color:rgba(23,184,166,.45);transform:translateY(-1px)}
+  .opt.on{color:#fff;border-color:var(--know);background:linear-gradient(180deg,rgba(23,184,166,.18),transparent);
+    box-shadow:0 4px 14px -8px rgba(23,184,166,.7)}
   /* pools */
   .pool{margin-bottom:12px}
   .pool label{font-size:10px;color:var(--td);font-weight:800;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
@@ -99,10 +106,10 @@
         <div class="axed cap"><label>Капитал</label><div class="dots" id="capDots"></div></div>
         <div class="axed know"><label>Ноу-хау</label><div class="dots" id="knowDots"></div></div>
       </div>
-      <div class="pool"><label>Черта</label><select id="selTrait"></select><div class="fx" id="fxTrait"></div></div>
-      <div class="pool"><label>Порок</label><select id="selVice"></select><div class="fx" id="fxVice"></div></div>
-      <div class="pool"><label>Мотивация</label><select id="selDrive"></select><div class="fx" id="fxDrive"></div></div>
-      <div class="pool"><label>Связь-опенер</label><select id="selBond"></select><div class="fx" id="fxBond"></div></div>
+      <div class="pool"><label>Черта</label><div class="optgrid" id="optTrait"></div><div class="fx" id="fxTrait"></div></div>
+      <div class="pool"><label>Порок</label><div class="optgrid" id="optVice"></div><div class="fx" id="fxVice"></div></div>
+      <div class="pool"><label>Мотивация</label><div class="optgrid" id="optDrive"></div><div class="fx" id="fxDrive"></div></div>
+      <div class="pool"><label>Связь-опенер</label><div class="optgrid" id="optBond"></div><div class="fx" id="fxBond"></div></div>
     </div>
   </main>
 
@@ -241,7 +248,10 @@ const EVENTS = [
 let S = { cap:1, know:0, trait:'perfectionist', vice:'procrastinator', drive:'prove', bond:'dev_friend', preset:null, e:'👤', n:'Основатель' };
 const $=id=>document.getElementById(id);
 
-function fillSelect(id, pool){ const s=$(id); s.innerHTML=Object.keys(pool).map(k=>`<option value="${k}">${pool[k].n}</option>`).join(''); }
+function renderOpts(cid, pool, key){
+  $(cid).innerHTML = Object.keys(pool).map(k=>`<div class="opt ${S[key]===k?'on':''}" data-key="${key}" data-val="${k}">${pool[k].n}</div>`).join('');
+}
+function renderPools(){ renderOpts('optTrait',TRAITS,'trait'); renderOpts('optVice',VICES,'vice'); renderOpts('optDrive',DRIVES,'drive'); renderOpts('optBond',BONDS,'bond'); }
 function classOf(){ return TRAITS[S.trait] ? TRAITS[S.trait].cls : '—'; }
 
 function renderPresets(){
@@ -295,20 +305,17 @@ function renderFx(){
   $('fxDrive').textContent=DRIVES[S.drive].fx;
   $('fxBond').textContent=BONDS[S.bond].fx;
 }
-function syncSelects(){ $('selTrait').value=S.trait; $('selVice').value=S.vice; $('selDrive').value=S.drive; $('selBond').value=S.bond; }
-function renderAll(){ renderPresets(); renderDots(); syncSelects(); renderFx(); renderDossier(); renderEvents(); }
+function renderAll(){ renderPresets(); renderDots(); renderPools(); renderFx(); renderDossier(); renderEvents(); }
 
 function loadPreset(id){ const p=PRESETS.find(x=>x.id===id); if(!p)return;
   S={cap:p.cap,know:p.know,trait:p.trait,vice:p.vice,drive:p.drive,bond:p.bond,preset:p.id,e:p.e,n:p.n}; renderAll(); }
 
-// init selects
-fillSelect('selTrait',TRAITS); fillSelect('selVice',VICES); fillSelect('selDrive',DRIVES); fillSelect('selBond',BONDS);
 // listeners
 $('presets').addEventListener('click',e=>{const c=e.target.closest('.pchip'); if(c) loadPreset(c.dataset.id);});
 document.addEventListener('click',e=>{const d=e.target.closest('.dot'); if(d){ S[d.dataset.ax]=+d.dataset.v; S.preset=null; S.n='Основатель'; S.e='👤'; renderAll(); }});
-['selTrait','selVice','selDrive','selBond'].forEach(id=>$(id).addEventListener('change',()=>{
-  S.trait=$('selTrait').value; S.vice=$('selVice').value; S.drive=$('selDrive').value; S.bond=$('selBond').value;
-  S.preset=null; S.n='Основатель'; S.e='👤'; renderAll();
+['optTrait','optVice','optDrive','optBond'].forEach(cid=>$(cid).addEventListener('click',e=>{
+  const o=e.target.closest('.opt'); if(!o) return;
+  S[o.dataset.key]=o.dataset.val; S.preset=null; S.n='Основатель'; S.e='👤'; renderAll();
 }));
 loadPreset('mark');
 </script>
