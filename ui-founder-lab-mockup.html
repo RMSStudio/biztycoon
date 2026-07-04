@@ -18,43 +18,31 @@
   header{max-width:1220px;margin:0 auto 4px}
   h1{font-size:18px;font-weight:800;margin:0} h1 b{color:var(--acc)}
   .sub{font-size:11px;color:var(--tm);margin-top:2px}
-  .wrap{max-width:1220px;margin:14px auto 0;display:grid;grid-template-columns:1fr 360px;gap:18px}
+  .wrap{max-width:1220px;margin:14px auto 0;display:grid;grid-template-columns:1fr 380px;gap:18px}
   .sec{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--panel2);
     border:1px solid var(--line);border-radius:14px;padding:14px 15px;margin-bottom:14px}
   .sec h2{font-size:10px;letter-spacing:.11em;color:var(--td);font-weight:800;text-transform:uppercase;margin:0 0 10px}
-  /* presets */
   .presets{display:flex;flex-wrap:wrap;gap:6px}
   .pchip{font-size:11px;font-weight:700;padding:6px 10px;border-radius:9px;background:var(--panel);
     border:1px solid var(--line);color:var(--tm);cursor:pointer;transition:.12s}
   .pchip:hover{color:var(--t);border-color:rgba(225,69,106,.4)}
   .pchip.on{color:#fff;border-color:var(--acc);background:linear-gradient(180deg,rgba(225,69,106,.14),transparent)}
   .pchip .e{margin-right:4px}
-  /* option cards (пулы как переключаемые карточки) */
   .optgrid{display:flex;flex-wrap:wrap;gap:6px}
   .opt{font-size:11px;font-weight:700;padding:6px 11px;border-radius:9px;background:var(--panel);
     border:1px solid var(--line);color:var(--tm);cursor:pointer;transition:.12s;user-select:none}
   .opt:hover{color:var(--t);border-color:rgba(23,184,166,.45);transform:translateY(-1px)}
   .opt.on{color:#fff;border-color:var(--know);background:linear-gradient(180deg,rgba(23,184,166,.18),transparent);
     box-shadow:0 4px 14px -8px rgba(23,184,166,.7)}
-  /* pools */
   .pool{margin-bottom:12px}
   .pool label{font-size:10px;color:var(--td);font-weight:800;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
-  select{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--t);border-radius:9px;
-    padding:8px 10px;font-size:12px;font-family:inherit;cursor:pointer}
-  select:focus{outline:none;border-color:var(--acc)}
+  .slider{width:100%;-webkit-appearance:none;appearance:none;height:6px;border-radius:4px;
+    background:linear-gradient(90deg,var(--know),rgba(23,184,166,.15));outline:none;margin:3px 0 2px}
+  .slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;
+    cursor:pointer;border:3px solid var(--know);box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .slider::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:#fff;cursor:pointer;border:3px solid var(--know)}
   .fx{font-size:10.5px;color:var(--tm);margin-top:4px;line-height:1.4;min-height:14px}
-  .fx b{color:var(--know);font-weight:700}
-  .axes-edit{display:flex;gap:16px}
-  .axed{flex:1}
-  .stepper{display:flex;align-items:center;gap:8px;margin-top:6px}
-  .sbtn{width:24px;height:22px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--t);
-    font-size:15px;font-weight:800;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;transition:.1s}
-  .sbtn:hover{border-color:var(--know);color:#fff}
-  .sval{font-size:11px;color:var(--tm);font-weight:800;min-width:26px}
-  .dots{display:flex;gap:4px}
-  .dot{width:20px;height:10px;border-radius:3px;background:rgba(255,255,255,.08);cursor:pointer;transition:.1s}
-  .dot:hover{filter:brightness(1.4)}
-  .axed.cap .dot.f{background:var(--cap)} .axed.know .dot.f{background:var(--know)}
+  .fx b{color:var(--know);font-weight:700} .fx .cap{color:var(--cap);font-weight:700}
   /* dossier */
   .dossier{position:sticky;top:16px;align-self:start}
   .dhead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
@@ -62,13 +50,26 @@
     display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0}
   .arc{font-size:15px;font-weight:800} .role{font-size:11px;color:var(--tm);margin-top:2px}
   .role .cls{color:var(--C);font-weight:700}
-  .daxis{margin-bottom:8px}
+  .daxis{margin-bottom:6px}
   .daxis .r{display:flex;justify-content:space-between;font-size:10px;font-weight:800;text-transform:uppercase;
     letter-spacing:.04em;color:var(--tm);margin-bottom:3px}
-  .daxis .track{height:7px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
-  .daxis .track>i{display:block;height:100%;border-radius:4px;transition:width .3s}
-  .daxis.cap .track>i{background:var(--cap)} .daxis.cap .r span:last-child{color:var(--cap)}
-  .daxis.know .track>i{background:var(--know)} .daxis.know .r span:last-child{color:var(--know)}
+  .daxis .track{height:9px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden}
+  .daxis.cap .track>i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--cap),#f5c451);transition:width .3s}
+  .daxis.cap .r span:last-child{color:var(--cap)}
+  /* mini-tree */
+  .treelab{font-size:9.5px;letter-spacing:.09em;color:var(--td);font-weight:800;text-transform:uppercase;margin:12px 0 7px;display:flex}
+  .treelab .kh{margin-left:auto;color:var(--know)}
+  .minitree{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .tcol{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 7px}
+  .tbh{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:center;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+  .tcol.A .tbh{color:var(--A)} .tcol.B .tbh{color:var(--B)} .tcol.C .tbh{color:var(--C)}
+  .tn{font-size:10px;font-weight:600;text-align:center;padding:5px 3px;border-radius:6px;margin-bottom:5px;
+    background:rgba(255,255,255,.03);color:var(--td);border:1px solid transparent;transition:.15s;opacity:.5}
+  .tn:last-child{margin-bottom:0}
+  .tcol.A .tn.on{opacity:1;color:#eafbf8;background:rgba(23,184,166,.18);border-color:rgba(23,184,166,.5)}
+  .tcol.B .tn.on{opacity:1;color:#eaf0ff;background:rgba(79,123,240,.18);border-color:rgba(79,123,240,.5)}
+  .tcol.C .tn.on{opacity:1;color:#f2ecff;background:rgba(154,108,240,.18);border-color:rgba(154,108,240,.5)}
+  /* effects */
   .effrow{display:flex;gap:7px;font-size:11px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
   .effrow .k{color:var(--td);width:64px;flex-shrink:0;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:.04em;padding-top:2px}
   .effrow .v{color:var(--t)} .effrow .v small{color:var(--tm)}
@@ -96,28 +97,18 @@
 <body>
 <header>
   <h1>Лаборатория <b>основателя</b></h1>
-  <div class="sub">Testbed нового контента · 17 пресетов + пулы (черта/порок/мотивация/связь) + каталог событий. Собери — увидь досье, сложность и что на него выпадет.</div>
+  <div class="sub">Testbed контента · капитал — производный (сумма всех вводных), ноу-хау — живая мини-карта дерева. Собери — увидь, что открыто и что выпадет.</div>
 </header>
 
 <div class="wrap">
   <main>
-    <div class="sec">
-      <h2>Пресеты-портреты (17) <span class="cnt" id="presetHint"></span></h2>
-      <div class="presets" id="presets"></div>
-    </div>
-
+    <div class="sec"><h2>Пресеты-портреты (17) <span class="cnt" id="presetHint"></span></h2><div class="presets" id="presets"></div></div>
     <div class="sec">
       <h2>Сборка вручную (пулы)</h2>
-      <div class="axes-edit" style="margin-bottom:12px">
-        <div class="axed cap"><label>Капитал</label>
-          <div class="stepper"><button class="sbtn" data-ax="cap" data-d="-1">−</button>
-            <div class="dots" id="capDots"></div>
-            <button class="sbtn" data-ax="cap" data-d="1">+</button><span class="sval" id="capVal"></span></div></div>
-        <div class="axed know"><label>Ноу-хау</label>
-          <div class="stepper"><button class="sbtn" data-ax="know" data-d="-1">−</button>
-            <div class="dots" id="knowDots"></div>
-            <button class="sbtn" data-ax="know" data-d="1">+</button><span class="sval" id="knowVal"></span></div></div>
-      </div>
+      <div class="pool"><label>Возраст</label><div class="optgrid" id="optAge"></div></div>
+      <div class="pool"><label>Рабочий опыт: <span style="color:var(--know)" id="expLab"></span></label>
+        <input type="range" id="expSlider" class="slider" min="0" max="12" value="1"><div class="fx" id="fxExp"></div></div>
+      <div class="pool"><label>Происхождение <span style="color:var(--cap)">(база капитала + систем)</span></label><div class="optgrid" id="optOrigin"></div><div class="fx" id="fxOrigin"></div></div>
       <div class="pool"><label>Черта</label><div class="optgrid" id="optTrait"></div><div class="fx" id="fxTrait"></div></div>
       <div class="pool"><label>Порок</label><div class="optgrid" id="optVice"></div><div class="fx" id="fxVice"></div></div>
       <div class="pool"><label>Мотивация</label><div class="optgrid" id="optDrive"></div><div class="fx" id="fxDrive"></div></div>
@@ -127,13 +118,12 @@
 
   <aside>
     <div class="sec dossier">
-      <div class="dhead">
-        <div class="port" id="dPort">👤</div>
-        <div><div class="arc" id="dArc">Основатель</div><div class="role" id="dRole"></div></div>
-      </div>
-      <div class="daxis cap"><div class="r"><span>Капитал</span><span id="dCapT"></span></div><div class="track"><i id="dCap"></i></div></div>
-      <div class="daxis know"><div class="r"><span>Ноу-хау</span><span id="dKnowT"></span></div><div class="track"><i id="dKnow"></i></div></div>
-      <div style="margin-top:10px">
+      <div class="dhead"><div class="port" id="dPort">👤</div><div><div class="arc" id="dArc">Основатель</div><div class="role" id="dRole"></div></div></div>
+      <div class="daxis cap"><div class="r"><span>Капитал (производный)</span><span id="dCapT"></span></div><div class="track"><i id="dCap"></i></div></div>
+      <div class="treelab">Ноу-хау — что открыто на старте <span class="kh" id="khCnt"></span></div>
+      <div class="minitree" id="miniTree"></div>
+      <div style="margin-top:12px">
+        <div class="effrow"><span class="k">Проис-е</span><span class="v" id="eOrigin"></span></div>
         <div class="effrow"><span class="k">Черта</span><span class="v" id="eTrait"></span></div>
         <div class="effrow"><span class="k">Порок</span><span class="v" id="eVice"></span></div>
         <div class="effrow"><span class="k">Мотив</span><span class="v" id="eDrive"></span></div>
@@ -141,33 +131,49 @@
       </div>
       <div class="readout"><div class="r1"><span class="chal num" id="chalT">—</span><span class="rew" id="rewT"></span></div><div class="x" id="chalX"></div></div>
     </div>
-
-    <div class="sec">
-      <h2>Выпадут события <span class="cnt" id="evCnt"></span></h2>
-      <div class="evlist" id="evlist"></div>
-    </div>
+    <div class="sec"><h2>Выпадут события <span class="cnt" id="evCnt"></span></h2><div class="evlist" id="evlist"></div></div>
   </aside>
 </div>
-
-<div class="foot">Концепт-testbed к design_founder_* · пулы/события — черновые. События фильтруются по тегам собранного основателя (порок/черта/мотивация/связь/класс).</div>
+<div class="foot">Концепт-testbed к design_founder_* · капитал = Σ вкладов всех категорий · ноу-хау = пред-открытые узлы дерева · события фильтруются по тегам.</div>
 
 <script>
-// ── ПУЛЫ (сокр. из design_founder_pools.md) ─────────────────────────────
+// ── ДЕРЕВО (13 узлов, 3 ветки) ──────────────────────────────────────────
+const TREE=[
+ {id:'hire',n:'Найм',br:'A'},{id:'life',n:'Процесс',br:'A'},{id:'port',n:'Кейсы',br:'A'},{id:'tree',n:'Перки',br:'A'},{id:'sub',n:'Саббренды',br:'A'},
+ {id:'scout',n:'Скаутинг',br:'B'},{id:'nego',n:'Переговоры',br:'B'},{id:'market',n:'Рынок',br:'B'},{id:'shares',n:'Доли',br:'B'},{id:'mna',n:'M&A',br:'B'},
+ {id:'ai',n:'Нейросеть',br:'C'},{id:'season',n:'Сезоны',br:'C'},{id:'director',n:'Директор',br:'C'},
+];
+const BR={A:'Доставка',B:'Рынок',C:'Системы'};
+// ── ПРОИСХОЖДЕНИЕ (база капитала + пред-открытых систем) ────────────────
+const ORIGINS={
+  student:{n:'Студент',cap:1,opens:[]},
+  selfmade:{n:'Самоучка с нуля',cap:0,opens:[]},
+  savings:{n:'Сбережения фрилансера',cap:2,opens:[]},
+  returner:{n:'Возвращенец',cap:2,opens:['life']},
+  senior:{n:'Senior-опыт',cap:2,opens:['life','port']},
+  severance:{n:'Выходное пособие',cap:3,opens:['life','nego']},
+  brand:{n:'Личный бренд',cap:2,opens:['scout']},
+  wealthy:{n:'Богатая семья',cap:4,opens:[]},
+  operator:{n:'Операционист',cap:3,opens:['life','hire','nego']},
+  serial:{n:'Серийный предприниматель',cap:3,opens:['hire','scout','life','nego']},
+  impact:{n:'Импакт-капитал',cap:3,opens:['life','market']},
+};
+// ── ЧЕРТЫ / ПОРОКИ / МОТИВАЦИИ / СВЯЗИ ──────────────────────────────────
 const TRAITS = {
-  perfectionist:{n:'Перфекционист',fx:'+качество, −скорость',syn:'бутик-качество (Sr+Кейсы)',cls:'Мастер'},
-  charismatic:{n:'Харизматик',fx:'+конверсия офферов, −маржа',syn:'воронка (Скаут+Медийный)',cls:'Торговец'},
-  empath:{n:'Эмпат',fx:'+лояльность, −жёсткость',syn:'«Семья» (команд. трейты)',cls:'Наставник'},
-  strategist:{n:'Стратег',fx:'+эффект. систем/плана',syn:'масштаб (рынок/M&A)',cls:'Строитель'},
-  pusher:{n:'Пробивной',fx:'+темп сделок, +риск',syn:'вал (скаут+хастл)',cls:'Хастлер'},
-  systematic:{n:'Системная',fx:'+стабильность, −гибкость',syn:'процесс/HR/lifecycle',cls:'Строитель'},
-  composed:{n:'Собранная',fx:'+эффект. в границах, анти-усталость',syn:'антивыгорание/процесс',cls:'Прагматик'},
-  deep_focus:{n:'Глубокий фокус',fx:'+качество сложного, −продажи',syn:'tech/продукт (Web)',cls:'Мастер'},
-  taste:{n:'Насмотренность',fx:'+оценка/качество вкуса',syn:'портфолио/кейсы+премиум',cls:'Мастер'},
-  principled:{n:'Принципиальная',fx:'+репутация-ниша, −доступные деньги',syn:'миссия/репутация',cls:'Подвижник'},
-  mediagenic:{n:'Медийный',fx:'+входящие лиды, −фокус доставки',syn:'маркетинг/аудитория',cls:'Торговец'},
-  team_player:{n:'Командные',fx:'+синергия команды/со-фаундер',syn:'наставник+со-фаундер',cls:'Наставник'},
+  perfectionist:{n:'Перфекционист',fx:'+качество, −скорость',syn:'бутик-качество',cls:'Мастер'},
+  charismatic:{n:'Харизматик',fx:'+конверсия офферов, −маржа',syn:'воронка продаж',cls:'Торговец'},
+  empath:{n:'Эмпат',fx:'+лояльность, −жёсткость',syn:'«Семья»',cls:'Наставник'},
+  strategist:{n:'Стратег',fx:'+эффект. систем/плана',syn:'масштаб',cls:'Строитель'},
+  pusher:{n:'Пробивной',fx:'+темп сделок, +риск',syn:'вал',cls:'Хастлер'},
+  systematic:{n:'Системная',fx:'+стабильность, −гибкость',syn:'процесс/HR',cls:'Строитель'},
+  composed:{n:'Собранная',fx:'+эффект. в границах',syn:'антивыгорание',cls:'Прагматик'},
+  deep_focus:{n:'Глубокий фокус',fx:'+качество сложного, −продажи',syn:'tech/продукт',cls:'Мастер'},
+  taste:{n:'Насмотренность',fx:'+оценка/качество вкуса',syn:'портфолио+премиум',cls:'Мастер'},
+  principled:{n:'Принципиальная',fx:'+репутация-ниша, −деньги',syn:'миссия/репутация',cls:'Подвижник'},
+  mediagenic:{n:'Медийный',fx:'+входящие лиды, −доставка',syn:'маркетинг/аудитория',cls:'Торговец'},
+  team_player:{n:'Командные',fx:'+синергия команды',syn:'наставник+со-фаундер',cls:'Наставник'},
   hungry:{n:'Голодный',fx:'+темп за меньше денег',syn:'андердог/вал',cls:'Хастлер'},
-  client_eye:{n:'Взгляд заказчика',fx:'+конверсия/удержание, −оценка production',syn:'продажи/переговоры',cls:'Торговец'},
+  client_eye:{n:'Взгляд заказчика',fx:'+конверсия/удержание',syn:'продажи/переговоры',cls:'Торговец'},
 };
 const VICES = {
   procrastinator:{n:'Прокрастинатор',fx:'шанс −дни/мес',sh:'Спираль отвлечений'},
@@ -177,164 +183,179 @@ const VICES = {
   corner_cutter:{n:'Срезает углы',fx:'копит риск скандала',sh:'По-быстрому'},
   analysis_paralysis:{n:'Паралич анализа',fx:'упускает возможности',sh:'Окно возможности'},
   outdated:{n:'«Отстал(а)»',fx:'−уверенность/цены',sh:'Ты вообще в теме?'},
-  social_anxiety:{n:'Соц-тревога',fx:'−конверсия (избегает людей)',sh:'Клиент хочет созвон'},
+  social_anxiety:{n:'Соц-тревога',fx:'−конверсия',sh:'Клиент хочет созвон'},
   disillusioned:{n:'Разочарование',fx:'−потолок вовлечённости',sh:'Поверить снова'},
-  inflexible:{n:'Негибкость',fx:'отказ от доступных денег',sh:'Грязные деньги'},
+  inflexible:{n:'Негибкость',fx:'отказ от денег',sh:'Грязные деньги'},
   hype_addict:{n:'Зависимость от хайпа',fx:'проседает без внимания',sh:'Хайп против дела'},
-  conflict_avoidant:{n:'Избегание конфликта',fx:'копит «обиды» (раскол)',sh:'Разговор, который откладывал'},
+  conflict_avoidant:{n:'Избегание конфликта',fx:'копит «обиды»',sh:'Разговор, который откладывал'},
   outsider:{n:'Синдром чужака',fx:'−нетворк/статус',sh:'Тусовка своих'},
   craft_underestimator:{n:'Недооценка ремесла',fx:'риск провала production',sh:'Это же просто'},
-  control_freak:{n:'Контроль-фрик',fx:'−делегирование (потолок)',sh:'Отпустить критичное'},
-  messiah:{n:'Мессианство',fx:'распыление (−экономика)',sh:'Спасти всех'},
-  smother:{n:'Мать-наседка',fx:'−рост команды (гиперопека)',sh:'Он перерос тебя'},
+  control_freak:{n:'Контроль-фрик',fx:'−делегирование',sh:'Отпустить критичное'},
+  messiah:{n:'Мессианство',fx:'распыление',sh:'Спасти всех'},
+  smother:{n:'Мать-наседка',fx:'−рост команды',sh:'Он перерос тебя'},
 };
 const DRIVES = {
-  prove:{n:'Доказать',fx:'+ за престиж/вершины'}, freedom:{n:'Свобода',fx:'− за клетку/перегруз'},
-  legacy:{n:'Наследие',fx:'+ за долгое/устойчивое'}, builder_thrill:{n:'Азарт билдера',fx:'+ за строительство/масштаб'},
-  money:{n:'Деньги',fx:'+ за прибыль/выплаты'}, balance:{n:'Баланс',fx:'+ устойчивость, − overwork'},
-  make_great:{n:'Сделать крутое',fx:'+ за качество, не деньги'}, my_way:{n:'Сделать по-своему',fx:'+ независимый путь'},
-  change_world:{n:'Изменить мир',fx:'+ за этичное/соц'}, fame:{n:'Охваты/слава',fx:'+ за бренд/медийность'},
-  together:{n:'Вместе',fx:'+ партнёрство/команда'}, escape:{n:'Вырваться',fx:'+ пробивание из низов'},
+  prove:{n:'Доказать',fx:'+ за престиж'}, freedom:{n:'Свобода',fx:'− за клетку/перегруз'},
+  legacy:{n:'Наследие',fx:'+ за долгое/устойчивое'}, builder_thrill:{n:'Азарт билдера',fx:'+ за масштаб'},
+  money:{n:'Деньги',fx:'+ за прибыль/выплаты'}, balance:{n:'Баланс',fx:'+ устойчивость'},
+  make_great:{n:'Сделать крутое',fx:'+ за качество'}, my_way:{n:'Сделать по-своему',fx:'+ независимый путь'},
+  change_world:{n:'Изменить мир',fx:'+ за этичное'}, fame:{n:'Охваты/слава',fx:'+ за бренд'},
+  together:{n:'Вместе',fx:'+ партнёрство'}, escape:{n:'Вырваться',fx:'+ из низов'},
   do_it_right:{n:'Сделать как надо',fx:'+ «правильно» для клиента'},
 };
 const BONDS = {
   dev_friend:{n:'Друг-разработчик',fx:'1 бесплатный джун'}, dad_network:{n:'Отцовский нетворк',fx:'изредка крупный клиент'},
   loyal_client:{n:'Лояльный клиент',fx:'1 гарант-проект'}, mercenaries:{n:'Команда варягов',fx:'сильный ростер, −лояльность'},
-  shady_partner:{n:'Сомнительный партнёр',fx:'поток мелких + мутные сделки'}, ex_colleague:{n:'Бывший коллега',fx:'контракт от старого работодателя'},
+  shady_partner:{n:'Сомнительный партнёр',fx:'поток мелких + мутные сделки'}, ex_colleague:{n:'Бывший коллега',fx:'контракт от работодателя'},
   word_of_mouth:{n:'Сарафан',fx:'слабый стабильный поток'}, fan_client:{n:'Фанат-заказчик',fx:'1 проект от поклонника'},
   old_contacts:{n:'Старые контакты',fx:'доступ к индустрии'}, community:{n:'Комьюнити/НКО',fx:'соц-заказы, +лояльность-ниша'},
-  own_audience:{n:'Своя аудитория',fx:'регулярные лиды из бренда'}, cofounder:{n:'Со-основатель',fx:'2-й юнит + арка партнёрства'},
+  own_audience:{n:'Своя аудитория',fx:'регулярные лиды из бренда'}, cofounder:{n:'Со-основатель',fx:'2-й юнит + арка'},
   hometown_tie:{n:'Земляк',fx:'первый заказ, вход в город'}, market_insider:{n:'Инсайд рынка',fx:'эмпатия-бонус к продажам'},
 };
-// ── ПРЕСЕТЫ (17 портретов) ──────────────────────────────────────────────
-const PRESETS = [
-  {id:'mark',n:'Марк',e:'🎓',cap:1,know:0,tier:'Струггер',trait:'perfectionist',vice:'procrastinator',drive:'prove',bond:'dev_friend'},
-  {id:'dania',n:'Даня',e:'💼',cap:4,know:0,tier:'Крепкий',trait:'charismatic',vice:'spender',drive:'freedom',bond:'dad_network'},
-  {id:'ira',n:'Ира',e:'🎨',cap:2,know:2,tier:'Крепкий',trait:'empath',vice:'burnout',drive:'legacy',bond:'loyal_client'},
-  {id:'victor',n:'Виктор',e:'🚀',cap:3,know:4,tier:'Состоявшийся',trait:'strategist',vice:'detached',drive:'builder_thrill',bond:'mercenaries'},
-  {id:'romych',n:'Ромыч',e:'🔥',cap:1,know:1,tier:'Струггер',trait:'pusher',vice:'corner_cutter',drive:'money',bond:'shady_partner'},
-  {id:'pavel',n:'Павел',e:'🗂',cap:3,know:2,tier:'Крепкий',trait:'systematic',vice:'analysis_paralysis',drive:'freedom',bond:'ex_colleague'},
-  {id:'olya',n:'Оля',e:'⏳',cap:2,know:2,tier:'Крепкий',trait:'composed',vice:'outdated',drive:'balance',bond:'word_of_mouth'},
-  {id:'tema',n:'Тёма',e:'💻',cap:1,know:2,tier:'Струггер',trait:'deep_focus',vice:'social_anxiety',drive:'make_great',bond:'fan_client'},
-  {id:'gleb',n:'Глеб',e:'🥃',cap:2,know:3,tier:'Состоявшийся',trait:'taste',vice:'disillusioned',drive:'my_way',bond:'old_contacts'},
-  {id:'sonya',n:'Соня',e:'🌱',cap:1,know:2,tier:'Струггер',trait:'principled',vice:'inflexible',drive:'change_world',bond:'community'},
-  {id:'vlad',n:'Влад',e:'📸',cap:2,know:1,tier:'Крепкий',trait:'mediagenic',vice:'hype_addict',drive:'fame',bond:'own_audience'},
-  {id:'dvoe',n:'«Двое»',e:'🤝',cap:2,know:2,tier:'Струггер',trait:'team_player',vice:'conflict_avoidant',drive:'together',bond:'cofounder'},
-  {id:'zhenya',n:'Женя',e:'🎒',cap:1,know:2,tier:'Струггер',trait:'hungry',vice:'outsider',drive:'escape',bond:'hometown_tie'},
-  {id:'nastya',n:'Настя',e:'📋',cap:2,know:1,tier:'Крепкий',trait:'client_eye',vice:'craft_underestimator',drive:'do_it_right',bond:'market_insider'},
-  {id:'marina',n:'Марина',e:'⚙️',cap:3,know:3,tier:'Состоявшийся',trait:'systematic',vice:'control_freak',drive:'balance',bond:'old_contacts'},
-  {id:'artur',n:'Артур',e:'🕊',cap:3,know:3,tier:'Состоявшийся',trait:'strategist',vice:'messiah',drive:'change_world',bond:'community'},
-  {id:'tamara',n:'Тамара',e:'🫶',cap:2,know:3,tier:'Состоявшийся',trait:'empath',vice:'smother',drive:'legacy',bond:'loyal_client'},
+// ── ВКЛАДЫ: капитал (Σ по всем категориям) + пред-открытые системы ──────
+const TRAIT_CAP={charismatic:1,strategist:1,taste:1,mediagenic:1,principled:-1};
+const TRAIT_OPENS={perfectionist:'port',charismatic:'nego',empath:'hire',strategist:'market',pusher:'scout',
+  systematic:'life',composed:'life',deep_focus:'ai',taste:'port',principled:'port',mediagenic:'scout',
+  team_player:'hire',hungry:'scout',client_eye:'nego'};
+const VICE_CAP={spender:-2,inflexible:-1};
+const DRIVE_CAP={money:1,fame:1,change_world:-1};
+const BOND_CAP={dad_network:2,mercenaries:1,own_audience:1,community:-1,shady_partner:1,loyal_client:1,cofounder:1};
+const BOND_OPENS={mercenaries:'hire',market_insider:'market',own_audience:'scout',cofounder:'hire'};
+// ── ПРЕСЕТЫ (origin + 4 пула; капитал/ноу-хау — производные) ────────────
+const PRESETS=[
+  {id:'mark',n:'Марк',e:'🎓',tier:'Струггер',age:'young',exp:1,o:'student',trait:'perfectionist',vice:'procrastinator',drive:'prove',bond:'dev_friend'},
+  {id:'dania',n:'Даня',e:'💼',tier:'Крепкий',age:'adult',exp:2,o:'wealthy',trait:'charismatic',vice:'spender',drive:'freedom',bond:'dad_network'},
+  {id:'ira',n:'Ира',e:'🎨',tier:'Крепкий',age:'adult',exp:7,o:'senior',trait:'empath',vice:'burnout',drive:'legacy',bond:'loyal_client'},
+  {id:'victor',n:'Виктор',e:'🚀',tier:'Состоявшийся',age:'mature',exp:12,o:'serial',trait:'strategist',vice:'detached',drive:'builder_thrill',bond:'mercenaries'},
+  {id:'romych',n:'Ромыч',e:'🔥',tier:'Струггер',age:'young',exp:3,o:'selfmade',trait:'pusher',vice:'corner_cutter',drive:'money',bond:'shady_partner'},
+  {id:'pavel',n:'Павел',e:'🗂',tier:'Крепкий',age:'adult',exp:12,o:'severance',trait:'systematic',vice:'analysis_paralysis',drive:'freedom',bond:'ex_colleague'},
+  {id:'olya',n:'Оля',e:'⏳',tier:'Крепкий',age:'adult',exp:6,o:'returner',trait:'composed',vice:'outdated',drive:'balance',bond:'word_of_mouth'},
+  {id:'tema',n:'Тёма',e:'💻',tier:'Струггер',age:'young',exp:2,o:'student',trait:'deep_focus',vice:'social_anxiety',drive:'make_great',bond:'fan_client'},
+  {id:'gleb',n:'Глеб',e:'🥃',tier:'Состоявшийся',age:'mature',exp:12,o:'senior',trait:'taste',vice:'disillusioned',drive:'my_way',bond:'old_contacts'},
+  {id:'sonya',n:'Соня',e:'🌱',tier:'Струггер',age:'young',exp:2,o:'selfmade',trait:'principled',vice:'inflexible',drive:'change_world',bond:'community'},
+  {id:'vlad',n:'Влад',e:'📸',tier:'Крепкий',age:'adult',exp:3,o:'brand',trait:'mediagenic',vice:'hype_addict',drive:'fame',bond:'own_audience'},
+  {id:'dvoe',n:'«Двое»',e:'🤝',tier:'Струггер',age:'young',exp:1,o:'student',trait:'team_player',vice:'conflict_avoidant',drive:'together',bond:'cofounder'},
+  {id:'zhenya',n:'Женя',e:'🎒',tier:'Струггер',age:'young',exp:3,o:'selfmade',trait:'hungry',vice:'outsider',drive:'escape',bond:'hometown_tie'},
+  {id:'nastya',n:'Настя',e:'📋',tier:'Крепкий',age:'adult',exp:6,o:'savings',trait:'client_eye',vice:'craft_underestimator',drive:'do_it_right',bond:'market_insider'},
+  {id:'marina',n:'Марина',e:'⚙️',tier:'Состоявшийся',age:'mature',exp:12,o:'operator',trait:'systematic',vice:'control_freak',drive:'balance',bond:'old_contacts'},
+  {id:'artur',n:'Артур',e:'🕊',tier:'Состоявшийся',age:'mature',exp:12,o:'impact',trait:'strategist',vice:'messiah',drive:'change_world',bond:'community'},
+  {id:'tamara',n:'Тамара',e:'🫶',tier:'Состоявшийся',age:'mature',exp:12,o:'senior',trait:'empath',vice:'smother',drive:'legacy',bond:'loyal_client'},
 ];
-// ── СОБЫТИЯ (подмножество каталога, тегируемые) ─────────────────────────
-const EVENTS = [
-  // тени пороков
-  {id:'e_imp',t:'Ты вообще в теме?',cat:'vice',trig:{vice:['outdated']},s:'Клиент сыплет терминами и смотрит: узнаёшь?',ch:[['Уточнить честно','+уверенность'],['Кивнуть, блефуя','риск прокола',1]]},
+// ── СОБЫТИЯ ─────────────────────────────────────────────────────────────
+const EVENTS=[
+  {id:'e_imp',t:'Ты вообще в теме?',cat:'vice',trig:{vice:['outdated']},s:'Клиент сыплет терминами: узнаёшь?',ch:[['Уточнить честно','+уверенность'],['Кивнуть, блефуя','риск',1]]},
   {id:'e_proc',t:'Спираль отвлечений',cat:'vice',trig:{vice:['procrastinator']},s:'«Только гляну рефы» — полдня нет.',ch:[['Собраться','стоп'],['Ещё чуть-чуть','−дни',1]]},
-  {id:'e_burn',t:'Ты давно не отдыхал(а)',cat:'vice',trig:{vice:['burnout']},s:'«Ещё вот это — и отдохну». Третий месяц.',ch:[['Пауза','−−риск выгорания'],['Дожать','выгорание ближе',1]]},
-  {id:'e_corner',t:'По-быстрому',cat:'vice',trig:{vice:['corner_cutter']},s:'Есть серая схемка, к утру. Но потом всплывёт.',ch:[['Честно, с опозданием','+репутация'],['Склеить','мина скандала',1]]},
-  {id:'e_social',t:'Клиент хочет созвон',cat:'vice',trig:{vice:['social_anxiety']},s:'«Созвонимся на 15 минут?» — пытка.',ch:[['Заставить себя','+навык'],['Увести в переписку','−конверсия',1]]},
-  {id:'e_dirty',t:'Грязные деньги',cat:'vice',trig:{vice:['inflexible']},s:'Презираемый бренд даёт спасительный чек.',ch:[['Отказать','+принципы'],['Взять','−доверие',1]]},
-  {id:'e_ctrl',t:'Отпустить критичное',cat:'vice',trig:{vice:['control_freak']},s:'Рост требует отдать то, что держала сама.',ch:[['Делегировать','+масштаб'],['Оставить на себе','бутылочное горло',1]]},
-  {id:'e_msg',t:'Спасти всех',cat:'vice',trig:{vice:['messiah']},s:'Ещё один важный фронт: «кроме тебя некому».',ch:[['Сфокусироваться','+устойчивость'],['Взять ещё','−экономика',1]]},
-  {id:'e_smoth',t:'Он перерос тебя',cat:'vice',trig:{vice:['smother']},s:'Лучший человек готов к большему, чем ты дашь.',ch:[['Отпустить с благословением','сеть выпускников'],['Удержать','гиперопека',1]]},
-  {id:'e_detach',t:'Нечем гореть',cat:'vice',trig:{vice:['detached']},s:'Ключевой уходит: «тебе всё равно».',ch:[['Поговорить по-людски','+лояльность'],['Удержать деньгами','хрупко',1]]},
-  {id:'e_hype',t:'Хайп против дела',cat:'vice',trig:{vice:['hype_addict']},s:'Вирусный тренд сейчас vs горящий дедлайн.',ch:[['Дожать проект','+репутация'],['Ловить хайп','«Фасад»',1]]},
-  {id:'e_avoid',t:'Разговор, который откладывал',cat:'vice',trig:{vice:['conflict_avoidant']},s:'Прорвало при команде.',ch:[['Выговориться и услышать','прорыв'],['Хлопнуть дверью','раскол',1]]},
-  // черты
-  {id:'e_perf',t:'Дедлайн против совести',cat:'trait',trig:{trait:['perfectionist']},s:'«Выкатываем?» — а ты видишь пять недочётов.',ch:[['Выкатить','+оплата, −уверенность'],['Довести','+качество, −дни']]},
-  {id:'e_emp',t:'Слабое звено',cat:'trait',trig:{trait:['empath']},s:'Сотрудник не тянет второй месяц.',ch:[['Тащить','+«Семья», −деньги'],['Расстаться по-людски','+жёсткость']]},
-  // мотивации
-  {id:'e_free',t:'Зовут обратно',cat:'drive',trig:{drive:['freedom']},s:'Тёплое кресло в найме, оклад выше.',ch:[['Отказаться','+смысл'],['Вернуться','мягкий проигрыш',1]]},
+  {id:'e_burn',t:'Ты давно не отдыхал(а)',cat:'vice',trig:{vice:['burnout']},s:'«Ещё вот это — и отдохну». Третий месяц.',ch:[['Пауза','−−риск'],['Дожать','выгорание',1]]},
+  {id:'e_corner',t:'По-быстрому',cat:'vice',trig:{vice:['corner_cutter']},s:'Серая схемка, к утру. Но всплывёт.',ch:[['Честно','+репутация'],['Склеить','мина',1]]},
+  {id:'e_social',t:'Клиент хочет созвон',cat:'vice',trig:{vice:['social_anxiety']},s:'«Созвонимся на 15 минут?» — пытка.',ch:[['Заставить себя','+навык'],['В переписку','−конверсия',1]]},
+  {id:'e_dirty',t:'Грязные деньги',cat:'vice',trig:{vice:['inflexible']},s:'Презираемый бренд даёт чек.',ch:[['Отказать','+принципы'],['Взять','−доверие',1]]},
+  {id:'e_ctrl',t:'Отпустить критичное',cat:'vice',trig:{vice:['control_freak']},s:'Рост требует отдать то, что держала.',ch:[['Делегировать','+масштаб'],['Держать','бутылочное горло',1]]},
+  {id:'e_msg',t:'Спасти всех',cat:'vice',trig:{vice:['messiah']},s:'Ещё фронт: «кроме тебя некому».',ch:[['Сфокусироваться','+устойчивость'],['Взять ещё','−экономика',1]]},
+  {id:'e_smoth',t:'Он перерос тебя',cat:'vice',trig:{vice:['smother']},s:'Лучший готов к большему, чем дашь.',ch:[['Отпустить','сеть выпускников'],['Удержать','гиперопека',1]]},
+  {id:'e_detach',t:'Нечем гореть',cat:'vice',trig:{vice:['detached']},s:'Ключевой уходит: «тебе всё равно».',ch:[['Поговорить','+лояльность'],['Деньгами','хрупко',1]]},
+  {id:'e_hype',t:'Хайп против дела',cat:'vice',trig:{vice:['hype_addict']},s:'Тренд сейчас vs горящий дедлайн.',ch:[['Дожать','+репутация'],['Хайп','«Фасад»',1]]},
+  {id:'e_avoid',t:'Разговор, который откладывал',cat:'vice',trig:{vice:['conflict_avoidant']},s:'Прорвало при команде.',ch:[['Услышать','прорыв'],['Дверью','раскол',1]]},
+  {id:'e_para',t:'Окно возможности',cat:'vice',trig:{vice:['analysis_paralysis']},s:'Горячий шанс, решать сейчас.',ch:[['Прыгнуть','+toughness'],['Досчитывать','упустил',1]]},
+  {id:'e_dis',t:'Поверить снова',cat:'vice',trig:{vice:['disillusioned']},s:'Искрящий проект = риск ожога.',ch:[['Вложиться','+качество'],['Беречь себя','«Погас»',1]]},
+  {id:'e_out',t:'Тусовка своих',cat:'vice',trig:{vice:['outsider']},s:'Позвали на закрытую, там все свои.',ch:[['Пойти','+связи'],['Не пойти','нетворк закрыт',1]]},
+  {id:'e_und',t:'Это же просто',cat:'vice',trig:{vice:['craft_underestimator']},s:'«Делается за вечер».',ch:[['Отдать мастеру','+качество'],['Сам(а)','провал',1]]},
+  {id:'e_spend',t:'Дорогая игрушка',cat:'vice',trig:{vice:['spender']},s:'Приглядел статусную трату.',ch:[['Устоять','+деньги'],['Купить','«Понты»',1]]},
+  {id:'e_perf',t:'Дедлайн против совести',cat:'trait',trig:{trait:['perfectionist']},s:'«Выкатываем?» — а ты видишь недочёты.',ch:[['Выкатить','+оплата'],['Довести','+качество, −дни']]},
+  {id:'e_emp',t:'Слабое звено',cat:'trait',trig:{trait:['empath']},s:'Сотрудник не тянет.',ch:[['Тащить','+«Семья»'],['Расстаться','+жёсткость']]},
+  {id:'e_free',t:'Зовут обратно',cat:'drive',trig:{drive:['freedom']},s:'Тёплое кресло в найме.',ch:[['Отказаться','+смысл'],['Вернуться','проигрыш',1]]},
   {id:'e_leg',t:'Наследие против быстрых денег',cat:'drive',trig:{drive:['legacy']},s:'Жирный, но «не про то» контракт.',ch:[['Держать курс','поздние бонусы'],['Ради кассы','горчинка',1]]},
-  // связи
-  {id:'e_dad',t:'Отцовский контакт',cat:'bond',trig:{bond:['dad_network']},s:'Папа заносит крупного клиента.',ch:[['Взять','риск перегруза',1],['Отказать','+уверенность']]},
-  {id:'e_cof',t:'Кто тут главный',cat:'bond',trig:{bond:['cofounder']},s:'С партнёром разошлись во взгляде.',ch:[['Проговорить','+партнёрство'],['Промолчать','«Копилка обид»',1]]},
-  // общие / кризисы
-  {id:'e_life1',t:'Друг просит по дружбе',cat:'life',trig:{any:true},s:'Сделать бесплатно старому другу.',ch:[['Помочь','−дни'],['Мягко отказать','+границы']]},
+  {id:'e_dad',t:'Отцовский контакт',cat:'bond',trig:{bond:['dad_network']},s:'Папа заносит крупного клиента.',ch:[['Взять','перегруз',1],['Отказать','+уверенность']]},
+  {id:'e_cof',t:'Кто тут главный',cat:'bond',trig:{bond:['cofounder']},s:'С партнёром разошлись во взгляде.',ch:[['Проговорить','+партнёрство'],['Промолчать','обиды',1]]},
+  {id:'e_life1',t:'Друг просит по дружбе',cat:'life',trig:{any:true},s:'Сделать бесплатно старому другу.',ch:[['Помочь','−дни'],['Отказать','+границы']]},
   {id:'e_life2',t:'Токсичный, но денежный',cat:'life',trig:{any:true},s:'Платит хорошо, обращается плохо.',ch:[['Терпеть','+деньги, −энергия',1],['Уйти','+самоуважение']]},
   {id:'e_cri1',t:'КРИЗИС: Кассовый разрыв',cat:'crisis',trig:{any:true},s:'Нечем платить в этом месяце.',ch:[['Кредит','+деньги, +долг'],['Резать косты','−команда',1]]},
 ];
 
 // ── СОСТОЯНИЕ + РЕНДЕР ──────────────────────────────────────────────────
-let S = { cap:1, know:0, trait:'perfectionist', vice:'procrastinator', drive:'prove', bond:'dev_friend', preset:null, e:'👤', n:'Основатель' };
-const $=id=>document.getElementById(id);
+// ── ТАНГИБЛ-ФОН: возраст + опыт (питают капитал и открытые системы) ─────
+const AGES={
+  young:{n:'Молодой (18–25)',cap:0,opens:[]},
+  adult:{n:'Взрослый (26–38)',cap:1,opens:[]},
+  mature:{n:'Матёрый (39+)',cap:2,opens:['life']},
+};
+function expOpens(y){ const a=[]; if(y>=3)a.push('life'); if(y>=6)a.push('hire'); if(y>=9)a.push('nego'); if(y>=12)a.push('port'); return a; }
+function expCap(y){ return Math.floor(y/4); }          // 0..3
+function yrsWord(y){ return y+(y%10===1&&y%100!==11?' год':(y%10>=2&&y%10<=4&&(y%100<10||y%100>=20)?' года':' лет')); }
 
-function renderOpts(cid, pool, key){
-  $(cid).innerHTML = Object.keys(pool).map(k=>`<div class="opt ${S[key]===k?'on':''}" data-key="${key}" data-val="${k}">${pool[k].n}</div>`).join('');
-}
-function renderPools(){ renderOpts('optTrait',TRAITS,'trait'); renderOpts('optVice',VICES,'vice'); renderOpts('optDrive',DRIVES,'drive'); renderOpts('optBond',BONDS,'bond'); }
-function classOf(){ return TRAITS[S.trait] ? TRAITS[S.trait].cls : '—'; }
+let S={ age:'young', exp:1, origin:'student', trait:'perfectionist', vice:'procrastinator', drive:'prove', bond:'dev_friend', preset:null, e:'👤', n:'Основатель', tier:'—' };
+const $=id=>document.getElementById(id);
+const classOf=()=>TRAITS[S.trait]?TRAITS[S.trait].cls:'—';
+// Капитал = Σ по ВСЕМ категориям
+const capSum=()=>AGES[S.age].cap+expCap(S.exp)+ORIGINS[S.origin].cap+(TRAIT_CAP[S.trait]||0)+(VICE_CAP[S.vice]||0)+(DRIVE_CAP[S.drive]||0)+(BOND_CAP[S.bond]||0);
+// Ноу-хау (открытые узлы) = ТАНГИБЛ-фон: возраст + опыт + происхождение + связь-актив.
+// Характер (черта/порок/мотивация) систем НЕ открывает — он про то, КАК играешь.
+function openedSet(){ const s=new Set(ORIGINS[S.origin].opens);
+  AGES[S.age].opens.forEach(x=>s.add(x)); expOpens(S.exp).forEach(x=>s.add(x));
+  if(BOND_OPENS[S.bond])s.add(BOND_OPENS[S.bond]); return s; }
 
 function renderPresets(){
-  $('presets').innerHTML = PRESETS.map(p=>`<div class="pchip ${S.preset===p.id?'on':''}" data-id="${p.id}"><span class="e">${p.e}</span>${p.n}</div>`).join('');
-  $('presetHint').textContent = S.preset ? PRESETS.find(x=>x.id===S.preset).n : 'клик — загрузить';
+  $('presets').innerHTML=PRESETS.map(p=>`<div class="pchip ${S.preset===p.id?'on':''}" data-id="${p.id}"><span class="e">${p.e}</span>${p.n}</div>`).join('');
+  $('presetHint').textContent=S.preset?PRESETS.find(x=>x.id===S.preset).n:'клик — загрузить';
 }
-function renderDots(){
-  $('capDots').innerHTML=[0,1,2,3].map(i=>`<div class="dot ${i<S.cap?'f':''}" data-ax="cap" data-v="${i+1}"></div>`).join('');
-  $('knowDots').innerHTML=[0,1,2,3].map(i=>`<div class="dot ${i<S.know?'f':''}" data-ax="know" data-v="${i+1}"></div>`).join('');
-  $('capVal').textContent=S.cap+'/4'; $('knowVal').textContent=S.know+'/4';
+function renderOpts(cid,pool,key){ $(cid).innerHTML=Object.keys(pool).map(k=>`<div class="opt ${S[key]===k?'on':''}" data-key="${key}" data-val="${k}">${pool[k].n}</div>`).join(''); }
+function renderPools(){ renderOpts('optAge',AGES,'age'); renderOpts('optOrigin',ORIGINS,'origin'); renderOpts('optTrait',TRAITS,'trait'); renderOpts('optVice',VICES,'vice'); renderOpts('optDrive',DRIVES,'drive'); renderOpts('optBond',BONDS,'bond'); }
+function renderFx(){
+  $('expSlider').value=S.exp; $('expLab').textContent=yrsWord(S.exp);
+  const eo=expOpens(S.exp); const eon=eo.length?eo.map(id=>TREE.find(n=>n.id===id).n).join(', '):'ничего';
+  $('fxExp').innerHTML=`<span class="cap">капитал +${expCap(S.exp)}</span> · открывает: <b>${eon}</b>`;
+  const o=ORIGINS[S.origin]; const oo=o.opens.length?o.opens.map(id=>TREE.find(n=>n.id===id).n).join(', '):'ничего';
+  $('fxOrigin').innerHTML=`<span class="cap">капитал +${o.cap}</span> · открывает: <b>${oo}</b>`;
+  const t=TRAITS[S.trait];
+  $('fxTrait').innerHTML=`${t.fx}${TRAIT_CAP[S.trait]?` · <span class="cap">капитал ${TRAIT_CAP[S.trait]>0?'+':''}${TRAIT_CAP[S.trait]}</span>`:''} · синергия: <b>${t.syn}</b> · класс ${t.cls}`;
+  $('fxVice').innerHTML=`${VICES[S.vice].fx} · тень: «${VICES[S.vice].sh}»${VICE_CAP[S.vice]?` · <span class="cap">капитал ${VICE_CAP[S.vice]}</span>`:''}`;
+  $('fxDrive').innerHTML=`${DRIVES[S.drive].fx}${DRIVE_CAP[S.drive]?` · <span class="cap">капитал ${DRIVE_CAP[S.drive]>0?'+':''}${DRIVE_CAP[S.drive]}</span>`:''}`;
+  const b=BONDS[S.bond]; const bo=BOND_OPENS[S.bond]?TREE.find(n=>n.id===BOND_OPENS[S.bond]).n:'';
+  $('fxBond').innerHTML=`${b.fx}${bo?` · открывает: <b>${bo}</b>`:''}${BOND_CAP[S.bond]?` · <span class="cap">капитал ${BOND_CAP[S.bond]>0?'+':''}${BOND_CAP[S.bond]}</span>`:''}`;
+}
+function renderTree(){
+  const op=openedSet();
+  $('miniTree').innerHTML=['A','B','C'].map(br=>`<div class="tcol ${br}"><div class="tbh">${BR[br]}</div>${
+    TREE.filter(n=>n.br===br).map(n=>`<div class="tn ${op.has(n.id)?'on':''}">${n.n}</div>`).join('')}</div>`).join('');
+  $('khCnt').textContent='открыто '+op.size+'/13';
 }
 function challenge(){
-  const s=S.cap+S.know;
-  if(s<=1) return {t:'Брутальный старт',c:'var(--acc)',r:'×2.2',x:'Ни денег, ни школы. Первый ран — почти наверняка провал.'};
-  if(s<=3) return {t:'Крутой подъём',c:'#ec7a55',r:'×1.7',x:'Есть за что зацепиться, но тащить на себе.'};
-  if(s<=5) return {t:'Уверенный старт',c:'var(--exp)',r:'×1.4',x:'База собрана — думаешь о росте, не выживании.'};
+  const cap=capSum(), opened=openedSet().size, s=Math.max(0,Math.round(cap))+opened;
+  if(s<=2) return {t:'Брутальный старт',c:'var(--acc)',r:'×2.2',x:'Ни денег, ни школы. Первый ран — почти наверняка провал.'};
+  if(s<=6) return {t:'Крутой подъём',c:'#ec7a55',r:'×1.7',x:'Есть за что зацепиться, но тащить на себе.'};
+  if(s<=11) return {t:'Уверенный старт',c:'var(--exp)',r:'×1.4',x:'База собрана — думаешь о росте, не выживании.'};
   return {t:'Мягкий вход',c:'var(--know)',r:'×1.0',x:'Заходишь с позиции силы. Вызов ниже — награда тоже.'};
 }
 function renderDossier(){
   $('dPort').textContent=S.e; $('dArc').textContent=S.n;
-  $('dRole').innerHTML=`<span class="cls">${classOf()}</span> · ${S.preset?PRESETS.find(x=>x.id===S.preset).tier:'—'}`;
-  $('dCap').style.width=(S.cap/4*100)+'%'; $('dCapT').textContent=S.cap+'/4';
-  $('dKnow').style.width=(S.know/4*100)+'%'; $('dKnowT').textContent=S.know+'/4';
+  $('dRole').innerHTML=`<span class="cls">${classOf()}</span> · ${S.tier}`;
+  const cap=capSum(); $('dCap').style.width=Math.max(0,Math.min(100,cap/12*100))+'%'; $('dCapT').textContent=cap+' / 12';
+  $('eOrigin').innerHTML=`${ORIGINS[S.origin].n} <small>· капитал +${ORIGINS[S.origin].cap}</small>`;
   $('eTrait').innerHTML=`${TRAITS[S.trait].n} <small>· ${TRAITS[S.trait].fx}</small>`;
   $('eVice').innerHTML=`${VICES[S.vice].n} <small>· ${VICES[S.vice].fx}</small>`;
   $('eDrive').innerHTML=`${DRIVES[S.drive].n} <small>· ${DRIVES[S.drive].fx}</small>`;
   $('eBond').innerHTML=`${BONDS[S.bond].n} <small>· ${BONDS[S.bond].fx}</small>`;
   const c=challenge(); $('chalT').textContent=c.t; $('chalT').style.color=c.c; $('rewT').textContent='награда '+c.r+' ✦'; $('chalX').textContent=c.x;
 }
-function eligible(){
-  return EVENTS.filter(ev=>{
-    const tr=ev.trig; if(tr.any) return true;
-    if(tr.vice && tr.vice.includes(S.vice)) return true;
-    if(tr.trait && tr.trait.includes(S.trait)) return true;
-    if(tr.drive && tr.drive.includes(S.drive)) return true;
-    if(tr.bond && tr.bond.includes(S.bond)) return true;
-    if(tr.class && tr.class.includes(classOf())) return true;
-    return false;
-  });
-}
+function eligible(){ return EVENTS.filter(ev=>{const tr=ev.trig; if(tr.any)return true;
+  if(tr.vice&&tr.vice.includes(S.vice))return true; if(tr.trait&&tr.trait.includes(S.trait))return true;
+  if(tr.drive&&tr.drive.includes(S.drive))return true; if(tr.bond&&tr.bond.includes(S.bond))return true; return false; }); }
 function renderEvents(){
   const list=eligible(); $('evCnt').textContent=list.length+' шт.';
-  $('evlist').innerHTML = list.length ? list.map(ev=>`
-    <div class="ev"><div class="h">${ev.t}<span class="tag ${ev.cat}">${ev.cat}</span></div>
-      <div class="s">${ev.s}</div>
-      ${ev.ch.map(c=>`<div class="ch ${c[2]?'bad':''}">${c[0]} → <b>${c[1]}</b></div>`).join('')}
-    </div>`).join('') : '<div class="evempty">Нет специфичных событий — только общие/кризисы.</div>';
+  $('evlist').innerHTML=list.length?list.map(ev=>`<div class="ev"><div class="h">${ev.t}<span class="tag ${ev.cat}">${ev.cat}</span></div>
+    <div class="s">${ev.s}</div>${ev.ch.map(c=>`<div class="ch ${c[2]?'bad':''}">${c[0]} → <b>${c[1]}</b></div>`).join('')}</div>`).join('')
+    :'<div class="evempty">Только общие/кризисы.</div>';
 }
-function renderFx(){
-  $('fxTrait').innerHTML=`${TRAITS[S.trait].fx} · синергия: <b>${TRAITS[S.trait].syn}</b> · класс ${TRAITS[S.trait].cls}`;
-  $('fxVice').innerHTML=`${VICES[S.vice].fx} · тень: «${VICES[S.vice].sh}»`;
-  $('fxDrive').textContent=DRIVES[S.drive].fx;
-  $('fxBond').textContent=BONDS[S.bond].fx;
-}
-function renderAll(){ renderPresets(); renderDots(); renderPools(); renderFx(); renderDossier(); renderEvents(); }
-
+function renderAll(){ renderPresets(); renderPools(); renderFx(); renderTree(); renderDossier(); renderEvents(); }
 function loadPreset(id){ const p=PRESETS.find(x=>x.id===id); if(!p)return;
-  S={cap:p.cap,know:p.know,trait:p.trait,vice:p.vice,drive:p.drive,bond:p.bond,preset:p.id,e:p.e,n:p.n}; renderAll(); }
+  S={age:p.age,exp:p.exp,origin:p.o,trait:p.trait,vice:p.vice,drive:p.drive,bond:p.bond,preset:p.id,e:p.e,n:p.n,tier:p.tier}; renderAll(); }
+function manualTouch(){ S.preset=null; S.n='Основатель'; S.e='👤'; S.tier='—'; }
 
-// listeners
-$('presets').addEventListener('click',e=>{const c=e.target.closest('.pchip'); if(c) loadPreset(c.dataset.id);});
-document.addEventListener('click',e=>{
-  const b=e.target.closest('.sbtn');
-  if(b){ const ax=b.dataset.ax; S[ax]=Math.max(0,Math.min(4,S[ax]+(+b.dataset.d))); S.preset=null; S.n='Основатель'; S.e='👤'; renderAll(); return; }
-  const d=e.target.closest('.dot');
-  if(d){ S[d.dataset.ax]=+d.dataset.v; S.preset=null; S.n='Основатель'; S.e='👤'; renderAll(); }
-});
-['optTrait','optVice','optDrive','optBond'].forEach(cid=>$(cid).addEventListener('click',e=>{
-  const o=e.target.closest('.opt'); if(!o) return;
-  S[o.dataset.key]=o.dataset.val; S.preset=null; S.n='Основатель'; S.e='👤'; renderAll();
+$('presets').addEventListener('click',e=>{const c=e.target.closest('.pchip'); if(c)loadPreset(c.dataset.id);});
+['optAge','optOrigin','optTrait','optVice','optDrive','optBond'].forEach(cid=>$(cid).addEventListener('click',e=>{
+  const o=e.target.closest('.opt'); if(!o)return;
+  S[o.dataset.key]=o.dataset.val; manualTouch(); renderAll();
 }));
+$('expSlider').addEventListener('input',e=>{ S.exp=+e.target.value; manualTouch(); renderAll(); });
 loadPreset('mark');
 </script>
 </body>
