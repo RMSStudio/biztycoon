@@ -25,6 +25,8 @@
     economic:    { l:'эконом.',  c:'#17b8a6' },
     enabler:     { l:'энейблер', c:'#4f7bf0' },
     drawback:    { l:'цена',     c:'#e8524f' },
+    founder:     { l:'характер', c:'#e1456a' },
+    vice:        { l:'порок',    c:'#8a4715' },
   };
   const GRADE_SHORT = { junior:'JR', middle:'MD', senior:'SR', lead:'LEAD', star:'★' };
 
@@ -106,6 +108,24 @@
     const fot   = staff.reduce((t, s) => t + (s.cost || 0), 0);
     const mood  = staff.length ? Math.round(staff.reduce((t, s) => t + (s.mood != null ? s.mood : 70), 0) / staff.length) : 0;
 
+    // основатель — первым в ростере (особый юнит: характер работает на всех проектах)
+    let founderCard = '';
+    if (g.founder && Array.isArray(g.founder.rlTraits)) {
+      const f = g.founder;
+      const ftraits = f.rlTraits.map(id => TE.get(id)).filter(Boolean);
+      const P = (window.Founder && Founder.PARAM_NAMES) || {};
+      const params = f.params ? Object.keys(f.params).map(k =>
+        `<span>${(P[k] || k)} <b>${Math.round(f.params[k])}</b></span>`).join('') : '';
+      founderCard = `<div class="jk" style="--rc:#e1456a">
+        <div class="jk-top"><div class="jk-av">👤</div>
+          <div style="flex:1;min-width:0"><div class="jk-name">${f.name || 'Основатель'}</div>
+            <div class="jk-role">Основатель · ${f.cls || ''}</div></div>
+          <span class="jk-grade" style="background:rgba(225,69,106,.16);color:#f5a3b6">ТЫ</span></div>
+        ${params ? `<div class="jk-stats">${params}</div>` : ''}
+        ${ftraits.length ? ftraits.map(_traitBlock).join('') : '<div class="jk-none">Характер появится с драфтом основателя</div>'}
+      </div>`;
+    }
+
     // ростер-«джокеры»
     let roster = staff.map(s => {
       const traits = (s.rlTraits || []).map(id => TE.get(id)).filter(Boolean);
@@ -163,7 +183,7 @@
       <div class="wrap">
         <div>
           <div class="col-lbl">Твоя команда <span class="cnt">· ${staff.length} в штате · ФОТ −${_fmtK(fot)}/мес · мораль ${mood}</span></div>
-          <div class="roster">${roster}</div>
+          <div class="roster">${founderCard}${roster}</div>
           <div style="margin-top:10px">${lockCard}</div>
         </div>
         <div class="side">

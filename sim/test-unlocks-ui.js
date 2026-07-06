@@ -103,10 +103,13 @@ ok(!d.getElementById('unlocks-hide-css').textContent.includes('#btn-scout') &&
    d.getElementById('unlocks-hide-css').textContent.includes('#btn-assets'),
    'CSS покрывает динамические элементы, но не кнопку скаутинга');
 
-// открыли scout+hire → классы снялись, кнопка вернула обычный лейбл
+// открыли scout+hire → классы снялись; обратный лейбл кнопки — зона ui.js-рендера
+// (v3.101: наклейка в источнике, applyModuleVisibility — только guard от клоббера)
 w.eval(`Unlocks.unlock('scout'); Unlocks.unlock('hire')`);
 ok(!d.body.classList.contains('rl-lock-hire'), 'открытие узлов снимает rl-lock (unlocks_changed)');
-ok(d.getElementById('btn-scout').textContent.includes('Скаутинг проектов'), 'после открытия B1 кнопка снова «Скаутинг проектов»');
+d.getElementById('btn-scout').innerHTML = '🔍 Скаутинг проектов <span id="scout-cost-label"></span>';   // эмулируем ui.js-рендер
+w.eval(`UnlocksUI.applyModuleVisibility()`);
+ok(d.getElementById('btn-scout').textContent.includes('Скаутинг проектов'), 'guard не возвращает тир-0 наклейку при открытом B1');
 ok(d.body.classList.contains('rl-lock-market') && d.body.classList.contains('rl-lock-ai'),
    'неоткрытые остаются скрытыми');
 

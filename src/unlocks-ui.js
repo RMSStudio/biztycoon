@@ -337,7 +337,22 @@ body.rl-lock-sub    #btn-assets { display:none !important; }`;
 
     // Новый ран начался — флаг начисления снимается
     EventBus.on('navigate', ({ screen }) => {
-      if (screen === 'screen-game' && typeof G !== 'undefined' && G && (G.month || 0) <= 1) _awardedThisRun = false;
+      if (screen === 'screen-game' && typeof G !== 'undefined' && G && (G.month || 0) <= 1) {
+        _awardedThisRun = false;
+        // Слой основателя (§7-sextus): на старте рана в режиме поднимаем
+        // характер-юнит. Пока драфт-экрана нет — стартовый пресет «Марк»
+        // (прототип-ноль); драфт заменит этот вызов своим выбором.
+        try {
+          const U = window.Unlocks;
+          if (U && U.isActive() && window.Founder && !G.founder) {
+            const f = window.Founder.initState(G, window.Founder.preset('mark'));
+            if (f && typeof addLog === 'function') {
+              addLog('👤 Основатель: ' + f.name + ' (' + f.cls + ') — характер в деле: ' +
+                f.rlTraits.map(id => { const t = window.TraitEngine && TraitEngine.get(id); return t ? t.icon + ' ' + t.name : id; }).join(', '), 'purple');
+            }
+          }
+        } catch (e) {}
+      }
     });
 
     // Кнопка mode-screen — держим актуальной (покупка/начисление/сброс/тумблер DLC)

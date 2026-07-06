@@ -131,8 +131,12 @@
     ctx.project && (ctx.project._monthsSigned || 0) > (ctx.project._duration || 99));
   Predicates.register('companyStage', (ctx, arg) => {
     const st = (_g(ctx).living && _g(ctx).living.stage) || 0;
-    return st >= (arg.min || 0);
+    if (arg && arg.min != null && st < arg.min) return false;
+    if (arg && arg.max != null && st > arg.max) return false;
+    return true;
   });
+  Predicates.register('isFounder', (ctx) => !!(ctx.staff && ctx.staff.isFounder));   // носитель — основатель
+  Predicates.register('chance', (ctx, arg) => Math.random() < (typeof arg === 'number' ? arg : 0));   // вероятность (для «иногда»-правил)
   Predicates.register('teamHasGrade', (ctx, arg) => _team(ctx).some(s => s.grade === arg));
   Predicates.register('moduleOpen', (ctx, arg) => {
     try { return typeof isModuleUnlocked === 'function' ? isModuleUnlocked(arg) : true; } catch (e) { return true; }
@@ -226,9 +230,26 @@
 
   // Проектные хуки — носитель трейта должен быть НА проекте (ось расстановки,
   // §13.4); глобальные (апкип/месяц/найм/скаут) — весь штат.
+  // ── Основатель = особый юнит-носитель (§7-quinque/sextus, слой основателя) ──
+  // Виртуальный юнит из g.founder (Founder.initState): его характер-трейты
+  // (f_*/fv_*) исполняются на ВСЕХ хуках — основатель «на каждом проекте»
+  // (как его +2 мощности в движке). В составе штата для предикатов НЕ участвует
+  // (countRoleInStaff/teamSize считают наёмных). Стеки скейлеров живут в
+  // g.founder._rlStacks (юнит пересоздаётся, ссылка общая).
+  function _founderUnit(ctx) {
+    const f = _g(ctx).founder;
+    if (!f || !Array.isArray(f.rlTraits) || !f.rlTraits.length) return null;
+    f._rlStacks = f._rlStacks || {};
+    return { _iid: '__founder', id: '__founder', isFounder: true, role: 'founder',
+             grade: 'founder', name: f.name || 'Основатель', rlTraits: f.rlTraits,
+             _rlStacks: f._rlStacks, mood: 70, status: 'active' };
+  }
+
   const _PROJECT_HOOKS = { calcQuality:1, calcSpeed:1, calcPayout:1, calcRisk:1, onDeliver:1, onAssign:1 };
   function _traitRules(hook, ctx, cb) {
-    const pool = _PROJECT_HOOKS[hook] ? _team(ctx) : _staffAll(ctx);
+    const pool = (_PROJECT_HOOKS[hook] ? _team(ctx) : _staffAll(ctx)).slice();
+    const fu = _founderUnit(ctx);
+    if (fu) pool.push(fu);   // характер работает везде
     pool.forEach(s => {
       (s.rlTraits || []).forEach(tid => {
         const t = _byId['t:' + tid]; if (!t || !t.hooks) return;
@@ -298,13 +319,17 @@
   // ── Stateful-скейлеры: счётчики по событиям (§14.4 stackPer) ─────────
   function _onStackEvent(eventName, ctx) {
     if (!_active()) return;
-    _staffAll(ctx).forEach(s => {
+    const carriers = _staffAll(ctx).slice();
+    const fu = _founderUnit(ctx);
+    if (fu) carriers.push(fu);   // скейлеры основателя копят стеки в g.founder._rlStacks
+    carriers.forEach(s => {
       (s.rlTraits || []).forEach(tid => {
         const t = _byId['t:' + tid]; if (!t || !t.stackPer) return;
         if (t.stackPer.event !== eventName) return;
         // опц. условие: событие касается этого спеца (напр. сдача ЕГО проекта);
-        // команда события — ctx.team (слепок из сигнала) или _assignedStaff
-        if (t.stackPer.ownProject) {
+        // команда события — ctx.team (слепок из сигнала) или _assignedStaff.
+        // Основатель на всех проектах → для него ownProject всегда истинно.
+        if (t.stackPer.ownProject && !s.isFounder) {
           const ids = ctx.team ? ctx.team.map(_sid)
                     : (ctx.project && ctx.project._assignedStaff) || [];
           if (!ids.includes(_sid(s))) return;
@@ -329,7 +354,7 @@
     try { return typeof isModuleUnlocked === 'function' ? isModuleUnlocked(node) : true; }
     catch (e) { return true; }
   }
-  function availableTraitPool() { return _traits.filter(t => poolOpen(t.pool)); }
+  function availableTraitPool() { return _traits.filter(t => !t.founderOnly && poolOpen(t.pool)); }   // характер-трейты в скаут не попадают
   function get(id) { return _byId['t:' + id] || null; }
 
   // Выдача rl-трейтов кандидату в скауте (§15.3): количество — от грейда,
@@ -455,6 +480,8 @@
 
   // Автозагрузка каталога, если данные уже объявлены (traits-data.js грузится раньше)
   try { if (W.STAFF_TRAITS || W.TEAM_SYNERGIES) load(W.STAFF_TRAITS, W.TEAM_SYNERGIES); } catch (e) {}
+  // Характер-трейты основателя (src/founder.js) — порядок загрузки не важен
+  try { if (W.FOUNDER_TRAITS) load(W.FOUNDER_TRAITS); } catch (e) {}
 
   try {
     console.log('[traits] TraitEngine загружен: трейтов ' + _traits.length + ', синергий ' + _synergies.length +

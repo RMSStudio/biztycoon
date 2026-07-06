@@ -209,6 +209,176 @@
   function preset(id) { const p = PRESETS.find(x => x.id === id); return p ? Object.assign({}, p) : null; }
   function list() { return PRESETS.map(p => p.id); }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  ХАРАКТЕР → TraitEngine (§7-quinque killer-связка, гибрид-модель)
+  //
+  //  Основатель = особый юнит-носитель трейтов: его черта (f_*) и порок (fv_*)
+  //  исполняются TraitEngine НА ВСЕХ проектах (виртуальный юнит в traits.js).
+  //  Гибрид: «мод» = безусловные правила (±числа), «синергия» = условные
+  //  билдообразующие (состав команды × открытые узлы). founderOnly:true —
+  //  НЕ попадает в скаут-пул кандидатов. Часть пороков — заготовки с пустыми
+  //  hooks: их дебафы раскроются событийным слоем (design_founder_events).
+  //  Числа черновые — под balance-pass.
+  // ══════════════════════════════════════════════════════════════════════
+
+  // Параметры основателя (§7-sextus характер-лист): 0..100, поля G (DOM-free)
+  const PARAM_DEFAULTS = { focus: 50, confidence: 50, energy: 70, toughness: 40 };
+  const PARAM_NAMES = { focus: 'Фокус', confidence: 'Уверенность', energy: 'Энергия', toughness: 'Жёсткость' };
+
+  const FOUNDER_TRAITS = [
+    // ── ЧЕРТЫ (мод + синергия) ──────────────────────────────────────────
+    { id:'f_perfectionist', name:'Перфекционист', icon:'💎', family:'founder', founderOnly:true,
+      hooks:{ calcQuality:[ { when:[], do:[ { qAdd:2 } ] },
+                            { when:[ { countGradeInStaff:{ grade:'senior', min:2 } }, { moduleOpen:'port' } ], do:[ { qAdd:2 } ] } ],
+              calcSpeed:  [ { when:[], do:[ { speedMult:-0.08 } ] } ] },
+      desc:'+2 Q всем проектам, −8% скорость. Билд «Эталон»: 2+ senior и Кейсы → ещё +2 Q.' },
+    { id:'f_charismatic', name:'Харизматик', icon:'😎', family:'founder', founderOnly:true,
+      hooks:{ calcPayout:[ { when:[], do:[ { payoutMult:-0.05 } ] },
+                           { when:[ { moduleOpen:'scout' }, { moduleOpen:'nego' } ], do:[ { payoutMult:0.12 } ] } ],
+              onDeliver: [ { when:[], do:[ { rep:1 } ] } ] },
+      desc:'Имя растёт с каждой сдачей (+1 реп), но маржа −5%. Воронка: Скаутинг+Переговоры → +12% выплата.' },
+    { id:'f_empath', name:'Эмпат', icon:'🫂', family:'founder', founderOnly:true,
+      hooks:{ onMonth:    [ { when:[], do:[ { moodAdd:2, target:'staff_all' } ] } ],
+              calcQuality:[ { when:[ { teamMood:{ min:75 } } ], do:[ { qAdd:2 } ] } ] },
+      desc:'+2 морали команде каждый месяц. «Семья»: при морали 75+ проекты получают +2 Q.' },
+    { id:'f_strategist', name:'Стратег', icon:'♟️', family:'founder', founderOnly:true,
+      hooks:{ calcUpkeep:[ { when:[], do:[ { upkeepMult:-0.03 } ] } ],
+              calcPayout:[ { when:[ { moduleOpen:'market' } ], do:[ { payoutMult:0.08 } ] } ] },
+      desc:'Планирование: −3% ФОТ. Масштаб: с Живым рынком +8% выплата.' },
+    { id:'f_pusher', name:'Пробивной', icon:'🥊', family:'founder', founderOnly:true,
+      hooks:{ calcSpeed: [ { when:[], do:[ { speedMult:0.12 } ] } ],
+              calcRisk:  [ { when:[], do:[ { riskMult:0.2 } ] } ],
+              calcPayout:[ { when:[ { moduleOpen:'scout' } ], do:[ { payoutAdd:8000 } ] } ] },
+      desc:'+12% темп всех проектов, но риск-события бьют на 20% сильнее. Со Скаутингом +8К к выплатам.' },
+    { id:'f_systematic', name:'Системная', icon:'📐', family:'founder', founderOnly:true,
+      hooks:{ calcRisk: [ { when:[], do:[ { riskMult:-0.15 } ] } ],
+              calcSpeed:[ { when:[], do:[ { speedMult:-0.05 } ] },
+                          { when:[ { moduleOpen:'life' } ], do:[ { speedMult:0.12 } ] } ] },
+      desc:'Порядок гасит риски (−15%), но −5% гибкости. С Процессом (Lifecycle) +12% скорость.' },
+    { id:'f_composed', name:'Собранная', icon:'🧊', family:'founder', founderOnly:true,
+      hooks:{ onMonth:  [ { when:[], do:[ { fatigueAdd:-1 } ] } ],
+              calcSpeed:[ { when:[ { teamMood:{ min:70 } } ], do:[ { speedMult:0.05 } ] } ] },
+      desc:'Границы: −1 усталости команды/мес; при морали 70+ ещё +5% темп.' },
+    { id:'f_deep_focus', name:'Глубокий фокус', icon:'🔬', family:'founder', founderOnly:true,
+      hooks:{ calcQuality:[ { when:[ { projectTier:{ min:3 } } ], do:[ { qMult:0.15 } ] } ],
+              calcPayout: [ { when:[], do:[ { payoutMult:-0.05 } ] } ] },
+      desc:'×1.15 качество на сложных T3+, но продажи хромают: −5% выплата.' },
+    { id:'f_taste', name:'Насмотренность', icon:'🖼', family:'founder', founderOnly:true,
+      hooks:{ calcQuality:[ { when:[], do:[ { qAdd:2 } ] } ],
+              onDeliver:  [ { when:[ { moduleOpen:'port' } ], do:[ { rep:1 } ] } ] },
+      desc:'+2 Q всем проектам. С Кейсами каждая сдача добавляет +1 репутации.' },
+    { id:'f_principled', name:'Принципиальная', icon:'🧭', family:'founder', founderOnly:true,
+      hooks:{ calcPayout:[ { when:[], do:[ { payoutMult:-0.08 } ] },
+                           { when:[ { companyStage:{ min:2 } } ], do:[ { payoutMult:0.12 } ] } ],
+              onDeliver: [ { when:[], do:[ { rep:1 } ] } ] },
+      desc:'Не берёт «любые» деньги (−8%), зато имя растёт (+1 реп/сдача); со стадии «Студия» ниша платит +12%.' },
+    { id:'f_mediagenic', name:'Медийный', icon:'📣', family:'founder', founderOnly:true,
+      hooks:{ calcSpeed: [ { when:[], do:[ { speedMult:-0.07 } ] } ],
+              onDeliver: [ { when:[], do:[ { rep:1 } ] } ],
+              calcPayout:[ { when:[ { moduleOpen:'scout' } ], do:[ { payoutMult:0.08 } ] } ] },
+      desc:'Вечно на сцене: −7% доставка, +1 реп за сдачу. Со Скаутингом аудитория конвертится: +8% выплата.' },
+    { id:'f_team_player', name:'Командный', icon:'🤝', family:'founder', founderOnly:true,
+      hooks:{ calcQuality:[ { when:[ { teamSize:{ min:3 } } ], do:[ { qAdd:2 } ] } ],
+              calcSpeed:  [ { when:[ { teamSize:{ max:0 } } ], do:[ { speedMult:-0.15 } ] } ] },
+      desc:'В команде 3+ человек раскрывается (+2 Q), в одиночку буксует (−15% темп).' },
+    { id:'f_hungry', name:'Голодный', icon:'🔥', family:'founder', founderOnly:true,
+      hooks:{ calcSpeed: [ { when:[], do:[ { speedMult:0.1 } ] },
+                           { when:[ { projectTier:{ max:1 } } ], do:[ { speedMult:0.15 } ] } ],
+              calcUpkeep:[ { when:[], do:[ { upkeepMult:-0.05 } ] } ] },
+      desc:'+10% темп и −5% ФОТ (все стараются). Андердог-вал: мелкие T1 ещё +15% быстрее.' },
+    { id:'f_client_eye', name:'Взгляд заказчика', icon:'👁', family:'founder', founderOnly:true,
+      hooks:{ calcPayout: [ { when:[], do:[ { payoutMult:0.05 } ] },
+                            { when:[ { moduleOpen:'nego' } ], do:[ { payoutMult:0.08 } ] } ],
+              calcQuality:[ { when:[], do:[ { qAdd:-1 } ] } ] },
+      desc:'Знает, за что платят: +5% выплата (с Переговорами +8%), но production — слепая зона (−1 Q).' },
+
+    // ── ПОРОКИ (дебаф; часть — заготовки под тень-события) ──────────────
+    { id:'fv_procrastinator', name:'Прокрастинатор', icon:'🌀', family:'vice', founderOnly:true,
+      hooks:{ calcSpeed:[ { when:[], do:[ { speedMult:-0.07 } ] } ] },
+      desc:'Сроки тянутся: −7% темп всех проектов (потерянные дни).' },
+    { id:'fv_spender', name:'Транжира', icon:'💸', family:'vice', founderOnly:true,
+      hooks:{ onMonth:[ { when:[], do:[ { money:-8000 } ] },
+                        { when:[ { chance:0.2 } ], do:[ { money:-15000 } ] } ] },
+      desc:'Личный бёрн −8К/мес; иногда (20%) импульс-покупка ещё −15К.' },
+    { id:'fv_burnout', name:'Выгорание-склонность', icon:'🕯', family:'vice', founderOnly:true,
+      hooks:{ onMonth:[ { when:[], do:[ { fatigueAdd:2 } ] } ] },
+      desc:'Горит сам и поджигает команду: +2 усталости каждый месяц.' },
+    { id:'fv_detached', name:'Отстранённость', icon:'🧱', family:'vice', founderOnly:true,
+      hooks:{ onMonth:[ { when:[], do:[ { moodAdd:-1, target:'staff_all' } ] } ] },
+      desc:'Холоден с людьми: −1 морали всем каждый месяц.' },
+    { id:'fv_corner_cutter', name:'Срезает углы', icon:'✂️', family:'vice', founderOnly:true,
+      hooks:{ calcRisk:[ { when:[], do:[ { riskMult:0.25 } ] } ] },
+      desc:'«По-быстрому»: риск-события бьют проекты на 25% сильнее.' },
+    { id:'fv_analysis_paralysis', name:'Паралич анализа', icon:'🔁', family:'vice', founderOnly:true,
+      hooks:{ calcSpeed:[ { when:[], do:[ { speedMult:-0.08 } ] } ] },
+      desc:'Решения зависают: −8% темп (упущенные окна — в событиях).' },
+    { id:'fv_outdated', name:'«Отстал(а)»', icon:'📼', family:'vice', founderOnly:true,
+      hooks:{ calcPayout:[ { when:[], do:[ { payoutMult:-0.06 } ] } ] },
+      desc:'Занижает цены, не веря в себя: −6% выплата.' },
+    { id:'fv_social_anxiety', name:'Соц-тревога', icon:'🚪', family:'vice', founderOnly:true,
+      hooks:{ calcPayout:[ { when:[], do:[ { payoutMult:-0.05 } ] } ] },
+      desc:'Избегает созвонов и дожимов: −5% выплата (главная цена — в событиях).' },
+    { id:'fv_disillusioned', name:'Разочарование', icon:'🌫', family:'vice', founderOnly:true,
+      hooks:{ calcQuality:[ { when:[], do:[ { qAdd:-1 } ] } ] },
+      desc:'Потолок вовлечённости: −1 Q всем проектам, пока не «поверит снова».' },
+    { id:'fv_inflexible', name:'Негибкость', icon:'🗿', family:'vice', founderOnly:true,
+      hooks:{ calcPayout:[ { when:[], do:[ { payoutMult:-0.05 } ] } ] },
+      desc:'Отказывается от «не тех» денег: −5% выплата.' },
+    { id:'fv_hype_addict', name:'Зависимость от хайпа', icon:'🎇', family:'vice', founderOnly:true,
+      hooks:{},
+      desc:'Проседает без внимания — раскроется founder-событиями («Хайп против дела»).' },
+    { id:'fv_conflict_avoidant', name:'Избегание конфликта', icon:'🙈', family:'vice', founderOnly:true,
+      hooks:{},
+      desc:'Копит «обиды» в команде — раскроется founder-событиями (риск раскола).' },
+    { id:'fv_outsider', name:'Синдром чужака', icon:'🚷', family:'vice', founderOnly:true,
+      hooks:{},
+      desc:'Не «свой» в тусовке — раскроется founder-событиями (нетворк/статус).' },
+    { id:'fv_craft_underestimator', name:'Недооценка ремесла', icon:'🎲', family:'vice', founderOnly:true,
+      hooks:{ calcRisk:[ { when:[], do:[ { riskMult:0.15 } ] } ] },
+      desc:'«Это же просто»: недооценивает production — риск-события +15%.' },
+    { id:'fv_control_freak', name:'Контроль-фрик', icon:'🔒', family:'vice', founderOnly:true,
+      hooks:{ calcSpeed:[ { when:[ { teamSize:{ min:2 } } ], do:[ { speedMult:-0.06 } ] } ] },
+      desc:'Не делегирует: с командой 2+ человек все ждут его апрува (−6% темп).' },
+    { id:'fv_messiah', name:'Мессианство', icon:'🕊', family:'vice', founderOnly:true,
+      hooks:{ onMonth:[ { when:[], do:[ { fatigueAdd:1 } ] } ] },
+      desc:'Спасает всех разом — распыление: +1 усталости команды/мес.' },
+    { id:'fv_smother', name:'Мать-наседка', icon:'🐣', family:'vice', founderOnly:true,
+      hooks:{},
+      desc:'Опекает до удушья — рост команды тормозится (раскроется founder-событиями).' },
+  ];
+
+  // ── Рантайм-состояние основателя в G (создание/параметры) ─────────────
+  function initState(g, draft) {
+    if (!g) return null;
+    const d = draft ? Object.assign({}, draft) : preset('mark');
+    const v = validate(d);
+    if (!v.ok) return null;
+    const c = compute(d);
+    g.founder = {
+      draft: d,
+      name: d.n || (PRESETS.find(p => p.id === d.id) || {}).n || 'Основатель',
+      presetId: d.id || null,
+      cls: c.cls,
+      rlTraits: ['f_' + d.trait, 'fv_' + d.vice],
+      params: Object.assign({}, PARAM_DEFAULTS),
+      _rlStacks: {},
+    };
+    try { if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('founder_init', { founder: g.founder }); } catch (e) {}
+    return g.founder;
+  }
+  function param(g, key) {
+    return (g && g.founder && g.founder.params && typeof g.founder.params[key] === 'number')
+      ? g.founder.params[key] : null;
+  }
+  function paramAdd(g, key, delta) {
+    if (!g || !g.founder || !(key in PARAM_DEFAULTS)) return null;
+    const p = g.founder.params;
+    const before = typeof p[key] === 'number' ? p[key] : PARAM_DEFAULTS[key];
+    p[key] = Math.max(0, Math.min(100, before + (delta || 0)));
+    try { if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('founder_param', { key, value: p[key], delta: p[key] - before }); } catch (e) {}
+    return p[key];
+  }
+
   root.Founder = {
     TREE, BRANCHES,
     POOLS: { ages: AGES, origins: ORIGINS, traits: TRAITS, vices: VICES, drives: DRIVES, bonds: BONDS },
@@ -216,7 +386,15 @@
     // расчёт
     compute, capitalOf, openedOf, eventWeightOf, classOf, challengeOf,
     expCap, expOpens, validate, preset, list, nodeName: id => (TREE.find(n => n.id === id) || {}).n || id,
+    // характер → TraitEngine + параметры (§7-quinque/sextus)
+    FOUNDER_TRAITS, PARAM_DEFAULTS, PARAM_NAMES,
+    initState, param, paramAdd,
   };
+
+  // Регистрация характер-трейтов в TraitEngine (порядок загрузки не важен:
+  // если движок ещё не поднят — он сам подберёт из root.FOUNDER_TRAITS)
+  root.FOUNDER_TRAITS = FOUNDER_TRAITS;
+  try { if (root.TraitEngine && root.TraitEngine.load) root.TraitEngine.load(FOUNDER_TRAITS); } catch (e) {}
 
   if (typeof module !== 'undefined' && module.exports) module.exports = root.Founder;
 })();
