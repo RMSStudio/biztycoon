@@ -246,6 +246,56 @@ var STAFF_TRAITS = [
     hooks:{ calcQuality:[ { when:[], do:[ { qAdd:6 } ] } ],
             calcUpkeep: [ { when:[], do:[ { upkeepAdd:25000 } ] } ] },
     desc:'+6 Q любому своему проекту, но контракт +25К/мес к ФОТ.' },
+
+  // ── НОВЫЕ ДЖОКЕРЫ: энейблеры под напряжения/синергии/разгон (§13.4) ───
+  // 🕊 [2+ «Звезды» на проекте] → гасит эго-войну: +5 Q, +10% скорость
+  { id:'diplomat', name:'Дипломат', icon:'🕊', family:'enabler', pool:'A1',
+    weight:1, rarity:'rare',
+    hooks:{ calcQuality:[ { when:[ { countTraitOnProject:{ trait:'star_ego', min:2 } } ], do:[ { qAdd:5 } ] } ],
+            calcSpeed:  [ { when:[ { countTraitOnProject:{ trait:'star_ego', min:2 } } ], do:[ { speedMult:0.10 } ] } ] },
+    desc:'Разруливает эго: при 2+ «Звёздах» на проекте гасит их войну — +5 Q и +10% скорость. Делает стак звёзд играбельным.' },
+
+  // 🧑‍🏫 [2+ junior на проекте] → присматривает: +3 Q (лечит «Джунов без присмотра»)
+  { id:'player_coach', name:'Играющий тренер', icon:'🧑‍🏫', family:'synergy', pool:'A2',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcQuality:[ { when:[ { countGradeOnProject:{ grade:'junior', min:2 } } ], do:[ { qAdd:3 } ] } ] },
+    desc:'2+ джуна на его проекте → +3 Q: подхватывает молодых прямо в бою (гасит штраф «без присмотра»).' },
+
+  // 🧰 [3+ разные роли на проекте] → +20% скорость (любит разносторонние команды)
+  { id:'generalist', name:'Генералист', icon:'🧰', family:'synergy', pool:'A5',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcSpeed:[ { when:[ { distinctRolesOnProject:{ min:3 } } ], do:[ { speedMult:0.20 } ] } ] },
+    desc:'3+ разные роли на проекте → +20% скорость: сшивает разношёрстную команду.' },
+
+  // 🎯 [3+ одной роли на проекте] → +4 Q (глубина профиля лечит «Монокультуру»)
+  { id:'role_fanatic', name:'Фанатик роли', icon:'🎯', family:'conditional', pool:'B1',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcQuality:[ { when:[ { roleStackOnProject:{ min:3 } } ], do:[ { qAdd:4 } ] } ] },
+    desc:'3+ спеца одной роли на проекте → +4 Q: гонит глубину, компенсируя «Монокультуру». Моно-стек становится жизнеспособным.' },
+
+  // 🧠 быстро адаптируется — разгон после перевода вдвое короче (движковый эффект)
+  { id:'quick_study', name:'Квик-стади', icon:'🧠', family:'enabler', pool:'A4',
+    weight:2, rarity:'uncommon',
+    hooks:{},
+    desc:'Схватывает на лету: после перевода на проект разгон вдвое короче (стартует с ×0.75, полная сила уже через месяц). Снижает цену переключения.' },
+
+  // 🚨 [проект просрочен] → +30% скорость (личный антикризис, любая роль)
+  { id:'crisis_manager', name:'Кризис-менеджер', icon:'🚨', family:'conditional', pool:'C3',
+    weight:2, rarity:'uncommon',
+    hooks:{ calcSpeed:[ { when:[ { overdue:true } ], do:[ { speedMult:0.30 } ] } ] },
+    desc:'На просроченном проекте → +30% скорость: включается на пожаре в одиночку.' },
+
+  // 🦉 [работает ОДИН на проекте] → +6 Q (гений-одиночка)
+  { id:'introvert_genius', name:'Интроверт-гений', icon:'🦉', family:'conditional', pool:'A3',
+    weight:1, rarity:'rare',
+    hooks:{ calcQuality:[ { when:[ { projectTeamSize:{ max:1 } } ], do:[ { qAdd:6 } ] } ] },
+    desc:'Один на проекте → +6 Q: в тишине выдаёт шедевр. (На сложном T3+ частично гасит «Одиночку на сложном».)' },
+
+  // 🤗 [каждый месяц] → +1 морали всем (держит большие/звёздные команды)
+  { id:'team_builder', name:'Тимбилдер', icon:'🤗', family:'enabler', pool:'C2',
+    weight:1, rarity:'uncommon',
+    hooks:{ onMonth:[ { when:[], do:[ { moodAdd:1, target:'staff_all' } ] } ] },
+    desc:'+1 морали всей команде каждый месяц: гасит эго-просадку «Звезды» и держит крупные команды.' },
 ];
 
 // ┌─────────────────────── ФОРМУЛА СИНЕРГИИ ──────────────────────────────┐

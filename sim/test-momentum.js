@@ -67,6 +67,12 @@ assignStaffToProject('sp1','prA'); sp._rampMo=0;
 advanceMonth(); _ok(sp._rampMo===1, 'месяц: разгон 0→1');
 advanceMonth(); _ok(sp._rampMo===2, 'месяц: разгон 1→2');
 advanceMonth(); _ok(sp._rampMo===2, 'разгон капится на 2');
+
+// Джокер «Квик-стади»: разгон вдвое короче (старт ×0.75 → полная через месяц)
+var qs = { _iid:'qs', id:'qs', role:'developer', grade:'senior', qStat:7, mood:80, status:'active', rlTraits:['quick_study'] };
+G.staff.push(qs); assignStaffToProject('qs','prA'); qs._rampMo=0;
+_ok(Math.abs(rampMult(qs)-0.75)<1e-9, 'Квик-стади: разгон 0 → ×0.75 (быстрее)');
+qs._rampMo=1; _ok(Math.abs(rampMult(qs)-1)<1e-9, 'Квик-стади: разгон 1 → уже ×1.0');
 `));
 
 // ── 2: ВНЕ РЕЖИМА — no-op (классика не тронута) ────────────────────────

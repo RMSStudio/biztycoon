@@ -194,7 +194,7 @@ _ok(!cand.rlTraits || cand.rlTraits.length === 0, 'кандидату нечег
 // открыли «Найм» (A1) → доступны только трейты пула A1
 Unlocks.unlock('hire');
 var poolA1 = TraitEngine.availableTraitPool().map(function(t){ return t.id; });
-_ok(poolA1.length === 3, 'открыт A1 → 3 трейта (Нишевый/Одиночка/Тимлид): ' + poolA1.join(','));
+_ok(poolA1.length === 4, 'открыт A1 → 4 трейта (Нишевый/Одиночка/Тимлид/Дипломат): ' + poolA1.join(','));
 _ok(poolA1.indexOf('niche_expert') >= 0 && poolA1.indexOf('mentor') < 0, 'A2-трейты (Ментор) ещё заперты');
 
 var c2 = _staff({ grade:'middle' });
@@ -233,7 +233,7 @@ add(run('Тест 8: validateCatalog — каталог чист, мусор л�
 var issues = TraitEngine.validateCatalog();
 _ok(issues.length === 0, 'весь каталог валиден (' + TraitEngine.catalog().traits.length + ' трейтов, ' +
   TraitEngine.catalog().synergies.length + ' синергий)' + (issues.length ? ' → ' + issues.join('; ') : ''));
-_ok(TraitEngine.catalog().traits.length === 27, '27 трейтов (12 + 15 новых)');
+_ok(TraitEngine.catalog().traits.length === 35, '35 трейтов (27 базовых + 8 новых джокеров-энейблеров)');
 _ok(TraitEngine.catalog().synergies.length === 21, '21 синергия (11 позит. + 6 напряжений + 4 новые проектные)');
 // у каждого узла-пула теперь есть трейты (все 13 пулов покрыты)
 var pools = {};
@@ -335,7 +335,28 @@ var Gso={staff:[so1],activeClients:[]};
 _ok(TraitEngine.mods('calcQuality',{G:Gso,project:_proj({_assignedStaff:['o1'],tier:3})}).add === -3, 'Одиночка на сложном: −3 Q');
 _ok(Math.abs(TraitEngine.mods('calcRisk',{G:Gso,project:_proj({_assignedStaff:['o1'],tier:3})}).mult - 1.25) < 1e-9, 'Одиночка на сложном: +25% риск');
 
-// Напряжения не срабатывают вне режима (no-op) — общий контракт уже проверен выше для трейтов
+// ── НОВЫЕ ДЖОКЕРЫ-ЭНЕЙБЛЕРЫ (гасят напряжения) ────────────────────────
+// Фанатик роли гасит Монокультуру: 3 копирайтера (1 фанатик) на T4 → −4 (моно) +4 (фанатик) = 0 Q
+var rf1=_staff({_iid:'rf1',role:'copywriter',rlTraits:['role_fanatic']}),rf2=_staff({_iid:'rf2',role:'copywriter'}),rf3=_staff({_iid:'rf3',role:'copywriter'});
+var Grf={staff:[rf1,rf2,rf3],activeClients:[]};
+_ok(TraitEngine.mods('calcQuality',{G:Grf,project:_proj({_assignedStaff:['rf1','rf2','rf3'],tier:4})}).add === 0, 'Фанатик роли гасит Монокультуру: 0 Q net');
+
+// Дипломат гасит Битву эго по скорости: 2 Звезды + Дипломат (роли designer×2+dev, без трио) → speed ×1.0
+var d1=_staff({_iid:'d1',role:'designer',rlTraits:['diplomat']}),z1=_staff({_iid:'z1',role:'designer',rlTraits:['star_ego']}),z2=_staff({_iid:'z2',role:'developer',rlTraits:['star_ego']});
+var Gd={staff:[d1,z1,z2],activeClients:[]};
+_ok(Math.abs(TraitEngine.mods('calcSpeed',{G:Gd,project:_proj({_assignedStaff:['d1','z1','z2']})}).mult - 0.9*1.1) < 1e-9, 'Дипломат почти гасит Битву эго: ×0.9 × ×1.1 = 0.99 (остаток −1%)');
+_ok(TraitEngine.mods('calcQuality',{G:Gd,project:_proj({_assignedStaff:['d1','z1','z2']})}).add === 10, 'Дипломат: 2×Звезда(+10) − эго(−5) + дипломат(+5) = +10 Q');
+
+// Играющий тренер смягчает «Джунов без присмотра»: 3 джуна (1 тренер), 0 senior, T2 → −4 +3 = −1 Q
+var pc1=_staff({_iid:'pc1',role:'copywriter',grade:'junior',rlTraits:['player_coach']}),pc2=_staff({_iid:'pc2',role:'copywriter',grade:'junior'}),pc3=_staff({_iid:'pc3',role:'copywriter',grade:'junior'});
+var Gpc={staff:[pc1,pc2,pc3],activeClients:[]};
+_ok(TraitEngine.mods('calcQuality',{G:Gpc,project:_proj({_assignedStaff:['pc1','pc2','pc3'],tier:2})}).add === -1, 'Играющий тренер: −4 (без присмотра) +3 (тренер) = −1 Q');
+
+// Интроверт-гений: один на T2 → +6 Q; на T3 частично гасит «Одиночку на сложном» → +6 −3 = +3
+var ig=_staff({_iid:'ig',role:'developer',rlTraits:['introvert_genius']});
+var Gig={staff:[ig],activeClients:[]};
+_ok(TraitEngine.mods('calcQuality',{G:Gig,project:_proj({_assignedStaff:['ig'],tier:2})}).add === 6, 'Интроверт-гений соло на T2: +6 Q');
+_ok(TraitEngine.mods('calcQuality',{G:Gig,project:_proj({_assignedStaff:['ig'],tier:3})}).add === 3, 'Интроверт-гений соло на T3: +6 −3 (Одиночка) = +3 Q');
 `));
 
 console.log('\nИтог: ' + totals.pass + '/' + (totals.pass + totals.fail) + ' проверок прошли');

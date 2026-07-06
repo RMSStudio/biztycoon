@@ -253,7 +253,9 @@ const RAMP_MIN = 0.5, RAMP_STEP = 0.25, RAMP_CAP = 2;
 function _rampActive() { return (typeof Unlocks !== 'undefined' && Unlocks.isActive && Unlocks.isActive()); }
 function rampMult(s) {
   if (!_rampActive() || !s) return 1;
-  return Math.min(1, RAMP_MIN + RAMP_STEP * (s._rampMo || 0));
+  // Джокер «Квик-стади»: разгон вдвое короче (старт ×0.75 → полная сила через месяц)
+  const base = (s.rlTraits && s.rlTraits.includes('quick_study')) ? 0.75 : RAMP_MIN;
+  return Math.min(1, base + RAMP_STEP * (s._rampMo || 0));
 }
 
 // Мощность конкретного проекта: 2 (фаундер) + мощн. назначенных сотрудников (× разгон)
