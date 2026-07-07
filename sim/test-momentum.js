@@ -42,28 +42,31 @@ var A = { id:'prA', _assignedStaff:[], tier:2 }, B = { id:'prB', _assignedStaff:
 G.activeClients = [A, B];
 var wu = calcStaffWorkUnit(sp);
 
+// первичная расстановка С БИРЖИ → сразу полная сила (штрафа нет)
 assignStaffToProject('sp1','prA');
-_ok(sp._rampMo===0, 'после назначения разгон = 0');
-_ok(Math.abs(rampMult(sp)-0.5)<1e-9, 'разгон 0 → ×0.5');
-_ok(Math.abs(getProjectThroughput(A) - (2 + wu*0.5))<1e-6, 'throughput = 2 + wu×0.5');
+_ok(sp._rampMo===2, 'первичная расстановка с биржи → разгон сразу 2 (полная сила)');
+_ok(Math.abs(rampMult(sp)-1)<1e-9, 'первичная → ×1.0 (без штрафа)');
+_ok(Math.abs(getProjectThroughput(A) - (2 + wu))<1e-6, 'throughput полный при первичной расстановке');
+
+// перевод на ДРУГОЙ активный проект → штраф разгона (сброс в 0)
+assignStaffToProject('sp1','prB');
+_ok(sp._rampMo===0, 'переманивание с другого проекта → сброс разгона в 0');
+_ok(Math.abs(rampMult(sp)-0.5)<1e-9, 'после переманивания разгон 0 → ×0.5');
+_ok(Math.abs(getProjectThroughput(B) - (2 + wu*0.5))<1e-6, 'throughput B = 2 + wu×0.5 (разгон)');
+_ok(B._assignedStaff.includes('sp1') && !A._assignedStaff.includes('sp1'), 'спец перемещён A→B');
 
 sp._rampMo = 1; _ok(Math.abs(rampMult(sp)-0.75)<1e-9, 'разгон 1 → ×0.75');
 sp._rampMo = 2; _ok(Math.abs(rampMult(sp)-1)<1e-9, 'разгон 2 → ×1.0 (полный)');
-_ok(Math.abs(getProjectThroughput(A) - (2 + wu))<1e-6, 'полный throughput при разгоне 2');
-
-// повторное назначение на ТОТ ЖЕ проект — разгон сохраняется
-assignStaffToProject('sp1','prA');
-_ok(sp._rampMo===2, 'повтор на тот же проект → разгон сохранён (2)');
-// перевод на ДРУГОЙ проект — сброс
+// повтор на ТОТ ЖЕ проект — разгон сохраняется
 assignStaffToProject('sp1','prB');
-_ok(sp._rampMo===0, 'перевод на другой проект → сброс в 0');
-_ok(B._assignedStaff.includes('sp1') && !A._assignedStaff.includes('sp1'), 'спец перемещён A→B');
+_ok(sp._rampMo===2, 'повтор на тот же проект → разгон сохранён (2)');
 // снятие — очистка
 sp._rampMo=2; unassignStaff('sp1');
 _ok(sp._rampMo===0 && sp._assignedProjectId===null, 'снятие сбрасывает разгон');
 
-// месячный инкремент через advanceMonth (hire открыт → не голый ран, конца не будет)
-assignStaffToProject('sp1','prA'); sp._rampMo=0;
+// месячный инкремент: смоделируем переманивание (bench→A=full, A→B=poach reset 0), затем месяцы
+assignStaffToProject('sp1','prA'); assignStaffToProject('sp1','prB');
+_ok(sp._rampMo===0, 'подготовка: разгон 0 после переманивания');
 advanceMonth(); _ok(sp._rampMo===1, 'месяц: разгон 0→1');
 advanceMonth(); _ok(sp._rampMo===2, 'месяц: разгон 1→2');
 advanceMonth(); _ok(sp._rampMo===2, 'разгон капится на 2');

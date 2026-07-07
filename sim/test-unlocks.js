@@ -159,8 +159,12 @@ _ok(Unlocks.scriptedIntroDue({ month: D+5, living:{stage:1} }), 'позже де
 _ok(!Unlocks.scriptedIntroDue({ month: D-1, living:{stage:1} }), 'до дедлайна → НЕ срабатывает');
 _ok(!Unlocks.scriptedIntroDue({ month: D, _endGameFired:true }), 'ран уже завершён → НЕ срабатывает');
 _ok(!Unlocks.scriptedIntroDue({ month: D+9, _scriptedIntroFired:true }), 'уже фаернуто → не повторяется');
-Unlocks.unlock('scout');
-_ok(!Unlocks.scriptedIntroDue({ month: D+9, living:{stage:1} }), 'открыт хоть один узел → НЕ поражение (настоящая попытка)');
+// под-экипированный ран (открыт 1 узел, но < INTRO_CORE) — ВСЁ ЕЩЁ поражение
+Unlocks.unlock('hire');
+_ok(Unlocks.scriptedIntroDue({ month: D+9, living:{stage:1} }), '1 узел (< core) → ещё вступительный, поражение форсится (фикс: 1 найм не спасает)');
+// открыли ≥ INTRO_CORE узлов → ран «настоящий», потолок не срабатывает
+Unlocks.unlock('scout'); Unlocks.unlock('life'); Unlocks.unlock('nego');
+_ok(!Unlocks.scriptedIntroDue({ month: D+9, living:{stage:1} }), 'открыто ≥ INTRO_CORE узлов → настоящая попытка, потолка нет');
 Unlocks.reset();
 `));
 
@@ -174,13 +178,21 @@ _ok(Unlocks.introBleed({ month: 10, living:{stage:0} }) === 0, 'вне режи�
 add(run('Тест 7c: introBleed — утечка бюджета голого рана', true, `
 var S = Unlocks.TUNING.INTRO_STRAIN;
 _ok(typeof S === 'number' && S > 0, 'INTRO_STRAIN задан (' + S + ')');
-_ok(Unlocks.isBareIntro({ month: 3, living:{stage:1} }), 'ничего не открыто → голый ран (даже стадия 1)');
-_ok(Unlocks.introBleed({ month: 3, living:{stage:1} }) === S * 3, 'утечка растёт линейно (мес×' + S + ')');
+var CORE = Unlocks.TUNING.INTRO_CORE;
+_ok(typeof CORE === 'number' && CORE >= 2, 'INTRO_CORE задан (' + CORE + ')');
+_ok(Unlocks.isBareIntro({ month: 3, living:{stage:1} }), 'ничего не открыто → вступительный ран');
+_ok(Unlocks.introBleed({ month: 3, living:{stage:1} }) === S * 3, 'opened 0 → полная утечка (мес×' + S + ', тейпер ×1)');
 _ok(Unlocks.introBleed({ month: 10 }) > Unlocks.introBleed({ month: 4 }), 'позже — списание больше');
+// 1 узел (< core) → ещё вступительный, но утечка ослаблена тейпером ((core-1)/core)
 Unlocks.unlock('hire');
-_ok(!Unlocks.isBareIntro({ month: 3, living:{stage:1} }), 'открыт узел → уже «настоящая» попытка, не голый ран');
-_ok(Unlocks.introBleed({ month: 12 }) === 0, 'узел открыт → утечки нет');
-_ok(!Unlocks.scriptedIntroDue({ month: 99 }), 'узел открыт → и скриптовый потолок не срабатывает');
+_ok(Unlocks.isBareIntro({ month: 3, living:{stage:1} }), '1 узел (< core) → всё ещё вступительный (фикс: 1 найм не спасает)');
+_ok(Unlocks.introBleed({ month: 4 }) === Math.round(S * 4 * (CORE-1)/CORE), '1 узел → утечка × тейпер (core-1)/core');
+_ok(Unlocks.introBleed({ month: 4 }) < S * 4, '1 узел → утечка слабее полной');
+// открыли ≥ core узлов → утечки и потолка нет
+Unlocks.unlock('scout'); Unlocks.unlock('life'); Unlocks.unlock('nego');
+_ok(!Unlocks.isBareIntro({ month: 3, living:{stage:1} }), '≥ core узлов → настоящая попытка');
+_ok(Unlocks.introBleed({ month: 12 }) === 0, '≥ core → утечки нет');
+_ok(!Unlocks.scriptedIntroDue({ month: 99 }), '≥ core → потолок не срабатывает');
 Unlocks.reset();
 `));
 

@@ -301,9 +301,12 @@ function assignStaffToProject(staffId, projectId) {
   project._assignedStaff = project._assignedStaff || [];
   project._assignedStaff.push(staffId);
   staff._assignedProjectId = projectId;
-  // тот же проект (перерисовка/повторное назначение) → разгон сохраняется;
-  // другой проект → сброс в 0 (заново адаптируется). Вне режима rampMult=1, эффекта нет.
-  staff._rampMo = (prevPid === projectId) ? prevRamp : 0;
+  // Разгон (opportunity-cost) — ТОЛЬКО за переманивание между активными проектами:
+  //  • тот же проект (перерисовка/повтор) → разгон сохраняется;
+  //  • перевод с ДРУГОГО активного проекта → сброс в 0 (адаптируется заново, штраф);
+  //  • с биржи / впервые (prevPid пуст) → сразу полная сила (первичная расстановка не штрафуется).
+  //  Вне режима rampMult=1 — эффекта нет в любом случае.
+  staff._rampMo = (prevPid === projectId) ? prevRamp : (prevPid ? 0 : RAMP_CAP);
   _emitRender();
 }
 

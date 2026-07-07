@@ -307,7 +307,7 @@ body.rl-lock-sub    #btn-assets { display:none !important; }`;
   function _announce(s, scriptedIntro) {
     if (!s) return;
     if (typeof addLog === 'function') {
-      if (scriptedIntro) addLog('🌱 Вступительный ран — так и должно быть. Без команды студию не удержать; это начало пути. Открой первый модуль в «Дереве открытий» — следующий заход будет глубже.', 'amber');
+      if (scriptedIntro) addLog('🌱 Вступительный ран — так и должно быть. Пока систем мало, студию не удержать; это начало пути. Открывай узлы в «Дереве открытий» — следующий заход будет глубже.', 'amber');
       addLog(`🌐 Экспертиза за ран: +${s.award} ✦ (исход ${s.base}${s.stageBonus ? ' + стадия ' + s.stageBonus : ''}${s.firstsExp ? ' + первые разы ' + s.firstsExp : ''}). Всего ${s.exp} ✦.`, 'purple');
       (s.firsts || []).forEach(f => addLog(`${f.ico} Впервые: «${f.name}» · +${f.exp} ✦`, 'green'));
     }
