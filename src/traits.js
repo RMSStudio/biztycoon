@@ -482,6 +482,8 @@
   try { if (W.STAFF_TRAITS || W.TEAM_SYNERGIES) load(W.STAFF_TRAITS, W.TEAM_SYNERGIES); } catch (e) {}
   // Характер-трейты основателя (src/founder.js) — порядок загрузки не важен
   try { if (W.FOUNDER_TRAITS) load(W.FOUNDER_TRAITS); } catch (e) {}
+  // Трейты-последствия founder-событий (src/founder-events.js)
+  try { if (W.FOUNDER_EVENT_TRAITS) load(W.FOUNDER_EVENT_TRAITS); } catch (e) {}
 
   try {
     console.log('[traits] TraitEngine загружен: трейтов ' + _traits.length + ', синергий ' + _synergies.length +
