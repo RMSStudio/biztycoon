@@ -237,6 +237,166 @@
       choices:[
         { text:'Признать и разгрести честно', hint:'−60К, −2 дня, но стоп', fx:{ money:-60000, days:-2, reputation:-3, toughness:+5 }, clearTag:'corners', tone:'growth' },
         { text:'Отрицать', hint:'обвал репутации', fx:{ reputation:-10, confidence:-6 }, tone:'degrade' } ] },
+
+    // ══ 4H. АРКИ ПЕРСОНАЖЕЙ (портреты → 3 звена: завязка → узел → развязка
+    //    по доминирующему тону). Ярус «Струггеры» — 6 арок; Крепкие и
+    //    Состоявшиеся доедут тем же форматом (§5 чек-лист). ═══════════════
+
+    // ── МАРК: «Ремесленник, который боится сдать» ────────────────────────
+    { id:'arc_mark_1', title:'Дедлайн против совести', icon:'⚖️', cat:'arc',
+      trig:{ preset:['mark'], month:'>=3' }, weight:5, once:'run',
+      situation:'Клиент пишет: «Выглядит супер, давай выкатывать?». А ты видишь пять вещей, которые не так. Никто, кроме тебя, их не заметит. Наверное.',
+      choices:[
+        { text:'Выкатить и отпустить', hint:'+20К сразу; учишься говорить «готово»', fx:{ money:+20000, toughness:+4 }, tone:'growth' },
+        { text:'Довести до идеала', hint:'−2 дня, −энергия; идеал не отпускает', fx:{ days:-2, quality:+1, energy:-6 }, tone:'degrade' } ] },
+    { id:'arc_mark_2', title:'Похвала и ценник', icon:'🪞', cat:'arc',
+      trig:{ preset:['mark'], afterEvent:'arc_mark_1', month:'>=5' }, weight:5, once:'run',
+      situation:'Прошлый клиент назвал работу «лучшим, что у нас было». Новый спрашивает цену — и ты ловишь себя на желании назвать поменьше. Вдруг спугнёшь.',
+      choices:[
+        { text:'Назвать полную цену', hint:'ты столько стоишь', fx:{ money:+15000, confidence:+8 }, tone:'growth' },
+        { text:'Скинуть «для верности»', hint:'−15К и осадок', fx:{ money:-15000, confidence:-6 }, tone:'degrade' } ] },
+    { id:'arc_mark_fin_g', title:'«Готово.»', icon:'🏆', cat:'arc',
+      trig:{ preset:['mark'], afterEvent:'arc_mark_2', toneDom:'growth', month:'>=8' }, weight:6, once:'run',
+      situation:'Бывший арт-директор — тот самый — зовёт тебя на свой подкаст рассказать про студию. Перфекционизм молчит. Ты просто говоришь «да».',
+      choices:[
+        { text:'Прийти и рассказать', hint:'имя работает на тебя', fx:{ reputation:+5, confidence:+10 }, tone:'growth' },
+        { text:'Прийти и слушать', hint:'скромно, но ты там', fx:{ reputation:+2, confidence:+4 }, tone:'neutral' } ] },
+    { id:'arc_mark_fin_d', title:'Переделываю проданное', icon:'🕳', cat:'arc',
+      trig:{ preset:['mark'], afterEvent:'arc_mark_2', toneDom:'degrade', month:'>=8' }, weight:6, once:'run',
+      situation:'Три часа ночи. Ты переделываешь лого, которое клиент принял месяц назад. Он не просил. Он даже не узнает.',
+      choices:[
+        { text:'Закрыть макет усилием воли', hint:'остановился на краю', fx:{ energy:+10, toughness:+5 }, tone:'growth' },
+        { text:'Ещё один прогон', hint:'выгорание рядом', fx:{ money:-20000, energy:-12 }, grant:['fe_faded'], once:'grant', tone:'degrade' } ] },
+
+    // ── РОМЫЧ: «Хастлер, который срезает углы» ───────────────────────────
+    { id:'arc_romych_1', title:'Клиент хочет вчера', icon:'🏎', cat:'arc',
+      trig:{ preset:['romych'], month:'>=3' }, weight:5, once:'run',
+      situation:'Сдача через два дня, работы — на неделю. Есть вариант: чужая сборка, слегка перекрашенная. Никто не докопается. Сегодня.',
+      choices:[
+        { text:'Честно: не успеваем', hint:'−10К штраф, но спишь спокойно', fx:{ money:-10000, reputation:+2 }, tone:'growth' },
+        { text:'Склеить на серой схеме', hint:'+25К и мина под репутацией', fx:{ money:+25000 }, tag:'corners', tone:'degrade' } ] },
+    { id:'arc_romych_2', title:'Мутная сделка партнёра', icon:'🤫', cat:'arc',
+      trig:{ preset:['romych'], afterEvent:'arc_romych_1', month:'>=5' }, weight:5, once:'run',
+      situation:'Партнёр заносит жирный заказ: «Только не спрашивай, откуда клиент. Тебе какая разница?»',
+      choices:[
+        { text:'Соскочить', hint:'−20К упущенных, +характер', fx:{ money:-20000, toughness:+5 }, tone:'growth' },
+        { text:'Взять и не спрашивать', hint:'+80К; разница, вообще-то, есть', fx:{ money:+80000, confidence:-2 }, tag:'corners', tone:'degrade' } ] },
+    { id:'arc_romych_fin_g', title:'Первым — по-честному', icon:'🏁', cat:'arc',
+      trig:{ preset:['romych'], afterEvent:'arc_romych_2', toneDom:'growth', month:'>=8' }, weight:6, once:'run',
+      situation:'Тендер. Все привычно заносят и договариваются, а ты просто приносишь лучшую цену и скорость. И выигрываешь.',
+      choices:[
+        { text:'Забрать и отработать', hint:'злой, быстрый, уважаемый', fx:{ money:+50000, reputation:+5 }, tone:'growth' },
+        { text:'Забрать и поднять цены', hint:'дерзко, рынок стерпит', fx:{ money:+70000, reputation:+1 }, tone:'neutral' } ] },
+    { id:'arc_romych_fin_d', title:'Схема зовёт обратно', icon:'🕸', cat:'arc',
+      trig:{ preset:['romych'], afterEvent:'arc_romych_2', toneDom:'degrade', month:'>=8' }, weight:6, once:'run',
+      situation:'Очередная «верняковая» схема. Прошлые сходили с рук — почти. Внутри что-то подсказывает: эта — лишняя.',
+      choices:[
+        { text:'Сказать «нет» — впервые', hint:'вырасти вдолгую', fx:{ toughness:+6, confidence:+4 }, clearTag:'corners', tone:'growth' },
+        { text:'Последний раз', hint:'они всегда последние', fx:{ money:+60000 }, tag:'corners', tone:'degrade' } ] },
+
+    // ── ТЁМА: «Гений, который боится созвона» ────────────────────────────
+    { id:'arc_tema_1', title:'Фанат приводит друга', icon:'🎮', cat:'arc',
+      trig:{ preset:['tema'], month:'>=3' }, weight:5, once:'run',
+      situation:'Твой фанат-заказчик привёл друга с деньгами. Друг «просто хочет созвониться познакомиться». Ты уже придумал три причины отказаться.',
+      choices:[
+        { text:'Выйти на звонок', hint:'полчаса ужаса, +заказ', fx:{ money:+25000, confidence:+6, energy:-4 }, tone:'growth' },
+        { text:'«Давайте в переписке»', hint:'друг растворился', fx:{ money:-10000, confidence:-3 }, tone:'degrade' } ] },
+    { id:'arc_tema_2', title:'Позвали выступить', icon:'🎤', cat:'arc',
+      trig:{ preset:['tema'], afterEvent:'arc_tema_1', month:'>=5' }, weight:5, once:'run',
+      situation:'Локальный митап зовёт рассказать про твой пет-проект. Двадцать человек. Живых. Смотрящих.',
+      choices:[
+        { text:'Выступить', hint:'−энергия, +имя и уверенность', fx:{ energy:-8, reputation:+4, confidence:+8 }, tone:'growth' },
+        { text:'Прийти слушателем', hint:'безопасно и незаметно', fx:{ confidence:-2 }, tone:'degrade' } ] },
+    { id:'arc_tema_fin_g', title:'Продукт говорит сам', icon:'🚀', cat:'arc',
+      trig:{ preset:['tema'], afterEvent:'arc_tema_2', toneDom:'growth', month:'>=8' }, weight:6, once:'run',
+      situation:'Твою работу шарят люди, которых ты не знаешь. Входящие сами пишут первыми. Оказывается, для этого не нужно было становиться экстравертом.',
+      choices:[
+        { text:'Принять поток', hint:'глубина победила', fx:{ money:+30000, reputation:+5 }, tone:'growth' },
+        { text:'Выбрать одного, лучшего', hint:'фокус прежде всего', fx:{ money:+15000, focus:+6 }, tone:'growth' } ] },
+    { id:'arc_tema_fin_d', title:'Гений в столе', icon:'🗄', cat:'arc',
+      trig:{ preset:['tema'], afterEvent:'arc_tema_2', toneDom:'degrade', month:'>=8' }, weight:6, once:'run',
+      situation:'Лучшая твоя работа лежит в папке «later». Показывать страшно, а не показывать — привычно.',
+      choices:[
+        { text:'Выложить как есть', hint:'страшно = туда', fx:{ confidence:+8, reputation:+3 }, tone:'growth' },
+        { text:'Довести и... потом', hint:'папка пополнилась', fx:{ confidence:-6 }, grant:['fe_never_ready'], once:'grant', tone:'degrade' } ] },
+
+    // ── СОНЯ: «Принципы против кассы» ────────────────────────────────────
+    { id:'arc_sonya_1', title:'Грант или заказ', icon:'🌍', cat:'arc',
+      trig:{ preset:['sonya'], month:'>=3' }, weight:5, once:'run',
+      situation:'НКО предлагает проект мечты — почти бесплатно. Параллельно висит скучный, но денежный заказ. Времени — на один.',
+      choices:[
+        { text:'Проект мечты', hint:'−деньги, +имя в нише', fx:{ money:-20000, reputation:+4, confidence:+5 }, tone:'growth' },
+        { text:'Скучный, но денежный', hint:'касса важнее, миссия подождёт', fx:{ money:+40000, confidence:-4 }, tone:'degrade' } ] },
+    { id:'arc_sonya_2', title:'Бренд-грязнуля', icon:'🏭', cat:'arc',
+      trig:{ preset:['sonya'], afterEvent:'arc_sonya_1', month:'>=5' }, weight:5, once:'run',
+      situation:'Корпорация с репутацией токсичного гиганта хочет «освежить образ». Твоими руками. Чек — годовой бюджет студии.',
+      choices:[
+        { text:'Отказать публично', hint:'ниша запомнит', fx:{ money:-30000, reputation:+4, toughness:+5 }, tone:'growth' },
+        { text:'Взять тихо', hint:'+100К и бессонница', fx:{ money:+100000, confidence:-6 }, tone:'degrade' } ] },
+    { id:'arc_sonya_fin_g', title:'Ниша поверила', icon:'🌱', cat:'arc',
+      trig:{ preset:['sonya'], afterEvent:'arc_sonya_2', toneDom:'growth', month:'>=8' }, weight:6, once:'run',
+      situation:'Тебя рекомендуют со словами «эти не возьмут что попало». Оказалось, принципы — это тоже позиционирование.',
+      choices:[
+        { text:'Поднять цены для «своих» тоже', hint:'миссия ≠ бесплатно', fx:{ money:+35000, toughness:+4 }, tone:'growth' },
+        { text:'Держать соц-тариф', hint:'верность корням', fx:{ reputation:+4 }, tone:'neutral' } ] },
+    { id:'arc_sonya_fin_d', title:'Принципы съели студию', icon:'🥀', cat:'arc',
+      trig:{ preset:['sonya'], afterEvent:'arc_sonya_2', toneDom:'degrade', month:'>=8' }, weight:6, once:'run',
+      situation:'Касса пустая, а ты опять на созвоне объясняешь, почему «этот заказ мы морально не можем взять».',
+      choices:[
+        { text:'Пересобрать рамки: что МОЖНО', hint:'гибкость ≠ предательство', fx:{ money:+30000, confidence:+4 }, remove:['fv_inflexible'], once:'grant', tone:'growth' },
+        { text:'Стоять до конца', hint:'красиво, но голодно', fx:{ money:-30000 }, tone:'degrade' } ] },
+
+    // ── ЖЕНЯ: «Вырваться из своего города» ───────────────────────────────
+    { id:'arc_zhenya_1', title:'Свои просят по-свойски', icon:'🏘', cat:'arc',
+      trig:{ preset:['zhenya'], month:'>=3' }, weight:5, once:'run',
+      situation:'Земляки шлют заказы один за другим — и все «ну ты же свой, сделай по-братски». Портфолио растёт, счёт — нет.',
+      choices:[
+        { text:'Поднять цену и для своих', hint:'уважение вместо скидки', fx:{ money:+15000, toughness:+5 }, tone:'growth' },
+        { text:'Своим — по-свойски', hint:'слава хорошего парня', fx:{ money:-15000 }, tone:'degrade' } ] },
+    { id:'arc_zhenya_2', title:'Столичный конкурс', icon:'🌆', cat:'arc',
+      trig:{ preset:['zhenya'], afterEvent:'arc_zhenya_1', month:'>=5' }, weight:5, once:'run',
+      situation:'Большой конкурс, столичные студии, известные имена. «Куда нам» — говорит внутренний голос голосом родного города.',
+      choices:[
+        { text:'Заявиться', hint:'страшно — значит туда', fx:{ energy:-5, reputation:+4, confidence:+6 }, tone:'growth' },
+        { text:'«Не в этот раз»', hint:'потолок остался на месте', fx:{ confidence:-5 }, tone:'degrade' } ] },
+    { id:'arc_zhenya_fin_g', title:'Свой среди своих', icon:'🌉', cat:'arc',
+      trig:{ preset:['zhenya'], afterEvent:'arc_zhenya_2', toneDom:'growth', month:'>=8' }, weight:6, once:'run',
+      situation:'В жюри того самого конкурса тебя представляют: «студия из региона, за которой стоит следить». Город в тебе больше не потолок — он бэкграунд.',
+      choices:[
+        { text:'Взять столичный заказ', hint:'новый уровень чеков', fx:{ money:+50000, reputation:+4 }, remove:['fv_outsider'], once:'grant', tone:'growth' },
+        { text:'Остаться базой в родном', hint:'корни — сила', fx:{ money:+25000, confidence:+5 }, tone:'growth' } ] },
+    { id:'arc_zhenya_fin_d', title:'Потолок родного города', icon:'🧱', cat:'arc',
+      trig:{ preset:['zhenya'], afterEvent:'arc_zhenya_2', toneDom:'degrade', month:'>=8' }, weight:6, once:'run',
+      situation:'Все заказы города — твои. Все — мелкие. Ты первый парень на районе, и район кончился.',
+      choices:[
+        { text:'Ва-банк: месяц на столичный рынок', hint:'−30К, шанс пробить', fx:{ money:-30000, confidence:+6, toughness:+4 }, tone:'growth' },
+        { text:'Досиживать королём', hint:'уютно и тесно', fx:{ money:+10000, confidence:-5 }, tone:'degrade' } ] },
+
+    // ── «ДВОЕ»: партнёрство на прочность ─────────────────────────────────
+    { id:'arc_dvoe_1', title:'Кто из вас главный?', icon:'👥', cat:'arc',
+      trig:{ preset:['dvoe'], month:'>=3' }, weight:5, once:'run',
+      situation:'Клиент на встрече спрашивает в лоб: «А решает кто?» Вы переглядываетесь на секунду дольше, чем надо.',
+      choices:[
+        { text:'Договориться о ролях в тот же вечер', hint:'взрослый разговор', fx:{ focus:+5, loyaltyAll:+5 }, tone:'growth' },
+        { text:'«Мы решаем вместе» (замять)', hint:'вопрос никуда не делся', fx:{}, tag:'rift_seed', tone:'degrade' } ] },
+    { id:'arc_dvoe_2', title:'Деньги делим как?', icon:'💳', cat:'arc',
+      trig:{ preset:['dvoe'], afterEvent:'arc_dvoe_1', month:'>=5' }, weight:5, once:'run',
+      situation:'Первый серьёзный чек. Один тащил продажи, второй — производство. Каждый втайне считает, что тащил больше.',
+      choices:[
+        { text:'Прописать доли на бумаге', hint:'−день, +фундамент', fx:{ days:-1, toughness:+4, loyaltyAll:+4 }, tone:'growth' },
+        { text:'«Потом разберёмся»', hint:'копилка обид пополняется', fx:{}, tag:'rift_seed', tone:'degrade' } ] },
+    { id:'arc_dvoe_fin_g', title:'Партнёрство++', icon:'🤝', cat:'arc',
+      trig:{ preset:['dvoe'], afterEvent:'arc_dvoe_2', toneDom:'growth', month:'>=8' }, weight:6, once:'run',
+      situation:'Вы спорите на планёрке — громко, азартно и по делу. Команда уже не пугается: знает, что через час вы вынесете решение лучше, чем предлагал каждый.',
+      choices:[
+        { text:'Закрепить: партнёрское соглашение', hint:'скучно и надёжно', fx:{ loyaltyAll:+8, moodAll:+5, money:+20000 }, tone:'growth' },
+        { text:'Работаем дальше, и так ясно', hint:'доверие как капитал', fx:{ loyaltyAll:+5, confidence:+4 }, tone:'neutral' } ] },
+    { id:'arc_dvoe_fin_d', title:'Раскол', icon:'🪓', cat:'arc',
+      trig:{ preset:['dvoe'], afterEvent:'arc_dvoe_2', toneDom:'degrade', month:'>=8' }, weight:6, once:'run',
+      situation:'Он написал в общий чат «нам надо поговорить». Вы оба знаете, о чём. Копилка обид полная.',
+      choices:[
+        { text:'Честный развод по ролям', hint:'больно, но по-людски', fx:{ money:-40000, moodAll:-5, toughness:+6 }, tone:'growth' },
+        { text:'Хлопнуть дверью', hint:'команда смотрит и делает выводы', fx:{ money:-40000, moodAll:-10, loyaltyAll:-10 }, tone:'degrade' } ] },
   ];
 
   // ── Раздатчик ─────────────────────────────────────────────────────────
@@ -267,6 +427,14 @@
       if (t.bond  && !t.bond.includes(d.bond))   return false;
       if (t.month && !_cmp(month, t.month))      return false;
       if (t.tag && !st.tags[t.tag])              return false;
+      // ── триггеры арок персонажей (§4H + портреты) ──
+      if (t.preset && !t.preset.includes(f.presetId)) return false;
+      if (t.afterEvent && st.seen[t.afterEvent] == null) return false;   // предыдущее звено отыграно
+      if (t.toneDom) {   // развязка по доминирующему тону рана
+        const tn = f.tone || { growth: 0, degrade: 0 };
+        if (t.toneDom === 'growth'  && !((tn.growth || 0) >  (tn.degrade || 0))) return false;
+        if (t.toneDom === 'degrade' && !((tn.degrade || 0) >= (tn.growth || 0))) return false;
+      }
       if (t.teamMin != null && (g.staff || []).filter(s => s.status !== 'fired').length < t.teamMin) return false;
       if (t.moneyBelow != null && (g.money || 0) >= t.moneyBelow) return false;
       if (t.param) {
@@ -307,7 +475,10 @@
     });
     if (ch.tag)      st.tags[ch.tag] = true;
     if (ch.clearTag) delete st.tags[ch.clearTag];
-    if (ch.chain)    st.chainNext = { id: ch.chain, month: (g.month || 0) + 1 };
+    if (ch.chain) {   // строка или {id, delay} — событие-следствие через N месяцев
+      const c = typeof ch.chain === 'string' ? { id: ch.chain, delay: 1 } : ch.chain;
+      st.chainNext = { id: c.id, month: (g.month || 0) + (c.delay || 1) };
+    }
     // тон — мета-скоринг «как вёл человека»
     g.founder.tone = g.founder.tone || { growth: 0, degrade: 0, neutral: 0 };
     g.founder.tone[ch.tone || 'neutral'] = (g.founder.tone[ch.tone || 'neutral'] || 0) + 1;
@@ -351,8 +522,11 @@
       const list = eligible(g, month);
       if (!list.length) return null;
       const crises = list.filter(e => e.priority);
+      const arcs   = list.filter(e => e.cat === 'arc');
       if (crises.length) {
         pick = crises[Math.floor(rng() * crises.length)];   // кризис — вне частоты
+      } else if (arcs.length && month - st.last >= TUNING.globalCooldown) {
+        pick = arcs[Math.floor(rng() * arcs.length)];       // арка — сюжет, вне шанса (но с кулдауном)
       } else {
         if (month - st.last < TUNING.globalCooldown) return null;
         const evtW = (root.Founder && g.founder.draft) ? root.Founder.eventWeightOf(g.founder.draft) : 6;
@@ -386,5 +560,6 @@
   try { console.log('[founder-events] каталог: ' + EVENTS.length + ' событий (' +
     EVENTS.filter(e => e.cat === 'vice').length + ' теней, ' +
     EVENTS.filter(e => e.cat === 'life').length + ' жизненных, ' +
-    EVENTS.filter(e => e.cat === 'crisis').length + ' кризиса) + ' + FE_TRAITS.length + ' трейтов-последствий'); } catch (e) {}
+    EVENTS.filter(e => e.cat === 'crisis').length + ' кризиса, ' +
+    EVENTS.filter(e => e.cat === 'arc').length + ' арк-звеньев) + ' + FE_TRAITS.length + ' трейтов-последствий'); } catch (e) {}
 })();

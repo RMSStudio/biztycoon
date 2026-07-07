@@ -333,23 +333,34 @@ body.rl-lock-sub    #btn-assets { display:none !important; }`;
         _announce(summary, scriptedIntro);
       } catch (e) { console.warn('[unlocks-ui] award error:', e); }
       try { injectResultsButton(summary ? `+${summary.award} ✦` : null); } catch (e) {}
+      // Мета персонажей (§3): наигрыш/победы/тон → открытие ярусов прототипов
+      try {
+        if (window.Founder && Founder.metaRecord && typeof G !== 'undefined' && G) Founder.metaRecord(G, !!won);
+      } catch (e) {}
+    });
+
+    // Страховка: ран идёт, а основателя нет (обошли драфт) — поднимаем «Марка»
+    EventBus.on('month_advanced', () => {
+      try {
+        const U = window.Unlocks;
+        if (U && U.isActive() && typeof G !== 'undefined' && G && !G.founder && window.Founder) {
+          if (window.FounderDraftUI) FounderDraftUI.close();
+          window.Founder.initState(G, window.Founder.preset('mark'));
+        }
+      } catch (e) {}
     });
 
     // Новый ран начался — флаг начисления снимается
     EventBus.on('navigate', ({ screen }) => {
       if (screen === 'screen-game' && typeof G !== 'undefined' && G && (G.month || 0) <= 1) {
         _awardedThisRun = false;
-        // Слой основателя (§7-sextus): на старте рана в режиме поднимаем
-        // характер-юнит. Пока драфт-экрана нет — стартовый пресет «Марк»
-        // (прототип-ноль); драфт заменит этот вызов своим выбором.
+        // Слой основателя: на старте рана в режиме — экран «Сборка основателя»
+        // (драфт §7-quater). Страховка на случай пропуска — в month_advanced.
         try {
           const U = window.Unlocks;
           if (U && U.isActive() && window.Founder && !G.founder) {
-            const f = window.Founder.initState(G, window.Founder.preset('mark'));
-            if (f && typeof addLog === 'function') {
-              addLog('👤 Основатель: ' + f.name + ' (' + f.cls + ') — характер в деле: ' +
-                f.rlTraits.map(id => { const t = window.TraitEngine && TraitEngine.get(id); return t ? t.icon + ' ' + t.name : id; }).join(', '), 'purple');
-            }
+            if (window.FounderDraftUI && FounderDraftUI.open()) { /* драфт открыт */ }
+            else window.Founder.initState(G, window.Founder.preset('mark'));   // headless/фолбэк
           }
         } catch (e) {}
       }

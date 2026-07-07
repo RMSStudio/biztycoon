@@ -109,6 +109,7 @@ const postEngineBlocks = [
   read('src/founder.js'),
   read('src/founder-events.js'),
   read('src/founder-ui.js'),
+  read('src/founder-draft-ui.js'),
   read('src/traits-data.js'),
   read('src/traits.js'),
   read('src/traits-ui.js'),

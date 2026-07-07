@@ -379,16 +379,88 @@
     return p[key];
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  МЕТА ПЕРСОНАЖЕЙ (§3 мета-гейт: «всё начинается с нуля»)
+  //
+  //  bt_founder_meta_v1: { runs, wins, byPreset:{id:{runs,wins,growth,degrade}},
+  //  tone:{growth,degrade} }. Гейт ЯРУСОВ (Ф3 таксономии = порядок открытия):
+  //  Струггеры доступны сразу (среди них прототип-ноль Марк), «Крепкие» —
+  //  наигрыш/победа, «Состоявшиеся» — победа или большой наигрыш. Пороги —
+  //  заглушки под balance-pass. «Как вёл человека» (тон) оседает в мету —
+  //  задел под будущие разблокировки арок/трейтов.
+  // ══════════════════════════════════════════════════════════════════════
+  const LS_META = 'bt_founder_meta_v1';
+  const TIER_ORDER = ['Струггер', 'Крепкий', 'Состоявшийся'];
+
+  function loadMeta() {
+    try {
+      const m = JSON.parse((typeof localStorage !== 'undefined' && localStorage.getItem(LS_META)) || 'null') || {};
+      return { runs: m.runs | 0, wins: m.wins | 0, byPreset: m.byPreset || {}, tone: m.tone || { growth: 0, degrade: 0 } };
+    } catch (e) { return { runs: 0, wins: 0, byPreset: {}, tone: { growth: 0, degrade: 0 } }; }
+  }
+  function _saveMeta(m) { try { if (typeof localStorage !== 'undefined') localStorage.setItem(LS_META, JSON.stringify(m)); } catch (e) {} }
+
+  function tierUnlocked(tier, meta) {
+    const m = meta || loadMeta();
+    if (tier === 'Крепкий')       return m.runs >= 3 || m.wins >= 1;
+    if (tier === 'Состоявшийся')  return m.wins >= 1 || m.runs >= 8;
+    return true;   // Струггер (и неизвестные ярусы) — открыты
+  }
+  function tierRequirement(tier) {
+    if (tier === 'Крепкий')      return '3 рана или 1 победа';
+    if (tier === 'Состоявшийся') return '1 победа или 8 ранов';
+    return '';
+  }
+  // Пресеты с флагом доступности (для драфт-экрана)
+  function presetsAvailable() {
+    const m = loadMeta();
+    return PRESETS.map(p => Object.assign({}, p, {
+      unlocked: tierUnlocked(p.tier, m),
+      req: tierUnlocked(p.tier, m) ? '' : tierRequirement(p.tier),
+    }));
+  }
+  // Итог рана → мета (зовёт петля рана при end_game)
+  function metaRecord(g, won) {
+    const m = loadMeta();
+    m.runs += 1; if (won) m.wins += 1;
+    const f = g && g.founder;
+    if (f) {
+      const pid = f.presetId || 'custom';
+      const rec = m.byPreset[pid] = m.byPreset[pid] || { runs: 0, wins: 0, growth: 0, degrade: 0 };
+      rec.runs += 1; if (won) rec.wins += 1;
+      const t = f.tone || {};
+      rec.growth += t.growth || 0; rec.degrade += t.degrade || 0;
+      m.tone.growth += t.growth || 0; m.tone.degrade += t.degrade || 0;
+    }
+    _saveMeta(m);
+    try { if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('founder_meta', { meta: m }); } catch (e) {}
+    return m;
+  }
+
+  // Случайный драфт из полных пулов (кнопка «Случайный» + тесты)
+  function randomDraft(rng) {
+    rng = rng || Math.random;
+    const pick = obj => { const k = Object.keys(obj); return k[Math.floor(rng() * k.length)]; };
+    return {
+      id: null, n: 'Случайный основатель', tier: 'Струггер',
+      age: pick(AGES), exp: Math.floor(rng() * 13),
+      origin: pick(ORIGINS), trait: pick(TRAITS), vice: pick(VICES),
+      drive: pick(DRIVES), bond: pick(BONDS),
+    };
+  }
+
   root.Founder = {
     TREE, BRANCHES,
     POOLS: { ages: AGES, origins: ORIGINS, traits: TRAITS, vices: VICES, drives: DRIVES, bonds: BONDS },
-    PRESETS,
+    PRESETS, TIER_ORDER,
     // расчёт
     compute, capitalOf, openedOf, eventWeightOf, classOf, challengeOf,
     expCap, expOpens, validate, preset, list, nodeName: id => (TREE.find(n => n.id === id) || {}).n || id,
     // характер → TraitEngine + параметры (§7-quinque/sextus)
     FOUNDER_TRAITS, PARAM_DEFAULTS, PARAM_NAMES,
     initState, param, paramAdd,
+    // мета персонажей + драфт (§3)
+    loadMeta, metaRecord, tierUnlocked, tierRequirement, presetsAvailable, randomDraft,
   };
 
   // Регистрация характер-трейтов в TraitEngine (порядок загрузки не важен:
